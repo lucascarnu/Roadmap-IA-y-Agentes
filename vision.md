@@ -1,3 +1,86 @@
 # Visión
 
-Describe la visión del producto Roadmap IA.
+Sistema personal de conocimiento y ejecución sobre IA y agentes, construido con
+mentalidad de producto: para un solo usuario, pero con la estructura y la
+disciplina de algo que podría dejar de serlo.
+
+## Qué problema resuelve
+
+El conocimiento sobre IA llega disperso, rápido y en formatos que se olvidan.
+El costo real no es acceder a la información, es retenerla, evaluarla y
+aplicarla. El sistema cierra tres brechas:
+
+- **Aprendizaje** — entender de verdad, no acumular material sin procesar.
+- **Organización** — que lo aprendido quede consultable y conectado.
+- **Ejecución** — que se traduzca en proyectos concretos, no en notas muertas.
+
+## Experiencia central
+
+El sistema acompaña un ciclo completo, desde que un tema aparece hasta que se
+convierte en algo aplicado.
+
+**Capturar**
+
+- Registrar y clasificar temas de interés en el momento en que surgen.
+- Guardar fuentes con tipo, URL accesible y trazabilidad hacia dónde se usaron.
+- Puntuar cada fuente personalmente: qué tan útil me resultó a mí.
+
+**Estudiar**
+
+- Escribir notas generales del tema y notas específicas por fuente.
+- Conservar resúmenes y síntesis de lo estudiado, en mis propias palabras.
+
+**Evaluar**
+
+- Revisar qué aprendí realmente y detectar los vacíos que quedaron abiertos.
+
+**Decidir y ejecutar**
+
+- Elegir entre modo **Aprender** y modo **Hacer**, según el momento.
+- Generar un roadmap dinámico que ordene el trabajo según dependencias entre
+  temas, tiempo disponible y urgencia real.
+- Conectar el aprendizaje con proyectos concretos en curso.
+
+## Principios
+
+- **Estructura antes que herramienta.** El modelo de datos se define primero;
+  la interfaz, si llega, se adapta a él.
+- **Portable por diseño.** Markdown plano y Git. Sin dependencias de
+  aplicaciones externas ni formatos propietarios. Todo debe poder migrarse a
+  una base de datos o una app sin reescribir el contenido.
+- **Una entidad principal por archivo.** Cada archivo tiene un sujeto claro que
+  lo identifica, sin impedir que incluya material de apoyo relacionado.
+- **Capturar no es aprobar.** Guardar una fuente solo registra que existe y me
+  interesó. No implica haberla validado, ni estar de acuerdo, ni convertirla en
+  nodo de conocimiento. La promoción a nodo es un acto deliberado y posterior,
+  que exige haber entendido.
+- **Sin complejidad anticipada.** Se agrega estructura cuando una necesidad real
+  la justifica, no por simetría.
+
+## Modelo
+
+El sistema se organiza en cinco entidades, deliberadamente en lugar de una lista
+plana de tareas:
+
+- **Nodos** — la unidad granular de aprendizaje. Un concepto entendido.
+- **Categorías** — agrupan nodos por dominio y dan navegación.
+- **Fuentes** — de dónde salió el conocimiento; sostienen la trazabilidad.
+- **Proyectos** — dónde se aplica lo aprendido, con alcance definido.
+- **Decisiones** — por qué el sistema es como es, una por archivo.
+
+La separación entre nodo y proyecto es el principio central del modelo:
+distingue lo que sé de lo que hice con eso. Un nodo puede existir sin proyecto,
+y un proyecto puede exponer vacíos que generan nodos nuevos.
+
+## Alcance actual
+
+Herramienta de uso personal. No está pensada para usuarios externos, mercado ni
+monetización. Las decisiones se toman según utilidad propia, no según adopción.
+
+## Hacia dónde puede evolucionar
+
+Si el modelo demuestra servir en el uso diario, el siguiente paso natural es una
+aplicación que lo consuma: búsqueda, relaciones navegables entre nodos,
+seguimiento de proyectos y una interfaz propia. Esa posibilidad no cambia las
+prioridades de hoy, pero sí justifica mantener el contenido limpio y
+estructurado desde el principio.
