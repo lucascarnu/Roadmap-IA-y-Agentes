@@ -42,6 +42,11 @@ fuentes: []
 Se usan categorías cerradas y no números: una escala numérica invita a retocar
 valores sin que el orden mejore, y pierde significado al releerla meses después.
 
+`estimacion` mide el tiempo aproximado que lleva aprender el concepto desde
+cero, no cuánto tiempo le llevó históricamente a quien lo estudió. El valor
+conserva su significado aunque el nodo ya esté en `aprendido`: describe el costo
+del tema, no el recorrido de una persona.
+
 Para el mínimo viable, `prioridad` representa también la urgencia. Son el mismo
 eje, y separarlos obligaría a inventar una fórmula que los combine.
 
