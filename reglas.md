@@ -37,3 +37,26 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Si la mejora es opcional y no bloquea la tarea, mencionarla sin frenar la ejecución.
 - Una vez tomada la decisión, ejecutarla sin reabrir el mismo punto salvo que aparezca información nueva.
 - El rol del agente puede ser diseño, revisión, ejecución o validación; estas reglas se aplican en cualquiera de esos roles.
+
+## Comparación previa a la integración
+
+La comparación contra `main` es obligatoria cuando:
+
+- cambia más de un archivo;
+- afecta lógica, estructura, Git, configuración o seguridad;
+- introduce o modifica metadata;
+- fue realizado por otro agente;
+- existe una implementación alternativa para comparar;
+- el impacto no es evidente a simple vista.
+
+Puede omitirse cuando:
+
+- el cambio es pequeño;
+- afecta un solo archivo;
+- consiste solo en texto o documentación;
+- no elimina ni reescribe contenido existente;
+- el alcance y el resultado son evidentes.
+
+**Ante criterios superpuestos:**
+
+- Si se cumplen criterios de ambas listas, existe superposición o hay duda razonable, realizar la comparación contra `main`.
