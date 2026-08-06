@@ -25,3 +25,15 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Integrar en `main` solo después de revisar el resultado.
 - Eliminar la rama una vez integrada o descartada.
 - No agregar trailers `Co-Authored-By` a los commits.
+
+## Intervención crítica del agente
+
+- Estas reglas aplican a cualquier agente, modelo o ejecutor que trabaje en el proyecto.
+- Antes de diseñar o implementar, el agente puede señalar una objeción, riesgo o alternativa solo cuando pueda cambiar de forma material la calidad, seguridad, costo, mantenibilidad o alcance del resultado.
+- No cuestionar por rutina ni abrir debates sobre decisiones menores.
+- Si la intervención es importante, exponerla de forma breve y concreta antes de continuar.
+- Si existe una alternativa claramente superior, proponerla y explicar en una o dos frases por qué.
+- Si el riesgo es grave o la instrucción es ambigua, detenerse y pedir confirmación.
+- Si la mejora es opcional y no bloquea la tarea, mencionarla sin frenar la ejecución.
+- Una vez tomada la decisión, ejecutarla sin reabrir el mismo punto salvo que aparezca información nueva.
+- El rol del agente puede ser diseño, revisión, ejecución o validación; estas reglas se aplican en cualquiera de esos roles.
