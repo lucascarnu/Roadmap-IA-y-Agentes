@@ -60,3 +60,16 @@ Puede omitirse cuando:
 **Ante criterios superpuestos:**
 
 - Si se cumplen criterios de ambas listas, existe superposición o hay duda razonable, realizar la comparación contra `main`.
+
+## Revisión de concisión
+
+- No iniciar una ronda de revisión basándose solamente en la cantidad de líneas.
+- Revisar por concisión únicamente cuando exista:
+  - repetición concreta;
+  - contenido fuera de alcance;
+  - estructura innecesariamente duplicada;
+  - o una oportunidad real de simplificación material.
+- No reabrir una tarea solo para reducir unas pocas líneas o alcanzar una cifra aproximada.
+- Como referencia, si no se espera una reducción de al menos 15% sin perder fundamentos, no hacer una ronda separada de concisión.
+- Las correcciones de precisión, contradicciones o errores sí justifican una revisión aunque no reduzcan la extensión.
+- La claridad y la calidad tienen prioridad sobre el número de líneas.
