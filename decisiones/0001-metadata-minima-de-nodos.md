@@ -68,6 +68,25 @@ navegación por categoría deja de servir.
 Como corolario, definir al menos una categoría es prerrequisito para crear el
 primer nodo. Hoy `categorias/` no contiene ninguna.
 
+### `depende_de` como dependencia de conocimiento
+
+`depende_de` representa una dependencia de conocimiento, no de tareas. Un nodo A
+depende de B solamente cuando comprender o practicar A presupone haber aprendido
+B.
+
+No debe usarse para expresar el orden circunstancial de tareas dentro de un
+proyecto. Ese orden operativo se representa en el proyecto mismo, mediante su
+próxima acción, su plan y `nodos_requeridos`.
+
+El criterio para distinguirlos es la reutilización: una dependencia debe seguir
+siendo válida aunque el nodo se reutilice en otro proyecto diferente. Si deja de
+tener sentido al cambiar de contexto, era orden de implementación.
+
+- "Construir un índice de entidades" puede depender de "Leer Markdown y
+  frontmatter" si el primero presupone saber extraer esos datos.
+- "Crear una pantalla bonita después del índice" no constituye por sí solo una
+  dependencia de conocimiento; podría ser solamente orden de implementación.
+
 ### Relaciones, en una sola dirección
 
 Un nodo no declara a qué proyectos alimenta: es el proyecto el que lista los
