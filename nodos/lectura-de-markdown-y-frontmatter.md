@@ -11,12 +11,18 @@ fuentes: []
 
 ## Objetivo de aprendizaje
 
-Poder leer los archivos Markdown del repositorio y obtener su frontmatter donde
-exista, sin asumir que todo archivo lo tiene ni que todo archivo representa una
-entidad del modelo.
+Poder dirigir la construcción de un lector de Markdown y frontmatter para este
+repositorio, y validar correctamente su resultado.
+
+No exige escribir personalmente el parser ni el código. Exige entender qué tiene
+que pasar al leer estos archivos y reconocer cuándo no está pasando.
 
 ## Qué incluye
 
+- Por qué el frontmatter se interpreta con un parser YAML conforme y nunca con
+  parsing manual improvisado: las decisiones definen escalares entrecomillados
+  con escapes, listas vacías y claves ausentes, y un lector por líneas los rompe
+  en silencio.
 - Separar el bloque delimitado por `---` del resto del archivo cuando está
   presente, y tratar correctamente el caso en que no lo está.
 - Parsear YAML y obtener los tipos que el sistema usa: cadenas, listas y fechas.
@@ -33,6 +39,10 @@ entidad del modelo.
     como entidad del modelo.
 - Recorrer un directorio aplicando a cada archivo el tratamiento que
   corresponde, y excluir los `README.md` que describen cada carpeta.
+- Leer explícitamente como UTF-8. El repositorio está lleno de vocales
+  acentuadas y el valor por defecto del sistema puede corromperlas sin avisar.
+- Cómo se ve una salida correcta del lector, con detalle suficiente para
+  reconocer una incorrecta.
 
 ## Qué queda fuera
 
@@ -44,19 +54,36 @@ entidad del modelo.
 
 ## Criterio para considerarlo aprendido
 
-Leer cualquier archivo Markdown del repositorio sin que el proceso falle:
-obtener el frontmatter tipado donde existe, resolver sin error el caso de un
-archivo que no lo tiene, y distinguir una clave ausente de una lista vacía, que
-es la diferencia sobre la que se apoya el formato variable de los proyectos.
+No alcanza con que el código funcione. El nodo está aprendido cuando se puede:
+
+- explicar qué tratamientos conviven en el repositorio y por qué;
+- dirigir a una IA para construir o corregir el lector;
+- revisar su salida y juzgar si es correcta;
+- detectar los errores que pasan en silencio: una clave ausente leída como lista
+  vacía, y el contenido corrompido por encoding.
+
+No exige memorizar APIs, escribir el código sin IA, dominar Python ni dominar
+YAML en profundidad.
 
 ## Práctica
 
-Escribir un script que recorra `categorias/`, `capacidades/`, `nodos/`,
-`fuentes/`, `herramientas/` y `proyectos/` e imprima, por archivo, su
-identificador y lo que haya podido leer. Debe parsear el frontmatter en las
-cuatro carpetas que lo tienen, aceptar sin error las categorías y capacidades
-que no lo tienen, omitir el `README.md` de cada carpeta, y no recorrer
-`decisiones/` ni los archivos sueltos de la raíz.
+Obtener un lector —escribiéndolo o dirigiendo a una IA para que lo escriba— que
+recorra `categorias/`, `capacidades/`, `nodos/`, `fuentes/`, `herramientas/` y
+`proyectos/`, e imprima por archivo su identificador y lo que haya podido leer.
+
+Comprobarlo después contra casos concretos:
+
+- una entidad con frontmatter y una sin él se leen ambas sin error;
+- un archivo donde una clave está ausente se distingue de uno donde esa misma
+  clave es una lista vacía;
+- un archivo con acentos se lee sin corromperse;
+- los `README.md`, `decisiones/` y los archivos sueltos de la raíz quedan fuera.
+
+Para cerrar, introducir a propósito una salida incorrecta —una clave ausente
+tratada como lista vacía, o un texto leído con el encoding equivocado— y
+explicar por qué está mal.
+
+El medio con el que se produzca el lector no determina si el nodo fue aprendido.
 
 ## Fuentes
 

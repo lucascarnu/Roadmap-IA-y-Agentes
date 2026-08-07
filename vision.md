@@ -57,6 +57,11 @@ hasta que se convierte en algo aplicado.
   las cubren, con qué clasificación para cada una.
 - No proponer construir ni buscar algo nuevo cuando una herramienta ya
   registrada cubre bien la necesidad.
+- Si ninguna la cubre suficientemente, investigar soluciones externas
+  reutilizables antes de considerar construir una propia.
+- Construir cuando el hueco persista, o cuando haya un motivo explícito que lo
+  justifique. La investigación previa es proporcional al costo, la importancia y
+  la naturaleza de lo que se pretende construir.
 - Detectar conocimientos, herramientas o prerrequisitos faltantes, y sugerir qué
   conviene buscar y dónde: Find Skills, documentación oficial, GitHub,
   buscadores, cursos o plataformas de contenido.

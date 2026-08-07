@@ -82,3 +82,13 @@ Puede omitirse cuando:
 - Si durante la implementación se descubre que la especificación es incompleta, ambigua o incorrecta en algo observable, detener esa parte, corregir y aprobar primero la fuente documental correspondiente, y después continuar con el código.
 - Ante una contradicción entre documentos canónicos, no resolverla por jerarquía automática ni dejando que el código elija: detener el cambio y corregir explícitamente la documentación antes de continuar.
 - Corregir un bug no exige modificar documentación cuando el código contradice una especificación ya correcta. Si el código cumple la especificación pero el resultado esperado debe cambiar, es un cambio de comportamiento y la documentación se actualiza primero.
+
+## Buscar antes de construir
+
+- Antes de proponer o iniciar una herramienta, app, plugin, skill, integración u otra solución propia para cubrir una capacidad, revisar las herramientas ya registradas para esa capacidad.
+- Si ninguna cubre suficientemente la necesidad, investigar alternativas externas reutilizables razonables.
+- Proponer construir cuando el hueco persista, indicando qué se revisó.
+- El esfuerzo de búsqueda es proporcional al costo y a la importancia de la construcción.
+- No hace falta repetir la comparación cuando la decisión de construir en lugar de reutilizar ya fue evaluada explícitamente, aprobada y sigue vigente.
+- Cuando construir tenga un propósito específico que vuelva irrelevante reutilizar algo existente —aprendizaje, control o una necesidad deliberadamente específica—, ese motivo se declara.
+- Si cambian materialmente las condiciones que sustentaban una decisión anterior de construir, esa decisión puede necesitar reevaluación.

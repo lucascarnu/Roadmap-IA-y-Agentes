@@ -19,11 +19,14 @@ motivo por el cual la portabilidad se adoptó como principio desde el primer dí
 en lugar de dejarse para después. El costo ya está pagado: el contenido es texto
 plano con frontmatter estructurado, sin dependencias propietarias.
 
-Las decisiones `0001`, `0002` y `0003` funcionan como especificación del modelo
-de datos: las tres entidades tienen formato definido y cada una fue ejercitada
-al menos con un caso real. El modelo todavía necesita más contenido,
-dependencias entre nodos, roadmaps y validaciones antes de considerarse maduro,
-así que el prototipo parte de un esquema escrito, no de uno probado a fondo.
+Las decisiones `0001`, `0002`, `0003`, `0005` y `0006` funcionan como
+especificación del modelo de datos: los seis tipos de entidad tienen formato
+definido, con frontmatter en nodos, fuentes, herramientas y proyectos, y sin él
+en categorías y capacidades. Categorías, nodos, fuentes y proyectos fueron
+ejercitados con casos reales; capacidades y herramientas todavía no tienen
+ninguno. El modelo necesita además más contenido, dependencias entre nodos,
+roadmaps y validaciones antes de considerarse maduro, así que el prototipo parte
+de un esquema escrito, no de uno probado a fondo.
 
 ## Alcance inicial
 
