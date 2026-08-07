@@ -94,6 +94,13 @@ nodos que aplica. Guardar la relación en ambos lados la desincroniza en la
 primera edición apurada. Se elige el lado del proyecto porque son menos archivos
 y cambian con menos frecuencia; la vista inversa se obtiene escaneando.
 
+Esa vista inversa es parcial. Desde `0003`, el campo `nodos_requeridos` de un
+proyecto representa únicamente los conocimientos necesarios para su próxima
+acción, así que escanear proyectos permite derivar qué proyectos requieren el
+nodo ahora, no todos los que lo usaron alguna vez. El uso histórico, si importa,
+vive en el cuerpo y la bitácora del proyecto y en el historial de Git, no en el
+frontmatter actual.
+
 La relación con fuentes sigue el mismo criterio de dirección única, pero se
 guarda del lado del nodo: al leer un nodo se quiere ver de dónde salió.
 
