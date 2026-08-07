@@ -42,6 +42,17 @@ fuentes: []
 Se usan categorías cerradas y no números: una escala numérica invita a retocar
 valores sin que el orden mejore, y pierde significado al releerla meses después.
 
+`aprendido` significa que se alcanzó el nivel de competencia operativa que el
+propio nodo define, suficiente para usar ese conocimiento de forma confiable en
+Aprender y en Hacer, normalmente con asistencia de IA cuando corresponda. No
+implica dominio experto, memorización, capacidad de ejecutar todo manualmente
+sin IA ni conocimiento exhaustivo del tema.
+
+El criterio concreto de suficiencia pertenece al cuerpo de cada nodo y depende
+del tipo de conocimiento. La práctica de un nodo puede consistir tanto en
+ejecutar algo directamente como en dirigir a una IA, evaluar el resultado y
+corregirlo.
+
 `estimacion` mide el tiempo aproximado que lleva aprender el concepto desde
 cero, no cuánto tiempo le llevó históricamente a quien lo estudió. El valor
 conserva su significado aunque el nodo ya esté en `aprendido`: describe el costo

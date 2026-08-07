@@ -19,6 +19,22 @@ aplicarla. El sistema cierra tres brechas:
 - **Organización** — que lo aprendido quede consultable y conectado.
 - **Ejecución** — que se traduzca en proyectos concretos, no en notas muertas.
 
+Aprender aquí significa alcanzar competencia operativa: capacidad para dirigir
+herramientas e IA, elegir entornos y flujos de trabajo eficientes, comprender lo
+suficiente para tomar las decisiones que importan y validar lo que se produce, y
+profundizar técnicamente cuando esa profundidad aporte valor práctico.
+
+No es formarse como especialista tradicional de cada disciplina, y tampoco es
+delegar: el criterio, la dirección y la evaluación siguen siendo propios. Según
+el tema, lo que hay que saber puede ser qué problema resuelve una herramienta,
+cuándo conviene usarla y cuándo no, cómo combinarla con otras, qué instrucciones
+darle a una IA para que ejecute bien, qué decisiones no conviene delegar, qué
+límites y riesgos reconocer, y cómo comprobar si el resultado es correcto.
+
+El criterio vale en cualquier dominio —programación, agentes, diseño, imagen,
+video, audio, marketing— porque en todos la pregunta es la misma: qué hace falta
+saber para obtener un resultado de calidad y para reconocer cuándo no lo es.
+
 ## Experiencia central
 
 El sistema acompaña un ciclo completo, desde que un tema aparece hasta que se
