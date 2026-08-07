@@ -1,8 +1,13 @@
 # Visión
 
-Sistema personal de conocimiento y ejecución sobre IA y agentes, construido con
-mentalidad de producto: para un solo usuario, pero con la estructura y la
-disciplina de algo que podría dejar de serlo.
+Entorno personal y multidominio de aprendizaje, conocimiento y ejecución
+asistido por IA. Organiza fuentes, conocimiento, roadmaps y proyectos propios en
+desarrollo de software, creatividad audiovisual, marketing y otros dominios
+futuros. La IA y los agentes son el medio con el que se opera el sistema, no su
+único objeto de estudio.
+
+Construido con mentalidad de producto: para un solo usuario, pero con la
+estructura y la disciplina de algo que podría dejar de serlo.
 
 ## Qué problema resuelve
 
