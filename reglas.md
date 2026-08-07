@@ -73,3 +73,12 @@ Puede omitirse cuando:
 - Como referencia, si no se espera una reducción de al menos 15% sin perder fundamentos, no hacer una ronda separada de concisión.
 - Las correcciones de precisión, contradicciones o errores sí justifican una revisión aunque no reduzcan la extensión.
 - La claridad y la calidad tienen prioridad sobre el número de líneas.
+
+## Documentación y código
+
+- La documentación es la fuente de verdad sobre el comportamiento esperado del sistema; el código lo implementa y no debe quedar como única constancia de una regla de comportamiento.
+- Todo cambio de comportamiento observable —el que sorprendería a quien leyó únicamente la documentación— se documenta y lo aprueba el usuario antes de implementarse.
+- Los cambios puramente técnicos que no alteran comportamiento observable se resuelven directamente en código: refactors, organización interna, optimizaciones sin efecto observable, tests, estilos visuales que no cambian funcionalidad y elecciones que una decisión haya dejado explícitamente abiertas.
+- Si durante la implementación se descubre que la especificación es incompleta, ambigua o incorrecta en algo observable, detener esa parte, corregir y aprobar primero la fuente documental correspondiente, y después continuar con el código.
+- Ante una contradicción entre documentos canónicos, no resolverla por jerarquía automática ni dejando que el código elija: detener el cambio y corregir explícitamente la documentación antes de continuar.
+- Corregir un bug no exige modificar documentación cuando el código contradice una especificación ya correcta. Si el código cumple la especificación pero el resultado esperado debe cambiar, es un cambio de comportamiento y la documentación se actualiza primero.
