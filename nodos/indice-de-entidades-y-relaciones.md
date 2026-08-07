@@ -18,17 +18,18 @@ inconsistencias.
 
 ## Qué incluye
 
-- Delimitar qué entra en el índice: cuatro tipos de entidad —categorías, nodos,
-  fuentes y proyectos— y nada más. Estar dentro de una de esas carpetas no
-  alcanza: el `README.md` que las describe no es una entidad.
+- Delimitar qué entra en el índice: seis tipos de entidad —categorías,
+  capacidades, nodos, fuentes, herramientas y proyectos— y nada más. Estar
+  dentro de una de esas carpetas no alcanza: el `README.md` que las describe no
+  es una entidad.
 - Identificar cada entidad por el nombre de su archivo.
-- Incorporar las categorías, que no tienen frontmatter, a partir de su
-  identificador y su `# H1`.
+- Incorporar las categorías y las capacidades, que no tienen frontmatter, a
+  partir de su identificador y su `# H1`.
 - Resolver las referencias entre entidades: la categoría de un nodo o una
-  fuente, las dependencias entre nodos, las fuentes que un nodo cita y los nodos
-  que un proyecto requiere.
+  fuente, las dependencias entre nodos, las fuentes que un nodo cita, los nodos
+  que un proyecto requiere y las capacidades que una herramienta cubre.
 - Construir las vistas inversas donde correspondan, como qué nodos citan una
-  fuente determinada.
+  fuente determinada o qué herramientas cubren una capacidad.
 - Detectar referencias rotas: identificadores que no corresponden a ningún
   archivo.
 - Detectar ciclos de dependencias entre nodos.
@@ -40,9 +41,9 @@ inconsistencias.
 - Las decisiones y los documentos operativos del repositorio. No entran al
   índice de entidades, aunque más adelante puedan consultarse por separado.
 - Otros orígenes de datos, como bases de datos o APIs. Este nodo se limita a
-  índices construidos sobre las cuatro entidades almacenadas como archivos
-  Markdown: nodos, fuentes y proyectos aportan su frontmatter, y las categorías
-  aportan identificador y `# H1` sin frontmatter.
+  índices construidos sobre las seis entidades almacenadas como archivos
+  Markdown: nodos, fuentes, herramientas y proyectos aportan su frontmatter, y
+  las categorías y capacidades aportan identificador y `# H1` sin frontmatter.
 - Presentar el índice en una interfaz.
 - Persistirlo en una base de datos.
 - Escribir o corregir los archivos de origen.

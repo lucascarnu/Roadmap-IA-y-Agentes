@@ -48,7 +48,7 @@ Un solo usuario, en su máquina. Sin cuentas, sin red, sin acceso compartido.
 
 ### Entidades que muestra
 
-Cuatro tipos: categorías, nodos, fuentes y proyectos.
+Seis tipos: categorías, capacidades, nodos, fuentes, herramientas y proyectos.
 
 Las decisiones y los documentos operativos no se convierten en entidades. Son
 documentación del sistema, no contenido del sistema. Las decisiones especifican
@@ -62,6 +62,8 @@ que la aplicación tenga que mostrar.
 - Buscar texto en el título y en el cuerpo de cualquier entidad.
 - Filtrar nodos por estado, prioridad, estimación y categoría.
 - Filtrar fuentes por clasificación, formato, plataforma y categoría.
+- Filtrar herramientas por tipo y por capacidad, y dentro de una capacidad por
+  su clasificación para esa capacidad.
 - Filtrar proyectos por estado y prioridad.
 - Qué puedo aprender ahora: nodos disponibles, ordenados por prioridad y
   filtrables por estimación según el tiempo del que se dispone.
@@ -72,11 +74,13 @@ que la aplicación tenga que mostrar.
 
 Directas, tal como están declaradas: de un nodo a su categoría, a sus fuentes y a
 sus dependencias; de una fuente a su categoría; de un proyecto a sus nodos
-requeridos.
+requeridos; de una herramienta a las capacidades que cubre, con su clasificación
+para cada una.
 
 Inversas, calculadas: de una categoría a lo que la referencia; de una fuente a
 los nodos que la citan; de un nodo a los nodos que dependen de él y a los
-proyectos que lo requieren.
+proyectos que lo requieren; de una capacidad a las herramientas que la cubren,
+ordenadas por su clasificación para esa capacidad.
 
 La última se muestra marcada como parcial. La decisión `0003` acotó
 `nodos_requeridos` a la próxima acción, así que esa vista responde quién necesita
@@ -146,6 +150,12 @@ De `0002`, sobre fuentes:
 - `clasificacion` en `pendiente`, `oro`, `plata` o `descartada`;
 - `plataforma` es un token en minúsculas y sin espacios.
 
+De `0006`, sobre herramientas:
+
+- `tipo` dentro de sus ocho valores;
+- cada clave de `capacidades` existe como capacidad;
+- cada valor de `capacidades` en `pendiente`, `oro`, `plata` o `descartada`.
+
 De `0003`, sobre proyectos:
 
 - `estado` en `activo`, `pausado` o `terminado`;
@@ -184,6 +194,23 @@ A eso se agregan, ya con el alcance definido:
   que el frontmatter no puede responder;
 - la elección del stack, que es la acción siguiente y no parte del alcance.
 
+Y con la incorporación de capacidades y herramientas, queda explícitamente
+fuera todo lo que sería decidir por el usuario en lugar de mostrarle el
+inventario:
+
+- recomendación automática de herramientas para un objetivo;
+- detección automática de huecos;
+- búsqueda web automática;
+- capacidades requeridas por proyectos, que serían una enmienda a `0003`;
+- construcción automática de soluciones;
+- la relación entre una herramienta y el proyecto que la originó;
+- el ranking `bronce`;
+- precios, suscripciones y disponibilidad;
+- cualquier arquitectura de plugins o anexos.
+
+El prototipo lee, valida, indexa, relaciona y muestra. Decidir sigue siendo del
+usuario.
+
 Si la edición se incorpora más adelante, se decidirá después de probar el visor
 si corresponde a este proyecto o a uno separado.
 
@@ -192,21 +219,22 @@ si corresponde a este proyecto o a uno separado.
 El proyecto termina cuando el prototipo:
 
 - implementa correctamente el alcance de solo lectura;
-- permite consultar categorías, nodos, fuentes y proyectos;
+- permite consultar los seis tipos de entidad;
 - permite búsqueda, filtros y visualización de relaciones;
 - fue usado en consultas reales durante un período breve;
 - resulta una alternativa útil y preferible para las consultas habituales.
 
 Comprobaciones concretas que hacen verificables esos criterios:
 
-1. Las cuatro entidades se listan y cada una abre su detalle con el cuerpo
+1. Los seis tipos de entidad se listan y cada uno abre su detalle con el cuerpo
    renderizado.
 2. Una búsqueda por una palabra del cuerpo encuentra la entidad que la contiene.
-3. Los filtros de las tres entidades con frontmatter funcionan.
+3. Los filtros de las cuatro entidades con frontmatter funcionan.
 4. La vista de nodos disponibles coincide con el cálculo manual sobre el
    repositorio.
 5. Desde un nodo se llega a sus fuentes, a sus dependencias y a los nodos que
-   dependen de él, sin escribir rutas.
+   dependen de él, y desde una capacidad a las herramientas que la cubren, sin
+   escribir rutas.
 6. Una referencia rota introducida a propósito aparece señalada, y la entidad que
    la contiene sigue siendo visible.
 7. Después de un período breve de uso real, consultar el sistema por la
@@ -225,10 +253,11 @@ No vinculante. Solo la próxima acción del frontmatter compromete algo.
 1. Definir el alcance del prototipo de solo lectura.
 2. Elegir el stack y registrar la decisión.
 3. Construir el lector de archivos del repositorio.
-4. Listados por entidad: categorías, nodos, fuentes, proyectos.
+4. Listados por entidad: categorías, capacidades, nodos, fuentes, herramientas,
+   proyectos.
 5. Búsqueda y filtros por los campos ya definidos en las decisiones.
 6. Vista de relaciones: dependencias entre nodos, fuentes citadas, nodos
-   requeridos por proyecto.
+   requeridos por proyecto, herramientas por capacidad.
 7. Uso real durante algunas semanas antes de evaluar el criterio de
    finalización.
 
@@ -282,3 +311,13 @@ La próxima acción pasa a ser construir el lector de archivos del repositorio, 
 Con eso el proyecto queda bloqueado mientras ese nodo siga en `pendiente`. Es el
 primer caso real del puente entre los dos modos: lo que corresponde ahora no es
 avanzar el proyecto sino aprender lo que la acción requiere.
+
+**2026-08-07 — El modelo pasa a seis tipos de entidad.**
+
+Se incorporaron `capacidades/` y `herramientas/`, definidas en las decisiones
+`0005` y `0006`. Una capacidad expresa qué se necesita poder hacer; una
+herramienta, con qué puede realizarse.
+
+En consecuencia, el primer prototipo deberá leer, validar, indexar y mostrar
+también esas dos entidades. El recomendador automático —elegir herramientas para
+un objetivo, detectar huecos y proponer construir— continúa fuera del alcance.

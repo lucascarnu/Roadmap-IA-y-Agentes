@@ -37,13 +37,26 @@ saber para obtener un resultado de calidad y para reconocer cuándo no lo es.
 
 ## Experiencia central
 
-El sistema acompaña un ciclo completo, desde que un tema aparece hasta que se
-convierte en algo aplicado.
+El punto de entrada habitual es Hacer: qué quiero lograr. Aprender sigue siendo
+una entrada legítima por sí misma, pero aparece con más frecuencia al servicio de
+Hacer, cuando algo que hace falta todavía no se sabe.
+
+Ante un objetivo el orden es: qué capacidades hacen falta, qué herramientas y
+conocimientos ya existen para cubrirlas, y recién entonces qué falta. Reutilizar
+y combinar lo que ya existe tiene precedencia sobre construir algo nuevo, que se
+considera cuando queda un hueco real que nada disponible resuelve bien.
+
+El sistema acompaña el ciclo completo, desde que aparece un objetivo o un tema
+hasta que se convierte en algo aplicado.
 
 **Descubrir**
 
 - Ante un objetivo de aprendizaje o de ejecución, revisar lo que ya existe y
   distinguir lo aprendido, lo pendiente y lo que todavía no está representado.
+- Identificar qué capacidades exige el objetivo y qué herramientas registradas
+  las cubren, con qué clasificación para cada una.
+- No proponer construir ni buscar algo nuevo cuando una herramienta ya
+  registrada cubre bien la necesidad.
 - Detectar conocimientos, herramientas o prerrequisitos faltantes, y sugerir qué
   conviene buscar y dónde: Find Skills, documentación oficial, GitHub,
   buscadores, cursos o plataformas de contenido.
@@ -96,18 +109,28 @@ convierte en algo aplicado.
 
 ## Modelo
 
-El sistema se organiza en cinco entidades, deliberadamente en lugar de una lista
-plana de tareas:
+El sistema se organiza en seis tipos de entidad, deliberadamente en lugar de una
+lista plana de tareas:
 
+- **Categorías** — agrupan nodos y fuentes por dominio y dan navegación.
+- **Capacidades** — qué se necesita poder hacer.
 - **Nodos** — la unidad granular de aprendizaje. Un concepto entendido.
-- **Categorías** — agrupan nodos por dominio y dan navegación.
 - **Fuentes** — de dónde salió el conocimiento; sostienen la trazabilidad.
-- **Proyectos** — dónde se aplica lo aprendido, con alcance definido.
-- **Decisiones** — por qué el sistema es como es, una por archivo.
+- **Herramientas** — con qué puede realizarse una capacidad.
+- **Proyectos** — qué resultado concreto se quiere conseguir, con alcance
+  definido.
 
-La separación entre nodo y proyecto es el principio central del modelo:
-distingue lo que sé de lo que hice con eso. Un nodo puede existir sin proyecto,
-y un proyecto puede exponer vacíos que generan nodos nuevos.
+Las **decisiones** no son entidades del modelo. Son documentación arquitectónica
+que registra por qué el sistema es como es, una por archivo, y no se indexan
+junto al contenido.
+
+La separación entre nodo y proyecto sigue siendo central: distingue lo que sé de
+lo que quiero conseguir. Un nodo puede existir sin proyecto, y un proyecto puede
+exponer vacíos que generan nodos nuevos.
+
+Capacidades y herramientas agregan el otro eje: qué hace falta poder hacer y con
+qué. Muchas veces un objetivo se resuelve combinando herramientas que ya existen,
+sin aprender nada nuevo.
 
 ## Alcance actual
 
@@ -119,7 +142,7 @@ y proyectos en generación de imágenes con IA, diseño gráfico 2D, video con I
 audio y voz, sincronización labial, avatares, producción de contenido,
 publicidad, marketing y los dominios que aparezcan más adelante.
 
-Categorías, nodos, fuentes y proyectos se reutilizan igual en todos ellos, y una
+Los seis tipos de entidad se reutilizan igual en todos ellos, y una
 categoría nueva se crea cuando existe contenido o una necesidad real que la
 justifique. Los modos Aprender y Hacer pueden combinar conocimientos de dominios
 distintos. Trabajar hoy sobre desarrollo de aplicaciones no especializa el

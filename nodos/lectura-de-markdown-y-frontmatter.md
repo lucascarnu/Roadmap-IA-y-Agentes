@@ -25,9 +25,9 @@ entidad del modelo.
   significan algo distinto de una lista vacía.
 - Leer el cuerpo como texto y extraer su `# H1`.
 - Distinguir los tres tratamientos que conviven en el repositorio:
-  - `nodos/`, `fuentes/` y `proyectos/`, cuyos archivos llevan frontmatter
-    definido por las decisiones `0001`, `0002` y `0003`;
-  - `categorias/`, cuyos archivos son Markdown sin frontmatter;
+  - `nodos/`, `fuentes/`, `herramientas/` y `proyectos/`, cuyos archivos llevan
+    frontmatter definido por las decisiones `0001`, `0002`, `0003` y `0006`;
+  - `categorias/` y `capacidades/`, cuyos archivos son Markdown sin frontmatter;
   - la documentación del repositorio —`decisiones/`, `README.md`, `vision.md`,
     `reglas.md` y los demás archivos de la raíz—, que no debe interpretarse
     como entidad del modelo.
@@ -51,11 +51,12 @@ es la diferencia sobre la que se apoya el formato variable de los proyectos.
 
 ## Práctica
 
-Escribir un script que recorra `categorias/`, `nodos/`, `fuentes/` y
-`proyectos/` e imprima, por archivo, su identificador y lo que haya podido leer.
-Debe parsear el frontmatter en las tres carpetas que lo tienen, aceptar sin
-error las categorías que no lo tienen, omitir el `README.md` de cada carpeta, y
-no recorrer `decisiones/` ni los archivos sueltos de la raíz.
+Escribir un script que recorra `categorias/`, `capacidades/`, `nodos/`,
+`fuentes/`, `herramientas/` y `proyectos/` e imprima, por archivo, su
+identificador y lo que haya podido leer. Debe parsear el frontmatter en las
+cuatro carpetas que lo tienen, aceptar sin error las categorías y capacidades
+que no lo tienen, omitir el `README.md` de cada carpeta, y no recorrer
+`decisiones/` ni los archivos sueltos de la raíz.
 
 ## Fuentes
 

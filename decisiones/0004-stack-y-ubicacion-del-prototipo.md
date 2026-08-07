@@ -7,7 +7,7 @@
 
 La próxima acción de `implementar-roadmap-como-app` era elegir el stack del
 primer prototipo. El alcance de ese prototipo ya está escrito: un visor local de
-solo lectura sobre las cuatro entidades del modelo, con búsqueda, filtros,
+solo lectura sobre los seis tipos de entidad del modelo, con búsqueda, filtros,
 relaciones y detección de errores de integridad.
 
 Dos preguntas había que resolver juntas. La primera es con qué construirlo. La
@@ -73,12 +73,13 @@ entidades. La elección concreta no forma parte de esta decisión.
 
 - La aplicación vive en **`app/`**, una única carpeta dedicada en la raíz de
   este mismo repositorio.
-- `app/` es hermana de `categorias/`, `nodos/`, `fuentes/`, `proyectos/` y
-  `decisiones/`, y no colisiona con ninguna de ellas.
+- `app/` es hermana de `categorias/`, `capacidades/`, `nodos/`, `fuentes/`,
+  `herramientas/`, `proyectos/` y `decisiones/`, y no colisiona con ninguna de
+  ellas.
 - **`app/` no forma parte del modelo de entidades.** No se le aplica ninguna de
-  las reglas de metadata de `0001`, `0002` o `0003`, y su contenido no se lee
-  como nodos, fuentes, proyectos ni categorías.
-- El lector continúa considerando únicamente las cuatro carpetas de entidades,
+  las reglas de metadata de `0001`, `0002`, `0003`, `0005` o `0006`, y su
+  contenido no se lee como ninguna de las seis entidades.
+- El lector continúa considerando únicamente las seis carpetas de entidades,
   según la lista explícita que ya define el nodo
   `lectura-de-markdown-y-frontmatter`. `app/` queda fuera sin necesidad de
   ninguna regla nueva.

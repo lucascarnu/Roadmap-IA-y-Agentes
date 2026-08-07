@@ -30,7 +30,8 @@ Fundamentos, acotados a lo que esta interfaz necesita:
 
 Aplicación a este sistema:
 
-- Listados por tipo de entidad: categorías, nodos, fuentes y proyectos.
+- Listados por tipo de entidad: categorías, capacidades, nodos, fuentes,
+  herramientas y proyectos.
 - Vista de detalle de una entidad, con su cuerpo renderizado.
 - Búsqueda por texto y filtros por los campos del frontmatter.
 - Navegación por las relaciones: de un nodo a sus fuentes, de un proyecto a los
