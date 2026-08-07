@@ -117,6 +117,11 @@ hasta que se convierte en algo aplicado.
   interesó. No implica haberla validado, ni estar de acuerdo, ni convertirla en
   nodo de conocimiento. La promoción a nodo es un acto deliberado y posterior,
   que exige haber entendido.
+- **Acervo curado, no colección.** Lo que se acumula busca calidad, cobertura y
+  diversidad funcional, no exhaustividad. Dentro de una misma capacidad se
+  minimiza la redundancia: una alternativa adicional tiene que aportar valor
+  incremental relevante, no solo ser buena. Y ninguna evaluación es definitiva:
+  cambia cuando cambia la evidencia o cambia la herramienta.
 - **Eficiencia del conjunto.** Una solución se evalúa por la eficiencia de
   usuario, IA y flujo de trabajo juntos, no solo por su resultado. Cuando tenga
   sentido: menos intervención humana repetitiva, menos pasos manuales, menos

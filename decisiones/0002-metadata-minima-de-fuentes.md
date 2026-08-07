@@ -21,7 +21,14 @@ esta decisión no puede contradecirla.
 
 ## Decisión
 
-Cada fuente lleva un frontmatter YAML con seis campos obligatorios:
+Una fuente es una **unidad lógica de procedencia y evidencia**, no
+necesariamente un único archivo. Una publicación preservada con varias capturas,
+un PDF descargado, o una URL acompañada de los archivos que conservan su
+contenido son, cada caso, una sola fuente. Y una misma fuente puede sustentar
+varios nodos y varias herramientas.
+
+Cada fuente lleva un frontmatter YAML con seis campos obligatorios, más
+`materiales`, que es opcional:
 
 ```yaml
 ---
@@ -72,11 +79,13 @@ URL de la cual deducir nada. La regla del token en minúsculas evita que conviva
 
 ### `origen`
 
-Obligatorio. Contiene la URL, la referencia bibliográfica, la identificación de
-una conversación o la ruta localizable del material.
+Obligatorio. Contiene la **referencia canónica de procedencia**: la URL, la
+referencia bibliográfica, la identificación de una conversación o la ruta
+localizable del material. Es de dónde viene la fuente, no todo lo que se
+conserva de ella.
 
-Se escribe **siempre entre comillas dobles**. Es el único campo de texto libre
-del frontmatter, y sin comillas hay tres formas de romperlo sin advertirlo: un
+Se escribe **siempre entre comillas dobles**. Es un campo de texto libre, y sin
+comillas hay tres formas de romperlo sin advertirlo: un
 `: ` interno corta el escalar, un ` #` inicia un comentario y trunca el valor, y
 varios caracteres iniciales reservados alteran el parseo. Una regla incondicional
 evita tener que evaluar caso por caso.
@@ -91,6 +100,46 @@ origen: "Conversación con Martín sobre MCP, 2026-08-06"
 origen: "fuentes/adjuntos/paper-agentes.pdf"
 origen: "Charla \"Agentes en producción\", 2026-05"
 ```
+
+### `materiales`
+
+Opcional. Lista de los artefactos o representaciones preservadas **de esa misma
+fuente lógica**: capturas de la publicación, el PDF descargado desde ese
+documento, una copia local de esa página, un snapshot que conserva ese contenido.
+
+```yaml
+materiales:
+  - "fuentes/adjuntos/skill-tiktok-01.png"
+  - "fuentes/adjuntos/skill-tiktok-02.png"
+```
+
+Mientras `origen` responde de dónde viene la fuente, `materiales` responde qué se
+conserva de ella. Varias capturas de una misma publicación pertenecen a una sola
+fuente: **un material no equivale a una fuente**.
+
+**Lo que no es un material.** Una evidencia independiente descubierta al
+investigar no se agrega como material de otra fuente. Si desde una publicación de
+TikTok se llega a la documentación oficial, al repositorio y a una comparativa de
+terceros, eso son cuatro fuentes distintas, cada una con su procedencia,
+plataforma, autor, formato y clasificación propios. Absorberlas como materiales
+destruiría esos cinco datos y `materiales` se convertiría en un contenedor
+genérico de todo lo relacionado con un candidato.
+
+Esas fuentes independientes se relacionan después desde la herramienta, con su
+campo `fuentes`.
+
+Una URL puede figurar en `materiales` solo cuando sea un artefacto de la misma
+fuente lógica —por ejemplo un archivo alojado de esa misma publicación—, nunca
+cuando sea una procedencia independiente.
+
+Rige el mismo formato que `origen`: cada entrada entre comillas dobles, rutas
+relativas a la raíz del repositorio con barras normales, y comillas dobles
+internas escapadas con `\"`. Las entradas pueden ser rutas locales o URLs.
+
+Ausente o `[]` significa que no se conservó ningún artefacto aparte del origen.
+
+No lleva metadata por material: ni tipo, ni orden, ni descripción. Si algún
+material necesita explicación, va en el cuerpo.
 
 ### `autor`
 
