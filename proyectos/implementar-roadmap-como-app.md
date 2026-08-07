@@ -265,11 +265,11 @@ No vinculante. Solo la próxima acción del frontmatter compromete algo.
 7. Uso real durante algunas semanas antes de evaluar el criterio de
    finalización.
 
-El conocimiento que exigen las etapas 3 y 6 existe en `nodos/`:
-`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. Ninguno
-está en `nodos_requeridos`: bajo la definición de `0003` ese campo recoge solo lo
-que el usuario necesita para decidir o dirigir, y ambos son conocimiento técnico
-delegable al agente que construya el lector.
+El conocimiento técnico que exigen las etapas 3 y 6 está especificado en las
+decisiones y en el alcance de este proyecto, no en `nodos/`. Bajo la definición
+de `0003`, `nodos_requeridos` recoge solo lo que el usuario necesita para decidir
+o dirigir: la implementación puede ejecutarla el agente sin que esas técnicas se
+conviertan en aprendizaje obligatorio.
 
 ## Bitácora
 

@@ -80,9 +80,9 @@ entidades. La elección concreta no forma parte de esta decisión.
   las reglas de metadata de `0001`, `0002`, `0003`, `0005` o `0006`, y su
   contenido no se lee como ninguna de las seis entidades.
 - El lector continúa considerando únicamente las seis carpetas de entidades,
-  según la lista explícita que ya define el nodo
-  `lectura-de-markdown-y-frontmatter`. `app/` queda fuera sin necesidad de
-  ninguna regla nueva.
+  según la lista explícita que define el alcance del prototipo en
+  `implementar-roadmap-como-app`. `app/` queda fuera sin necesidad de ninguna
+  regla nueva.
 - La aplicación encuentra el contenido mediante rutas relativas al propio
   repositorio, sin configuración externa de ubicación.
 - Nada de la aplicación vive fuera de `app/`, salvo lo que Git exige en la raíz
@@ -170,17 +170,11 @@ Detalles de implementación que esta decisión no congela:
 
 Una vez aprobada e integrada esta decisión, la próxima acción de
 `implementar-roadmap-como-app` pasa a ser **construir el lector de archivos del
-repositorio**, y `nodos_requeridos` incorpora por primera vez un nodo:
+repositorio**.
 
-```yaml
-nodos_requeridos:
-  - lectura-de-markdown-y-frontmatter
-```
-
-Ese nodo está en `pendiente`, de modo que el proyecto quedará bloqueado según la
-regla de `0003`, y lo que el modo Hacer recomendará será aprender antes de
-construir. Es el primer caso real del puente entre los dos modos.
-
-Esta decisión también desbloquea la sección de fuentes de ese nodo, que hasta
-ahora no podía completarse porque el material a estudiar dependía del stack
-elegido.
+Al escribirse esta decisión se esperaba que esa acción quedara bloqueada por un
+nodo de aprendizaje. No ocurrió: `0003` redefinió después `nodos_requeridos` como
+el conocimiento que el usuario necesita para decidir o dirigir, y el detalle
+técnico de implementación no entra en esa definición. La acción quedó con
+`nodos_requeridos: []` y con `capacidades_requeridas` declarando qué hace falta
+poder hacer.
