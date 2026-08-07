@@ -1,9 +1,10 @@
 ---
 estado: activo
 prioridad: alta
-proxima_accion: "Elegir el stack del prototipo y registrar la decisión"
-duracion_proxima_accion: corta
-nodos_requeridos: []
+proxima_accion: "Construir el lector de archivos del repositorio"
+duracion_proxima_accion: media
+nodos_requeridos:
+  - lectura-de-markdown-y-frontmatter
 ---
 
 # Implementar el roadmap como aplicación
@@ -232,9 +233,9 @@ No vinculante. Solo la próxima acción del frontmatter compromete algo.
    finalización.
 
 El conocimiento que exigen las etapas 3 y 6 ya existe en `nodos/`:
-`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. No
-están en `nodos_requeridos` porque no bloquean la acción actual; cuando una de
-esas etapas se convierta en la próxima acción, sus nodos se incorporan.
+`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. El
+primero ya está en `nodos_requeridos` porque bloquea la acción actual; el segundo
+se incorporará cuando su etapa se convierta en la próxima acción.
 
 ## Bitácora
 
@@ -267,3 +268,17 @@ aprender nada nuevo, y desbloquea la búsqueda de fuentes del nodo
 `lectura-de-markdown-y-frontmatter`, que dependen de esa elección. Recién la
 acción posterior, construir el lector, incorporará ese nodo a
 `nodos_requeridos`.
+
+**2026-08-07 — Stack elegido, proyecto bloqueado.**
+
+El stack quedó elegido y registrado en la decisión `0004`: Python 3 con Flask,
+HTML renderizado en el servidor, y la aplicación viviendo en `app/` dentro de
+este mismo repositorio.
+
+La próxima acción pasa a ser construir el lector de archivos del repositorio, y
+`nodos_requeridos` incorpora por primera vez un nodo:
+`lectura-de-markdown-y-frontmatter`.
+
+Con eso el proyecto queda bloqueado mientras ese nodo siga en `pendiente`. Es el
+primer caso real del puente entre los dos modos: lo que corresponde ahora no es
+avanzar el proyecto sino aprender lo que la acción requiere.
