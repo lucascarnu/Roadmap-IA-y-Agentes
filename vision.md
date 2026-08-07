@@ -35,6 +35,14 @@ El criterio vale en cualquier dominio —programación, agentes, diseño, imagen
 video, audio, marketing— porque en todos la pregunta es la misma: qué hace falta
 saber para obtener un resultado de calidad y para reconocer cuándo no lo es.
 
+De ahí se sigue una distinción que conviene no perder: una cosa es el
+conocimiento que necesito adquirir para decidir, dirigir o validar algo que no
+conviene delegar, y otra el conocimiento técnico que una IA aplica para ejecutar
+una tarea. El segundo no se convierte automáticamente en aprendizaje obligatorio.
+
+Aprender puede ser una entrada propia o aparecer al servicio de Hacer, pero Hacer
+no se bloquea porque el agente tenga que aplicar una técnica delegable.
+
 ## Experiencia central
 
 El punto de entrada habitual es Hacer: qué quiero lograr. Aprender sigue siendo
@@ -109,6 +117,20 @@ hasta que se convierte en algo aplicado.
   interesó. No implica haberla validado, ni estar de acuerdo, ni convertirla en
   nodo de conocimiento. La promoción a nodo es un acto deliberado y posterior,
   que exige haber entendido.
+- **Eficiencia del conjunto.** Una solución se evalúa por la eficiencia de
+  usuario, IA y flujo de trabajo juntos, no solo por su resultado. Cuando tenga
+  sentido: menos intervención humana repetitiva, menos pasos manuales, menos
+  tiempo operativo, menos consumo recurrente de tokens, créditos y costo, y menos
+  reprocesamiento de información que puede estructurarse una vez y reutilizarse;
+  más automatización, reutilización, interoperabilidad entre agentes y
+  escalabilidad. No se optimiza solo por facilidad inicial: una solución con más
+  costo de preparación puede convenir si reduce sustancialmente el trabajo o el
+  gasto recurrente. Ahorrar recursos no es un objetivo en sí mismo: importa
+  cuando produce un beneficio práctico neto —evita un límite real, reduce gasto
+  efectivo, acelera el trabajo, permite hacer más, reduce intervención humana,
+  evita reprocesamiento o mejora la autonomía—. Consumir menos de algo que sobra
+  no es una mejora y no justifica agregar complejidad. El beneficio se evalúa
+  caso por caso, sin convertir ninguna tecnología concreta en regla universal.
 - **Sin complejidad anticipada.** Se agrega estructura cuando una necesidad real
   la justifica, no por simetría.
 

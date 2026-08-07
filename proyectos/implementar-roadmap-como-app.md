@@ -3,8 +3,9 @@ estado: activo
 prioridad: alta
 proxima_accion: "Construir el lector de archivos del repositorio"
 duracion_proxima_accion: media
-nodos_requeridos:
-  - lectura-de-markdown-y-frontmatter
+nodos_requeridos: []
+capacidades_requeridas:
+  - desarrollo-asistido-por-ia
 ---
 
 # Implementar el roadmap como aplicación
@@ -264,10 +265,11 @@ No vinculante. Solo la próxima acción del frontmatter compromete algo.
 7. Uso real durante algunas semanas antes de evaluar el criterio de
    finalización.
 
-El conocimiento que exigen las etapas 3 y 6 ya existe en `nodos/`:
-`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. El
-primero ya está en `nodos_requeridos` porque bloquea la acción actual; el segundo
-se incorporará cuando su etapa se convierta en la próxima acción.
+El conocimiento que exigen las etapas 3 y 6 existe en `nodos/`:
+`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. Ninguno
+está en `nodos_requeridos`: bajo la definición de `0003` ese campo recoge solo lo
+que el usuario necesita para decidir o dirigir, y ambos son conocimiento técnico
+delegable al agente que construya el lector.
 
 ## Bitácora
 
@@ -324,3 +326,16 @@ herramienta, con qué puede realizarse.
 En consecuencia, el primer prototipo deberá leer, validar, indexar y mostrar
 también esas dos entidades. El recomendador automático —elegir herramientas para
 un objetivo, detectar huecos y proponer construir— continúa fuera del alcance.
+
+**2026-08-07 — El proyecto deja de estar bloqueado.**
+
+`0003` corrigió la semántica de `nodos_requeridos`: recoge el conocimiento previo
+que el usuario necesita para decidir o dirigir la acción, no el conocimiento
+técnico que el agente aplica al ejecutarla. Por eso
+`lectura-de-markdown-y-frontmatter` deja de bloquear la próxima acción y el campo
+queda vacío.
+
+La misma decisión incorporó `capacidades_requeridas` al bloque de próxima acción.
+Esta acción requiere `desarrollo-asistido-por-ia`, que expresa qué hace falta
+poder hacer. No implica que se haya elegido ni clasificado ninguna herramienta
+concreta todavía.

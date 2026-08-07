@@ -67,8 +67,8 @@ crítico, y nadie edita ese campo. Una fecha se recalcula sola.
 
 ### Bloque de próxima acción
 
-Tres campos que forman una unidad indivisible, porque los tres describen el mismo
-objeto —el paso siguiente— y ninguno tiene sentido sin los otros dos.
+Cuatro campos que forman una unidad indivisible, porque los cuatro describen el
+mismo objeto —el paso siguiente— y ninguno tiene sentido sin los demás.
 
 **`proxima_accion`** — texto libre. Representa una única acción concreta e
 inmediata, no el plan completo. El plan vive en el cuerpo.
@@ -90,16 +90,35 @@ otro significado repetiría el error que `0002` ya evitó al no llamar `estado` 
 campo de clasificación de las fuentes.
 
 **`nodos_requeridos`** — lista de identificadores de nodos. Representa
-únicamente los conocimientos necesarios para ejecutar la próxima acción.
+únicamente los conocimientos que **el usuario** necesita antes de la próxima
+acción para poder decidirla o dirigirla, y que no conviene delegar por completo.
 
-`[]` significa que no se identificaron conocimientos necesarios para esa acción
-concreta. **No** significa que el proyecto completo no requiera conocimiento
-nuevo.
+No incluye el conocimiento técnico que un agente aplica para ejecutar. Que una
+acción use Python, YAML, HTTP o desarrollo web no convierte esos temas en nodos
+requeridos. Tampoco incluye lo que solo servirá para validar una vez que exista
+un resultado: eso pertenece al criterio de finalización del proyecto y a la
+prioridad propia del nodo.
+
+`[]` significa que no se identificó ningún conocimiento previo del usuario
+necesario para esa próxima acción. **No** significa que el proyecto completo no
+requiera conocimiento nuevo.
 
 El alcance acotado es lo que vuelve correcto el algoritmo: si el campo listara
 todo lo que el proyecto va a necesitar alguna vez, cualquier conocimiento de una
 etapa lejana bloquearía la acción de hoy y casi ningún proyecto avanzaría nunca.
 Los nodos de etapas futuras no deben bloquear la acción actual.
+
+**`capacidades_requeridas`** — lista de identificadores de capacidades
+existentes en `capacidades/`. Representa las capacidades que **esa** próxima
+acción necesita, no todas las que el proyecto usará alguna vez.
+
+`[]` significa que no se identificaron capacidades necesarias para esa próxima
+acción. **No** implica que el proyecto completo no use ninguna.
+
+A diferencia de `nodos_requeridos`, este campo **no bloquea**. Es información
+declarativa: permite expresar qué hace falta poder hacer. Cruzarla con el
+inventario de herramientas para detectar huecos o proponer una combinación
+pertenece al recomendador, que queda fuera de esta decisión.
 
 ### Obligatoriedad por estado
 
@@ -129,6 +148,8 @@ proxima_accion: "Definir el esquema de la tabla de prospectos"
 duracion_proxima_accion: corta
 nodos_requeridos:
   - mcp-servidores-locales
+capacidades_requeridas:
+  - modelado-de-datos
 ---
 ```
 
@@ -142,6 +163,7 @@ proxima_accion: "Migrar los shortcodes al editor de bloques"
 duracion_proxima_accion: media
 nodos_requeridos:
   - wordpress-bloques
+capacidades_requeridas: []
 ---
 ```
 
@@ -197,6 +219,10 @@ Algoritmo mínimo:
 
 Un nodo `en-curso` todavía bloquea la acción, igual que uno `pendiente`.
 
+`capacidades_requeridas` no interviene en este algoritmo. Es declarativa: expresa
+qué hace falta poder hacer, pero no condiciona si la acción puede iniciarse.
+Cruzarla con el inventario de herramientas pertenece al recomendador.
+
 El paso 3 es el puente entre modo Hacer y modo Aprender, y no necesita ningún
 campo propio. Cuando deriva a un nodo, el filtro de tiempo del paso 4 pasa a usar
 el `estimacion` de ese nodo en lugar de `duracion_proxima_accion`: son campos
@@ -242,12 +268,18 @@ asumidos permanecen en `inbox.md`; crear el archivo en `proyectos/` es el acto d
 compromiso, igual que en `0002` crear el archivo de la fuente es el acto de
 aprobación.
 
+**Herramientas elegidas o candidatas, orden entre ellas, cobertura, porcentajes,
+intervención manual y flujos de trabajo.** Un proyecto declara qué capacidades
+necesita, no con qué se resolverán ni en qué secuencia. Elegir y combinar
+herramientas pertenece al recomendador, y modelarlo ahora sería diseñar contra
+casos que todavía no existen.
+
 ## Costos conocidos
 
 Se aceptan junto con la decisión:
 
-- `nodos_requeridos` es volátil: cambia cada vez que avanza la próxima acción, y
-  esa edición es manual.
+- `nodos_requeridos` y `capacidades_requeridas` son volátiles: cambian cada vez
+  que avanza la próxima acción, y esa edición es manual.
 - **La vista inversa desde un nodo hacia proyectos es parcial.** `0001` afirma
   que se obtiene escaneando, y esta decisión no modifica ese texto. Con el
   alcance acotado, escanear `nodos_requeridos` solo recupera los proyectos que
@@ -259,7 +291,7 @@ Se aceptan junto con la decisión:
 - El frontmatter tiene forma variable según `estado`, a diferencia de nodos y
   fuentes, que siempre llevan seis campos.
 - Terminar un proyecto deja de ser una edición de una palabra: hay que quitar
-  `prioridad` y las tres claves del bloque.
+  `prioridad` y las cuatro claves del bloque.
 - Un proyecto pausado con acción preparada envejece. Conviene revalidar el bloque
   al reactivarlo en lugar de confiar en él a ciegas.
 
@@ -271,6 +303,8 @@ comprobar:
 
 - que los valores estén dentro de los permitidos;
 - que los identificadores de `nodos_requeridos` correspondan a nodos existentes;
+- que los identificadores de `capacidades_requeridas` correspondan a capacidades
+  existentes;
 - la presencia o ausencia de cada campo según `estado`;
 - la coherencia del bloque de próxima acción, según la regla definida arriba;
 - la ausencia de campos operativos en proyectos terminados.
