@@ -4,7 +4,8 @@ prioridad: alta
 estimacion: corta
 categoria: agentes-de-desarrollo
 depende_de: []
-fuentes: []
+fuentes:
+  - separacion-reglas-y-tareas
 ---
 
 # Reglas permanentes y tareas puntuales
@@ -69,6 +70,8 @@ archivo de reglas.
 
 ## Origen
 
-Este nodo no proviene de material externo, sino de la construcción de este mismo
+Este conocimiento surgió de la práctica durante la construcción de este mismo
 repositorio: `reglas.md`, sus cuatro secciones y los adaptadores `CLAUDE.md` y
-`AGENTS.md`. Por eso `fuentes` está vacío.
+`AGENTS.md`. La conversación de trabajo en la que se definieron esos criterios
+quedó registrada como fuente interna del sistema; no proviene de material externo
+publicado.
