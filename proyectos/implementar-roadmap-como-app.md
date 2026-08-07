@@ -1,7 +1,7 @@
 ---
 estado: activo
 prioridad: alta
-proxima_accion: "Definir el alcance del primer prototipo de solo lectura"
+proxima_accion: "Elegir el stack del prototipo y registrar la decisión"
 duracion_proxima_accion: corta
 nodos_requeridos: []
 ---
@@ -26,13 +26,136 @@ así que el prototipo parte de un esquema escrito, no de uno probado a fondo.
 
 ## Alcance inicial
 
-El primer prototipo se limita a:
+### Qué problema resuelve
 
-- leer los archivos Markdown y su frontmatter;
-- mostrar categorías, nodos, fuentes y proyectos;
-- permitir búsqueda y filtros;
-- mostrar relaciones y dependencias;
-- funcionar en modo de solo lectura.
+Hoy la única forma de consultar el sistema es abrir archivos en el editor. Con
+ocho entidades eso todavía es manejable, y no es ahí donde está el problema. El
+problema son las preguntas que no se pueden responder mirando un archivo, porque
+exigen cruzar varios:
+
+- qué nodos puedo aprender ahora, que obliga a leer el estado y las dependencias
+  de todos los nodos y resolver la cadena a mano;
+- qué proyectos están listos para avanzar, que obliga a leer los nodos requeridos
+  de cada proyecto y después el estado de cada nodo listado;
+- qué nodos citan una fuente, que solo se responde buscando, porque la relación
+  se guarda en una sola dirección;
+- si hay alguna referencia rota, que hoy no verifica nada.
+
+### Quién lo usa
+
+Un solo usuario, en su máquina. Sin cuentas, sin red, sin acceso compartido.
+
+### Entidades que muestra
+
+Cuatro tipos: categorías, nodos, fuentes y proyectos.
+
+Las decisiones y los documentos operativos no se convierten en entidades. Son
+documentación del sistema, no contenido del sistema. Las decisiones especifican
+el formato y por eso son insumo para construir la aplicación, pero no material
+que la aplicación tenga que mostrar.
+
+### Consultas
+
+- Listar cada tipo de entidad y abrir el detalle de cualquiera, con su cuerpo
+  renderizado.
+- Buscar texto en el título y en el cuerpo de cualquier entidad.
+- Filtrar nodos por estado, prioridad, estimación y categoría.
+- Filtrar fuentes por clasificación, formato, plataforma y categoría.
+- Filtrar proyectos por estado y prioridad.
+- Qué puedo aprender ahora: nodos disponibles, ordenados por prioridad y
+  filtrables por estimación según el tiempo del que se dispone.
+- Qué puedo hacer ahora: proyectos activos y listos, con su próxima acción
+  visible.
+
+### Relaciones
+
+Directas, tal como están declaradas: de un nodo a su categoría, a sus fuentes y a
+sus dependencias; de una fuente a su categoría; de un proyecto a sus nodos
+requeridos.
+
+Inversas, calculadas: de una categoría a lo que la referencia; de una fuente a
+los nodos que la citan; de un nodo a los nodos que dependen de él y a los
+proyectos que lo requieren.
+
+La última se muestra marcada como parcial. La decisión `0003` acotó
+`nodos_requeridos` a la próxima acción, así que esa vista responde quién necesita
+el nodo hoy, no quién lo usó alguna vez.
+
+### Información derivada
+
+Nada de esto se guarda en ningún archivo; todo se recalcula al leer.
+
+- Disponibilidad de cada nodo, según la regla de `0001`.
+- Cadena de bloqueo: las dependencias pendientes que bloquean a un nodo y las
+  relaciones de precedencia que se desprenden del grafo. Cuando varias
+  dependencias pueden resolverse en paralelo o en cualquier orden, la aplicación
+  no inventa una prioridad entre ellas.
+- Preparación de cada proyecto, según la regla de `0003`.
+- Las vistas inversas enumeradas arriba.
+- Conteo de nodos por categoría, como dato informativo frente al umbral que las
+  propias categorías mencionan.
+
+Sobre `fecha_limite`, el prototipo se limita a mostrarla cuando existe,
+distinguir los proyectos que la tienen de los que no, y permitir ordenar por
+proximidad temporal. No define umbrales ni niveles de urgencia, porque ninguna
+decisión los establece.
+
+### Entidades inválidas
+
+Un visor sobre archivos escritos a mano se encuentra con frontmatter mal formado,
+campos faltantes o valores fuera del conjunto permitido.
+
+- Una entidad inválida nunca desaparece en silencio.
+- Sigue siendo visible siempre que pueda leerse algo de ella.
+- Queda marcada como inválida de forma evidente.
+- Se muestra el motivo concreto del error.
+
+Si el archivo no puede parsearse ni leerse como entidad, aparece igual mediante
+su ruta o su nombre de archivo, junto con el error. Si además puede recuperarse
+un identificador válido, se muestra también.
+
+No hay reparación automática ni corrección sugerida: el prototipo informa,
+corregir es trabajo del editor.
+
+### Integridad
+
+Todas las comprobaciones provienen de reglas ya escritas en las decisiones. No se
+agrega ninguna regla nueva.
+
+Comunes a las entidades con frontmatter:
+
+- presencia de los campos obligatorios;
+- valores dentro del conjunto permitido.
+
+Cuando una entidad declara `categoria`, ese identificador debe corresponder a una
+categoría existente.
+
+De `0001`, sobre nodos:
+
+- `estado` en `pendiente`, `en-curso` o `aprendido`;
+- `prioridad` en `alta`, `media` o `baja`;
+- `estimacion` en `corta`, `media` o `larga`;
+- los identificadores de `depende_de` existen como nodos;
+- los identificadores de `fuentes` existen como fuentes;
+- no hay ciclos de dependencias entre nodos.
+
+De `0002`, sobre fuentes:
+
+- `formato` dentro de sus ocho valores;
+- `clasificacion` en `pendiente`, `oro`, `plata` o `descartada`;
+- `plataforma` es un token en minúsculas y sin espacios.
+
+De `0003`, sobre proyectos:
+
+- `estado` en `activo`, `pausado` o `terminado`;
+- `prioridad` presente en activos y pausados, ausente en terminados;
+- `duracion_proxima_accion` en `corta`, `media` o `larga`;
+- coherencia del bloque de próxima acción, según la regla de esa decisión;
+- ausencia de campos operativos en proyectos terminados;
+- los identificadores de `nodos_requeridos` existen como nodos.
+
+Las categorías no se validan por frontmatter porque no lo tienen. Lo único
+verificable en ellas es que exista el archivo al que otras entidades apuntan.
 
 ## Fuera del primer prototipo
 
@@ -48,6 +171,18 @@ una de esas cosas multiplica el trabajo sin mejorar la consulta diaria, que es l
 - base de datos externa;
 - aplicación móvil nativa.
 
+A eso se agregan, ya con el alcance definido:
+
+- las decisiones y los documentos operativos como entidades navegables;
+- cualquier funcionalidad atada a un dominio concreto: el modelo es neutral y la
+  aplicación también, sin vistas especiales para programación, diseño o
+  marketing;
+- umbrales o niveles de urgencia que las decisiones no definen;
+- reparación automática de entidades inválidas;
+- reconstrucción histórica de qué nodos usó un proyecto a lo largo del tiempo,
+  que el frontmatter no puede responder;
+- la elección del stack, que es la acción siguiente y no parte del alcance.
+
 Si la edición se incorpora más adelante, se decidirá después de probar el visor
 si corresponde a este proyecto o a uno separado.
 
@@ -61,6 +196,24 @@ El proyecto termina cuando el prototipo:
 - fue usado en consultas reales durante un período breve;
 - resulta una alternativa útil y preferible para las consultas habituales.
 
+Comprobaciones concretas que hacen verificables esos criterios:
+
+1. Las cuatro entidades se listan y cada una abre su detalle con el cuerpo
+   renderizado.
+2. Una búsqueda por una palabra del cuerpo encuentra la entidad que la contiene.
+3. Los filtros de las tres entidades con frontmatter funcionan.
+4. La vista de nodos disponibles coincide con el cálculo manual sobre el
+   repositorio.
+5. Desde un nodo se llega a sus fuentes, a sus dependencias y a los nodos que
+   dependen de él, sin escribir rutas.
+6. Una referencia rota introducida a propósito aparece señalada, y la entidad que
+   la contiene sigue siendo visible.
+7. Después de un período breve de uso real, consultar el sistema por la
+   aplicación resulta preferible a abrir el editor.
+
+La séptima es un juicio propio y no una casilla. Es deliberado: las otras seis se
+pueden cumplir con una aplicación que funciona y no sirve.
+
 No se exige que reemplace toda apertura de los archivos Markdown: seguir
 abriéndolos para leerlos o editarlos es esperable y no invalida el criterio.
 
@@ -69,18 +222,19 @@ abriéndolos para leerlos o editarlos es esperable y no invalida el criterio.
 No vinculante. Solo la próxima acción del frontmatter compromete algo.
 
 1. Definir el alcance del prototipo de solo lectura.
-2. Elegir cómo leer Markdown y frontmatter, y sobre qué stack.
-3. Listados por entidad: categorías, nodos, fuentes, proyectos.
-4. Búsqueda y filtros por los campos ya definidos en las decisiones.
-5. Vista de relaciones: dependencias entre nodos, fuentes citadas, nodos
+2. Elegir el stack y registrar la decisión.
+3. Construir el lector de archivos del repositorio.
+4. Listados por entidad: categorías, nodos, fuentes, proyectos.
+5. Búsqueda y filtros por los campos ya definidos en las decisiones.
+6. Vista de relaciones: dependencias entre nodos, fuentes citadas, nodos
    requeridos por proyecto.
-6. Uso real durante algunas semanas antes de evaluar el criterio de
+7. Uso real durante algunas semanas antes de evaluar el criterio de
    finalización.
 
-Las etapas 2 y 5 probablemente exijan conocimiento que todavía no está en
-`nodos/` —parseo de frontmatter, elección de stack, representación de grafos—.
-Mientras sigan siendo vagas quedan acá como prosa; cuando alguna se convierta en
-la próxima acción, sus nodos se incorporan a `nodos_requeridos`.
+El conocimiento que exigen las etapas 3 y 6 ya existe en `nodos/`:
+`lectura-de-markdown-y-frontmatter` e `indice-de-entidades-y-relaciones`. No
+están en `nodos_requeridos` porque no bloquean la acción actual; cuando una de
+esas etapas se convierta en la próxima acción, sus nodos se incorporan.
 
 ## Bitácora
 
@@ -96,3 +250,20 @@ roadmaps y validaciones.
 La primera acción es de alcance, no de código: sin un límite escrito, un
 prototipo de solo lectura tiende a crecer hacia la edición antes de haber
 demostrado que la consulta sirve.
+
+**2026-08-07 — Alcance definido.**
+
+Queda escrito qué problema resuelve el prototipo, qué entidades muestra, qué
+consultas y relaciones permite, qué calcula sin almacenar, cómo trata las
+entidades inválidas y con qué comprobaciones se considera terminado.
+
+Dos límites que la definición fija y conviene recordar: la aplicación no
+introduce reglas de negocio que las decisiones no tengan —de ahí que
+`fecha_limite` solo se muestre y se ordene, sin niveles de urgencia—, y no asume
+ningún dominio, para no romper el alcance multidominio de la visión.
+
+La acción siguiente es elegir el stack y registrarlo como decisión. No requiere
+aprender nada nuevo, y desbloquea la búsqueda de fuentes del nodo
+`lectura-de-markdown-y-frontmatter`, que dependen de esa elección. Recién la
+acción posterior, construir el lector, incorporará ese nodo a
+`nodos_requeridos`.
