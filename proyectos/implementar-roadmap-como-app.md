@@ -79,16 +79,22 @@ que la aplicación tenga que mostrar.
 Directas, tal como están declaradas: de un nodo a su categoría, a sus fuentes y a
 sus dependencias; de una fuente a su categoría; de un proyecto a sus nodos
 requeridos; de una herramienta a las capacidades que cubre, con su clasificación
-para cada una.
+para cada una, y a las fuentes que la sustentan.
 
 Inversas, calculadas: de una categoría a lo que la referencia; de una fuente a
-los nodos que la citan; de un nodo a los nodos que dependen de él y a los
-proyectos que lo requieren; de una capacidad a las herramientas que la cubren,
-ordenadas por su clasificación para esa capacidad.
+los nodos que la citan y a las herramientas que se apoyan en ella; de un nodo a
+los nodos que dependen de él y a los proyectos que lo requieren; de una capacidad
+a las herramientas que la cubren, ordenadas por su clasificación para esa
+capacidad.
 
-La última se muestra marcada como parcial. La decisión `0003` acotó
-`nodos_requeridos` a la próxima acción, así que esa vista responde quién necesita
-el nodo hoy, no quién lo usó alguna vez.
+Ninguna de las inversas se almacena: la herramienta guarda `fuentes` y la fuente
+no guarda herramientas, así que la inversa se deriva escaneando `herramientas/`.
+Lo mismo vale para el resto.
+
+La inversa **de un nodo a los proyectos que lo requieren** se muestra marcada
+como parcial: `0003` acotó `nodos_requeridos` a la próxima acción, así que
+responde quién necesita el nodo hoy, no quién lo usó alguna vez. Las demás
+inversas de este inventario son completas, según lo definen sus decisiones.
 
 ### Información derivada
 
@@ -152,13 +158,16 @@ De `0002`, sobre fuentes:
 
 - `formato` dentro de sus ocho valores;
 - `clasificacion` en `pendiente`, `oro`, `plata` o `descartada`;
-- `plataforma` es un token en minúsculas y sin espacios.
+- `plataforma` es un token en minúsculas y sin espacios;
+- cada entrada de `materiales`, cuando exista, cumple el formato de `0002`: en
+  particular, va entre comillas dobles.
 
 De `0006`, sobre herramientas:
 
 - `tipo` dentro de sus ocho valores;
 - cada clave de `capacidades` existe como capacidad;
-- cada valor de `capacidades` en `pendiente`, `oro`, `plata` o `descartada`.
+- cada valor de `capacidades` en `pendiente`, `oro`, `plata` o `descartada`;
+- cada identificador de `fuentes` existe como fuente.
 
 De `0003`, sobre proyectos:
 
@@ -167,10 +176,12 @@ De `0003`, sobre proyectos:
 - `duracion_proxima_accion` en `corta`, `media` o `larga`;
 - coherencia del bloque de próxima acción, según la regla de esa decisión;
 - ausencia de campos operativos en proyectos terminados;
-- los identificadores de `nodos_requeridos` existen como nodos.
+- los identificadores de `nodos_requeridos` existen como nodos;
+- los identificadores de `capacidades_requeridas` existen como capacidades.
 
-Las categorías no se validan por frontmatter porque no lo tienen. Lo único
-verificable en ellas es que exista el archivo al que otras entidades apuntan.
+Las categorías y las capacidades no se validan por frontmatter porque no lo
+tienen. Lo único verificable en ellas es que exista el archivo al que otras
+entidades apuntan.
 
 ## Fuera del primer prototipo
 
@@ -339,3 +350,14 @@ La misma decisión incorporó `capacidades_requeridas` al bloque de próxima acc
 Esta acción requiere `desarrollo-asistido-por-ia`, que expresa qué hace falta
 poder hacer. No implica que se haya elegido ni clasificado ninguna herramienta
 concreta todavía.
+
+**2026-08-07 — Alcance sincronizado antes de implementar.**
+
+El alcance del lector había quedado atrasado respecto de reglas incorporadas
+después en `0002`, `0003` y `0006`. Se le agregaron tres comprobaciones de
+integridad —formato de `materiales`, existencia de las `fuentes` de una
+herramienta y existencia de las `capacidades_requeridas` de un proyecto—, la
+relación entre herramienta y fuentes en ambos sentidos, y la corrección de qué
+vista inversa es parcial.
+
+Sin ampliar el alcance: son reglas que ya existían y no estaban declaradas acá.
