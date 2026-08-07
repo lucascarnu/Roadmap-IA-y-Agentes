@@ -19,6 +19,22 @@ aplicarla. El sistema cierra tres brechas:
 El sistema acompaña un ciclo completo, desde que un tema aparece hasta que se
 convierte en algo aplicado.
 
+**Descubrir**
+
+- Ante un objetivo de aprendizaje o de ejecución, revisar lo que ya existe y
+  distinguir lo aprendido, lo pendiente y lo que todavía no está representado.
+- Detectar conocimientos, herramientas o prerrequisitos faltantes, y sugerir qué
+  conviene buscar y dónde: Find Skills, documentación oficial, GitHub,
+  buscadores, cursos o plataformas de contenido.
+- Investigar y proponer fuentes candidatas, sin recomendar material nuevo cuando
+  una fuente existente ya cubre bien la necesidad.
+- Los huecos detectados pueden originar propuestas de nodos nuevos.
+- Una fuente descubierta puede clasificarse en la misma sesión cuando haya
+  evidencia suficiente; si la evidencia no alcanza, queda pendiente. La
+  clasificación depende de la evidencia, no de quién encontró la fuente, y puede
+  revisarse cuando aparezca nueva evidencia o experiencia práctica.
+- De toda evaluación se conservan el origen y los motivos.
+
 **Capturar**
 
 - Registrar y clasificar temas de interés en el momento en que surgen.
@@ -76,6 +92,17 @@ y un proyecto puede exponer vacíos que generan nodos nuevos.
 
 Herramienta de uso personal. No está pensada para usuarios externos, mercado ni
 monetización. Las decisiones se toman según utilidad propia, no según adopción.
+
+No se limita al desarrollo de software o de agentes. Puede organizar aprendizaje
+y proyectos en generación de imágenes con IA, diseño gráfico 2D, video con IA,
+audio y voz, sincronización labial, avatares, producción de contenido,
+publicidad, marketing y los dominios que aparezcan más adelante.
+
+Categorías, nodos, fuentes y proyectos se reutilizan igual en todos ellos, y una
+categoría nueva se crea cuando existe contenido o una necesidad real que la
+justifique. Los modos Aprender y Hacer pueden combinar conocimientos de dominios
+distintos. Trabajar hoy sobre desarrollo de aplicaciones no especializa el
+sistema en programación.
 
 ## Hacia dónde puede evolucionar
 
