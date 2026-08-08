@@ -1,0 +1,2 @@
+Prueba temporal del flujo Claude Code -> GitHub PR -> Copilot review.
+Este archivo no debe integrarse en main.
