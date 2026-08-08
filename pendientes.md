@@ -54,18 +54,32 @@ resuelve ese tramo.
 El problema **no es concatenar con `;`**: ya se comprobó que varios comandos Git
 encadenados con `;` se ejecutan sin prompt cuando cada tramo está cubierto.
 
+**Verificado tras reiniciar Claude Code.** Se cerró Claude Code por completo con
+`exit` y se abrió una sesión nueva desde el mismo repositorio. En esa sesión se
+ejecutaron, uno por uno y sin lógica adicional, `git status`, `git branch`,
+`git merge-base --is-ancestor origin/main HEAD` y `gh pr list`. Ninguno provocó
+una solicitud de permiso, `git merge-base` terminó con exit code 0 y no hubo
+modificaciones al repositorio ni a la configuración.
+
+Conclusión: las reglas persistidas en `.claude/settings.local.json` **sobreviven
+entre sesiones** y se reutilizan correctamente al reiniciar. La hipótesis de
+pérdida de permisos entre sesiones queda **descartada** para las operaciones
+probadas, y el resultado refuerza que los prompts anteriores se debieron al
+tramo PowerShell no cubierto (`if (...)`), no a un `git merge-base` simple.
+
 - Preferir **comandos simples** cuyo exit code pueda interpretar el agente.
 - Evitar construcciones PowerShell (`if`, `Test-Path`) que solo reformatean un
-  resultado que el agente ya puede leer directamente.
-- Confirmar experimentalmente, **tras reiniciar Claude Code**, que las reglas
-  persistidas se reutilizan en una sesión nueva. Probar con comandos simples:
-  `git status`, `git branch`, `git merge-base --is-ancestor origin/main HEAD` y
-  `gh pr list`. Si pasan sin pedir autorización, registrar la persistencia entre
-  sesiones como verificada.
+  resultado que el agente ya puede leer directamente y que, además, crean tramos
+  de permiso nuevos sin aportar información.
+- Definir la **estrategia segura de permisos para automatización desatendida**:
+  qué debe quedar autorizado de antemano para que un circuito autónomo no se
+  bloquee, sin abrir más superficie de la necesaria.
+- Decidir si conviene mantener reglas amplias del tipo `PowerShell(git *)` y
+  `PowerShell(gh *)` o reemplazarlas por permisos más acotados.
 - Registrar como **bloqueo de automatización** cualquier solicitud interactiva
   inesperada dentro de un flujo que debería ser autónomo.
-- **Todavía no** modificar las reglas de permisos ni moverlas a
-  `.claude/settings.json`. Nunca recurrir a modos globales de bypass.
+- **Todavía no** modificar las reglas de permisos, eliminar las redundantes ni
+  moverlas a `.claude/settings.json`. Nunca recurrir a modos globales de bypass.
 
 **Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
 usuario tenga que aprobar herramientas ni comandos durante el circuito normal.
