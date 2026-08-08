@@ -20,7 +20,6 @@ Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
 - `https://code.claude.com/docs/en/settings`
-- `https://code.claude.com/docs/en/cli-usage`
 
 ## Qué afirmaciones respalda
 

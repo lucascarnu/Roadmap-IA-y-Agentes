@@ -42,7 +42,11 @@
       "PowerShell(gh auth *)",
       "PowerShell(gh api *)",
       "Bash(git *)",
-      "Bash(gh *)"
+      "Bash(gh *)",
+      "PowerShell(git * --output*)",
+      "PowerShell(git push * +*)",
+      "PowerShell(* > *)",
+      "PowerShell(* >> *)"
     ]
   }
 }
