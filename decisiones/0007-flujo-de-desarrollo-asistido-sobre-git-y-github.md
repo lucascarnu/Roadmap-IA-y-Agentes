@@ -71,21 +71,22 @@ configuración que hay que mantener sin problema que resuelva.
 ## Observaciones iniciales, no compromisos
 
 Las pruebas dejaron dos mediciones. Se registran porque conviene no perderlas, y
-se acotan porque provienen de tres revisiones sobre documentos breves, en
+se acotan porque provienen de unas pocas revisiones sobre documentos breves, en
 condiciones que el proyecto no controla.
 
-- **Latencia.** Se observaron aproximadamente 90 segundos entre solicitar una
-  revisión y recibirla. Es una observación inicial, **no un SLA ni un valor
-  fijo**, y puede variar con el tamaño del cambio, la carga del servicio o
+- **Latencia.** Se observaron entre 69 y 155 segundos entre solicitar una
+  revisión y recibirla, sobre cuatro solicitudes: las tres pruebas y la pull
+  request de esta misma decisión. Es una observación inicial, **no un SLA ni un
+  valor fijo**, y puede variar con el tamaño del cambio, la carga del servicio o
   cambios del proveedor.
 - **Costo.** GitHub mostró 20.16 AI Credits consumidos en total por las tres
-  revisiones. Se registra como **medición inicial, no como costo fijo por
-  review**. Dividirlo por tres para obtener un precio unitario sería leerlo mal:
-  las tres revisiones no eran equivalentes entre sí.
+  revisiones de prueba, y solo por ellas. Se registra como **medición inicial,
+  no como costo fijo por review**. Dividirlo por tres para obtener un precio
+  unitario sería leerlo mal: las tres revisiones no eran equivalentes entre sí.
 
 Lo que ambas sí permiten afirmar es de otro orden: el intercambio es asíncrono y
-su latencia se mide en minutos, no en horas ni en segundos. Eso alcanza para
-saber que el flujo es utilizable sin bloquear el trabajo.
+su latencia se mide en decenas de segundos, no en horas. Eso alcanza para saber
+que el flujo es utilizable sin bloquear el trabajo.
 
 ## Qué demostraron las pruebas y qué no
 
