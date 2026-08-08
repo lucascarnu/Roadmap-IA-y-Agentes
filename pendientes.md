@@ -12,86 +12,48 @@ entidad.
 
 ## Automatización del workflow de desarrollo asistido
 
-El marco conceptual está en
+Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 [0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md). Acá
-quedan los pendientes operativos que se derivan de él.
+quedan únicamente las acciones futuras que se derivan de ellas.
 
-### Ya observado
+### Solicitud y lectura de revisiones
 
-- GitHub funciona como canal asíncrono entre ejecutor y revisor.
-- Copilot Code Review se solicita **manualmente** en el estado actual.
-- Después de nuevos commits en una PR ya revisada, GitHub ofrece **Re-request
-  review**.
-- En cuatro solicitudes se observaron latencias de entre **69 y 155 segundos**.
-  Es una medición inicial, **no un SLA**.
-- Una review `COMMENTED` **no bloquea por sí sola** la integración.
-- Para procesar una review de Copilot **no alcanza con leer los comentarios
-  inline**. Hay que inspeccionar:
-  - el cuerpo completo de la review;
-  - los comentarios inline;
-  - los *suppressed comments*.
-- **"0 new comments" no implica "0 observaciones".** Una review puede declarar
-  cero comentarios y traer hallazgos suprimidos en el cuerpo.
-- Las tres primeras revisiones de prueba consumieron **20.16 AI Credits en
-  total**. Medición inicial: no extrapolar un costo fijo por review.
+- Automatizar la solicitud de revisión, incluido el **Re-request review** que
+  GitHub ofrece después de nuevos commits en una PR ya revisada.
+- Diseñar la espera: consultar estado **sin polling agresivo**, con timeout y
+  reintentos razonables. Las latencias observadas están en `0007`.
+- Al procesar una review, leer las **tres** fuentes: el cuerpo de la review, los
+  comentarios inline y los *suppressed comments*. Una review puede declarar
+  "0 new comments" y traer igualmente hallazgos en el cuerpo.
+- Verificar que la automatización permita sustituir ejecutor y revisor, según el
+  principio de reemplazabilidad de `0007`.
 
-### Requisitos de diseño para la automatización futura
+### Evaluación del revisor
 
-- Claude Code es el ejecutor principal actual, pero el diseño **debe permitir
-  reemplazarlo**.
-- El revisor **también debe ser reemplazable**.
-- **No hacer polling agresivo.** Esperar, consultar estado y aplicar timeout y
-  reintentos razonables.
-- Cuando el revisor detecte un problema real y la solución sea clara, debería:
-  - explicar el problema;
-  - señalar dónde está;
-  - proponer una corrección concreta;
-  - evitar cambios meramente cosméticos.
-- **El revisor propone; el ejecutor evalúa** y aplica, rechaza o acepta
-  parcialmente.
-- Un desacuerdo material persistente sin evidencia concluyente **se escala al
-  usuario**.
-- Evaluar proporcionalidad documental **sin imponer máximos rígidos de líneas**.
-- Copilot está aceptado **actualmente** como revisor complementario, no como
-  autoridad final ni como supervisor fuerte probado.
-- **No construir todavía** un harness multiagente propio.
-- **No activar nuevas capas de complejidad** sin una necesidad real demostrada.
-
-### Por probar
-
-- Un nivel de revisión superior a Lite / low effort, comparando calidad y costo
-  contra Lite.
+- Probar un nivel de esfuerzo superior a Lite **sobre código real** y comparar
+  calidad y costo. Balanced ya se probó sobre documentación.
+- Definir qué debe entregar el revisor cuando detecte un problema real con
+  solución clara: explicar el problema, señalar dónde está, proponer una
+  corrección concreta y evitar cambios meramente cosméticos.
+- Evaluar proporcionalidad documental sin imponer máximos rígidos de líneas.
 
 ### Permisos y ejecución no interactiva
 
-**Ya observado**
-
-- Durante el uso interactivo aparecieron autorizaciones nuevas para comandos Git
-  concretos, por ejemplo `git merge-base *`.
-
-**Requisitos**
-
-- Una automatización desatendida **no puede quedar bloqueada por prompts de
-  permisos**.
-- La automatización futura debe funcionar **después de reiniciar Claude Code**, y
-  no depender de permisos válidos solo durante una sesión.
-- **No usar modos globales de bypass de permisos** como solución por defecto.
-- Una solicitud interactiva inesperada dentro de un flujo que debería ser
-  autónomo **es un bloqueo de automatización** y se registra como tal.
-
-**Por hacer**
+Una automatización desatendida no puede quedar bloqueada por prompts de permisos.
 
 - Comprobar **qué permisos sobreviven** al cerrar y volver a iniciar Claude Code.
+  Durante el uso interactivo fueron apareciendo autorizaciones nuevas para
+  comandos concretos, por ejemplo `git merge-base *`.
 - Antes de declarar lista la automatización, hacer una **prueba completa de
   reinicio**: cerrar Claude Code, volver a abrirlo en este repositorio y
   comprobar las operaciones habituales de Git y GitHub que necesita el workflow.
-- Después, si hace falta, diseñar **permisos persistentes explícitos** para las
-  operaciones normales del proyecto.
+- Diseñar, si hace falta, **permisos persistentes explícitos** para las
+  operaciones normales del proyecto, sin recurrir a modos globales de bypass.
+- Registrar como **bloqueo de automatización** cualquier solicitud interactiva
+  inesperada dentro de un flujo que debería ser autónomo.
 
-**Criterio futuro de aceptación**
-
-- Completar varias PR reales consecutivas sin que el usuario tenga que aprobar
-  herramientas ni comandos durante el circuito normal.
+**Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
+usuario tenga que aprobar herramientas ni comandos durante el circuito normal.
 
 ## Entregables reutilizables
 
@@ -123,7 +85,8 @@ comenzar un proyecto nuevo.
 plantilla rígida.
 
 **Disparador.** Cuando el primer MVP local esté funcionando y ya haya varias PR
-reales completadas con el workflow.
+reales completadas con el workflow. Al cumplirse, evaluar además si corresponde
+promoverlo a `proyectos/`.
 
 ---
 
