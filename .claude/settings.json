@@ -46,7 +46,12 @@
       "PowerShell(git * --output*)",
       "PowerShell(git push * +*)",
       "PowerShell(* > *)",
-      "PowerShell(* >> *)"
+      "PowerShell(* >> *)",
+      "PowerShell(git push * --del*)",
+      "PowerShell(git push * -d*)",
+      "PowerShell(git push * :*)",
+      "PowerShell(git push * --mirror*)",
+      "PowerShell(git push * --prune*)"
     ]
   }
 }

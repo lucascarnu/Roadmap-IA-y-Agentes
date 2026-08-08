@@ -114,8 +114,10 @@ pendiente diseñar una política segura y suficientemente determinista.
   definir la política, y hacer determinista qué ejecutor usa cada operación.
 - Registrar como **bloqueo de automatización** cualquier solicitud interactiva
   inesperada dentro de un flujo que debería ser autónomo.
-- **Todavía no** modificar las reglas de permisos, eliminar las redundantes ni
-  moverlas a `.claude/settings.json`. Nunca recurrir a modos globales de bypass.
+- La política compartida ya vive en `.claude/settings.json`, en estado
+  **CANDIDATA / EN PRUEBA**. Falta depurar `.claude/settings.local.json`, que
+  conserva reglas muertas y redundantes. Nunca recurrir a modos globales de
+  bypass.
 
 **Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
 usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
