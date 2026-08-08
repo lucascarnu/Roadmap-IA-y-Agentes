@@ -27,10 +27,10 @@ el trabajo asistido. La pull request cumple además una segunda función: es el
 **canal asíncrono entre agentes**, el lugar donde uno deja trabajo y otro deja
 hallazgos, sin sesión compartida ni intermediación manual.
 
-Markdown y Git siguen siendo la fuente de verdad del proyecto, como `0004` ya
-establece para Markdown. GitHub transporta, coordina y conserva el historial
-de la conversación entre agentes; no pasa a ser el lugar donde vive el
-contenido.
+Markdown sigue siendo la fuente de verdad del proyecto, como `0004` ya
+establece; Git la versiona y conserva su historial. GitHub es infraestructura
+de transporte, coordinación y pull requests, y deja registrado el historial de
+la conversación entre agentes; no pasa a ser el lugar donde vive el contenido.
 
 ### Ningún proveedor ni agente es arquitectónicamente obligatorio
 
