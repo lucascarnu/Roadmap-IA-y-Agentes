@@ -59,6 +59,20 @@ De ahí se sigue una separación de roles: quien revisa responde si algo está b
 - Una vez tomada la decisión, ejecutarla sin reabrir el mismo punto salvo que aparezca información nueva.
 - El rol del agente puede ser diseño, revisión, ejecución o validación; estas reglas se aplican en cualquiera de esos roles.
 
+## Completitud de una entrega
+
+- Una entrega responde lo que se pidió y, además, incluye la información **directa y material** que el agente descubrió durante la tarea y que el rol o la decisión siguientes necesitan para continuar correctamente, aunque no figurara entre los campos pedidos.
+- El criterio es práctico: si omitir algo que el agente ya descubrió provocaría previsiblemente otro intercambio solo para pedirlo, se incluye ahora.
+- Esto no autoriza auditoría general, ampliación lateral del alcance, mejoras cosméticas, refactors opcionales ni ideas no relacionadas. Se entrega lo que la tarea ya produjo, no trabajo nuevo.
+- Toda información adicional se verifica antes de presentarse como hecho. Cuando la distinción importe, se declara si es **hecho verificado**, **inferencia**, **recomendación** o **no observable desde ese entorno**.
+- Una inferencia no se presenta como hecho, y un límite del entorno se declara en vez de disimularse.
+
+## Chequeo de dependencias directas
+
+- Antes de cerrar una tarea que modifica, sustituye o elimina una regla, una decisión, un documento canónico o un concepto significativo, se revisan sus dependencias **directas en los dos sentidos**: qué contenido referencia lo cambiado, y qué contenido depende de lo cambiado o apunta a ello.
+- El objetivo es detectar la consecuencia inmediata antes de introducir una contradicción nueva, no revisar el repositorio entero.
+- Solo cuentan las consecuencias **directas y materiales**. Si el chequeo no encuentra ninguna, se dice y se cierra.
+
 ## Comparación previa a la integración
 
 La comparación contra `main` es obligatoria cuando:
@@ -100,7 +114,7 @@ Puede omitirse cuando:
 - La documentación es la fuente de verdad sobre el comportamiento esperado del sistema; el código lo implementa y no debe quedar como única constancia de una regla de comportamiento.
 - Todo cambio de comportamiento observable —el que sorprendería a quien leyó únicamente la documentación— se documenta y lo aprueba el usuario antes de implementarse.
 - Los cambios puramente técnicos que no alteran comportamiento observable se resuelven directamente en código: refactors, organización interna, optimizaciones sin efecto observable, tests, estilos visuales que no cambian funcionalidad y elecciones que una decisión haya dejado explícitamente abiertas.
-- Si durante la implementación se descubre que la especificación es incompleta, ambigua o incorrecta en algo observable, detener esa parte, corregir y aprobar primero la fuente documental correspondiente, y después continuar con el código.
+- Si durante la implementación se descubre que la especificación es incompleta, ambigua o incorrecta en algo observable, detener esa parte, corregir primero la fuente documental correspondiente y después continuar con el código. Quién aprueba esa corrección depende de su naturaleza: una **enmienda técnica** que preserva la intención y las restricciones materiales la resuelve el rol con autoridad técnica delegada, y se informa después; un cambio de comportamiento observable, de alcance o de intención lo aprueba el usuario antes. La decisión sobre el modelo operativo fija el detalle.
 - Ante una contradicción entre documentos canónicos, no resolverla por jerarquía automática ni dejando que el código elija: detener el cambio y corregir explícitamente la documentación antes de continuar.
 - Corregir un bug no exige modificar documentación cuando el código contradice una especificación ya correcta. Si el código cumple la especificación pero el resultado esperado debe cambiar, es un cambio de comportamiento y la documentación se actualiza primero.
 
@@ -114,3 +128,16 @@ Puede omitirse cuando:
 - No hace falta repetir la comparación cuando la decisión de construir en lugar de reutilizar ya fue evaluada explícitamente, aprobada y sigue vigente.
 - Cuando construir tenga un propósito específico que vuelva irrelevante reutilizar algo existente —aprendizaje, control o una necesidad deliberadamente específica—, ese motivo se declara.
 - Si cambian materialmente las condiciones que sustentaban una decisión anterior de construir, esa decisión puede necesitar reevaluación.
+
+## Transición entre fases
+
+Antes de empezar una fase material nueva —pasar de documentación a código, de prototipo a uso real, de un usuario a varios—:
+
+- se consulta `pendientes.md`;
+- se identifican los asuntos que afectan a esa fase;
+- se clasifican en **A**, cerrar antes de empezar; **B**, medir durante la fase; y **C**, posponer;
+- se cierran todos los **A** antes de iniciar el trabajo de la fase.
+
+Tener un pendiente escrito no alcanza si nadie está obligado a leerlo al cambiar de fase: sin esta regla, la transición depende de que alguien se acuerde, que es justo lo que `pendientes.md` existe para evitar.
+
+No aplica a microtareas ni a cada pull request. Aplica a transiciones de fase material, que son pocas y reconocibles.

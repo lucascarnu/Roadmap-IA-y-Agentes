@@ -129,6 +129,33 @@ Entre agentes, un desacuerdo se resuelve primero con evidencia, pruebas y
 documentación. Solo se escala al director un desacuerdo material que la evidencia
 no resolvió, o una decisión de producto.
 
+### Enmiendas técnicas basadas en evidencia
+
+El director decide **qué** se construye y bajo qué restricciones materiales. El
+Arquitecto / Lead decide **cómo**, y eso incluye poder **enmendar reglas y
+decisiones técnicas ya escritas** cuando aparece evidencia de que una regla
+bloquea un requisito real, agrega complejidad innecesaria, quedó obsoleta,
+contradice una decisión posterior o fuerza una solución peor que una alternativa
+demostrada.
+
+Esa enmienda **no requiere aprobación previa** mientras preserve la intención y
+las restricciones materiales. A cambio exige:
+
+- que quede trazable en Git y en la pull request;
+- que explicite qué evidencia la motivó;
+- que pase revisión independiente cuando corresponda;
+- que se informe después qué cambió, por qué, con qué evidencia y con qué
+  impacto.
+
+Se escala al director, en vez de enmendar por cuenta propia, cuando el cambio
+afecta producto, alcance material, costo relevante, privacidad, seguridad
+aceptada, algo irreversible, o una preferencia genuina que la evidencia no puede
+resolver.
+
+Sin esta regla, cada corrección puramente técnica de un documento canónico
+necesitaría una ronda con el director: el cuello de botella que delegar buscaba
+evitar.
+
 ## Independencia del revisor
 
 Una segunda opinión que ya conoce la sospecha de la primera deja de ser
@@ -156,6 +183,35 @@ verifica que corresponda al HEAD actual. Si hubo cambios materiales después, se
 solicita una revisión nueva o se revalida el HEAD nuevo, según corresponda: una
 review sobre un commit anterior no dice nada sobre el código que se va a
 integrar.
+
+### Cuándo una review cuenta
+
+Que exista un registro de review no prueba que haya habido revisión. Para contar
+como revisión independiente hacen falta tres cosas a la vez:
+
+- que corresponda al **HEAD** que se va a integrar;
+- que el reviewer **haya podido ejecutarla realmente**;
+- que se procesen sus **tres canales**: el cuerpo de la review, los comentarios
+  inline y los comentarios suprimidos.
+
+Ninguna señal aislada alcanza para declarar una review limpia: ni "0
+comentarios", ni la ausencia de comentarios inline, ni la ausencia de suprimidos,
+ni la mera existencia de una entrada de review. Una revisión puede registrarse
+sobre el commit correcto y **no haberse ejecutado** —por cuota, por
+indisponibilidad o por un error del servicio—, y a veces eso solo es legible en
+el cuerpo. Una revisión que no se ejecutó no es una revisión sin hallazgos.
+
+### Convergencia
+
+Una pull request no se prolonga indefinidamente por rondas de revisión. Manda la
+materialidad:
+
+- un cambio **material** del HEAD exige revalidación independiente;
+- los hallazgos **no bloqueantes** se registran y no reabren la pull request;
+- cuando el delta es cerrado y el reviewer conserva el contexto completo de lo ya
+  revisado, alcanza una **revalidación acotada** de ese delta en lugar de una
+  revisión completa desde cero;
+- la indisponibilidad del reviewer **nunca** cuenta como aprobación.
 
 ## Revisión y validación no son lo mismo
 

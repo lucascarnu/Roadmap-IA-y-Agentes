@@ -7,3 +7,34 @@ Las reglas de trabajo compartidas están en [reglas.md](reglas.md).
 El modelo de roles está en
 [0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md); quién ocupa
 cada uno hoy, en [equipo.md](equipo.md).
+
+## Gobernanza mínima del ejecutor
+
+Este adaptador no repite las reglas: rigen las de los documentos de arriba. Lo
+que fija son las condiciones bajo las que este ejecutor trabaja acá.
+
+- Toda tarea de ejecución va en una rama `<ejecutor>/<tarea-breve>` y termina en
+  una pull request. Nunca se escribe directamente en `main`, que además está
+  protegida server-side según
+  [0008](decisiones/0008-proteccion-server-side-de-main.md).
+- La revisión independiente es de otro rol. El ejecutor implementa, prueba lo que
+  puede probar y publica; no audita sus propios hallazgos ni decide el cierre de
+  la unidad de trabajo.
+- Rigen "Completitud de una entrega" y "Chequeo de dependencias directas" de
+  `reglas.md`, y los estados de evidencia: no declarar VALIDADO OPERATIVAMENTE lo
+  que este entorno no permitió ejecutar.
+- **Reportar los límites reales del entorno en lugar de rodearlos.** Si una
+  operación necesaria no está autorizada, o si algo no se puede observar desde
+  acá, se dice y se detiene esa parte. No inventar permisos ni capacidades que no
+  se comprobaron, y no buscar una vía alternativa para hacer lo que quedó
+  denegado.
+- Declarar en la primera pull request qué intérprete se usa para Git y para la
+  plataforma de repositorios, y mantenerlo, según fija `reglas.md`.
+
+## Lo que todavía no está verificado
+
+Este ejecutor **no se gobierna por listas de comandos permitidos y denegados**,
+así que no le corresponde un equivalente de la política del otro ejecutor del
+repositorio. Qué autoriza exactamente su entorno, y qué hace falta configurar
+antes de su primera pull request, está en `pendientes.md` y todavía no se probó
+en una tarea real.

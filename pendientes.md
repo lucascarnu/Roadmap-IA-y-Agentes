@@ -10,6 +10,94 @@ va a `inbox.md`. Acá viven los asuntos operativos y transversales —cómo
 trabajamos, qué falta probar, qué habría que extraer— que no encajan en ninguna
 entidad.
 
+Cada asunto declara su **estado**: `ABIERTO`, `PARCIAL`, `RESUELTO` o
+`POSPUESTO`. Un asunto `RESUELTO` se conserva mientras su evidencia siga
+explicando por qué el sistema es como es; cuando deje de aportar, se retira.
+
+## Compuerta PRE-MVP
+
+Lo que tiene que quedar cerrado **antes de la primera pull request de código**
+del MVP, según la regla de transición entre fases de `reglas.md`. Cuando todo
+esto esté cerrado, la compuerta queda abierta.
+
+### Revisión independiente obligatoria en las primeras PR de código
+
+**Estado: ABIERTO.** Excepción operativa y temporal a la proporcionalidad de
+`0009`.
+
+Durante las primeras pull requests de código real del MVP, **toda** pull request
+de código lleva revisión independiente, incluso si el cambio parece pequeño o
+mecánico. La regla general de `0009` sigue vigente a largo plazo; esto la
+suspende mientras no exista evidencia propia.
+
+El motivo es que toda la evidencia acumulada sobre la calidad de la revisión es
+sobre documentación y configuración. `0007` lo dice sin adornos: la calidad del
+revisor frente a bugs de código **no está demostrada**. Hasta tenerla, "cambio
+pequeño" no es un juicio confiable sobre código.
+
+Se reevalúa después de acumular evidencia suficiente en varias pull requests
+reales de código. No se fija un número acá: cuántas hacen falta es una
+preferencia del director que la evidencia todavía no puede resolver.
+
+### Gobernanza del ejecutor principal
+
+**Estado: PARCIAL.** La parte neutral quedó escrita en `AGENTS.md`; la
+configuración concreta no está verificada.
+
+Lo verificado en este entorno, al 2026-08-09:
+
+- El ejecutor principal está instalado y configurado en la máquina del director,
+  con su propio archivo de configuración.
+- **No se gobierna por listas de comandos permitidos y denegados.** Autoriza por
+  **nivel de confianza del proyecto** más un modo de sandbox. Es un modelo
+  distinto del de `.claude/settings.json`, y por eso no corresponde inventarle un
+  equivalente.
+- **Este repositorio todavía no figura entre sus proyectos de confianza.**
+- Su archivo de instrucciones globales del usuario está vacío, así que hoy no
+  contradice nada de lo que fija este repositorio.
+
+Lo que falta, y **requiere intervención en la PC del director**: abrir este
+repositorio con ese ejecutor y otorgarle el nivel de confianza necesario. No se
+puede hacer desde acá.
+
+Después de esa configuración queda por comprobar, ya en una tarea real, si puede
+completar el circuito rama → commit → push → pull request sin autorizaciones
+inesperadas, y con qué intérprete. Ese intérprete se declara en su primera pull
+request.
+
+### Prueba de sustitución del ocupante de contingencia
+
+**Estado: ABIERTO.** La contingencia está documentada en `equipo.md`; la
+sustitución no se probó.
+
+Ejercicio mínimo, sobre una tarea pequeña y real: entregarle al ocupante de
+contingencia únicamente el repositorio y el historial de ramas y pull requests, y
+comprobar que reconstruye por su cuenta **el estado actual, el próximo paso y qué
+no debe hacer todavía**, sin que el director le reconstruya la historia a mano.
+
+Si lo logra, la contingencia queda PROBADA LOCALMENTE. Si falla, se documentan
+únicamente los huecos concretos que impidieron la reconstrucción.
+
+### Prueba de reconstrucción del consultor externo
+
+**Estado: ABIERTO.** Requiere configuración previa.
+
+El consultor externo por hitos que `equipo.md` registra debe poder, usando
+únicamente el repositorio y la configuración disponible:
+
+1. explicar el estado actual del proyecto;
+2. decir cuál es el siguiente paso;
+3. decir qué **no** debe hacerse todavía.
+
+El objetivo no es sumar una herramienta: es comprobar que el repositorio alcanza
+como memoria crítica del proyecto y que ninguna conversación larga es
+insustituible. Si pasa, no se agrega documentación nueva. Si falla, se documentan
+solo los huecos concretos.
+
+**INTERVENCIÓN EN PC REQUERIDA**: configurar ese servicio y lanzar la prueba
+necesita al director en su computadora. Ningún agente puede hacerlo desde el
+repositorio.
+
 ## Automatización del workflow de desarrollo asistido
 
 Las decisiones del workflow y las mediciones de las pruebas son canónicas en
@@ -22,7 +110,11 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 
 ### Solicitud y lectura de revisiones
 
-- **Solicitud automática: probada localmente.**
+**Estado: PARCIAL.** Cómo se procesa una review y cuándo cuenta como válida ya no
+vive acá: es regla estable en `0009`, "Coordinación de revisiones". Lo que queda
+son las capacidades que al circuito todavía le faltan.
+
+- **Solicitud automática: RESUELTA, PROBADO LOCALMENTE.**
   `gh pr edit <PR> --add-reviewer "@copilot"` produjo una review real sobre el
   commit indicado, sin intervención humana. Queda pendiente el **Re-request
   review** que GitHub ofrece después de nuevos commits en una PR ya revisada.
@@ -37,9 +129,6 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
   puede seguir por sí mismo el estado de una revisión en curso.
 - Evaluar coordinación **basada en eventos** con GitHub Actions o webhooks, si
   las pull requests reales demuestran que esperar es un cuello de botella.
-- Al procesar una review, leer las **tres** fuentes: el cuerpo de la review, los
-  comentarios inline y los *suppressed comments*. Una review puede declarar
-  "0 new comments" y traer igualmente hallazgos en el cuerpo.
 - Verificar que la automatización permita sustituir ejecutor y revisor, según el
   principio de reemplazabilidad de `0007`.
 - **Resolución de conversaciones.** La PR #9 demostró que un hilo de review sin
@@ -48,7 +137,7 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 
 #### Lectura automática de comentarios inline
 
-**Resuelto para lectura, PROBADO LOCALMENTE.** `scripts/get-pr-comments.ps1` es
+**Estado: PARCIAL. Resuelto para lectura, PROBADO LOCALMENTE.** `scripts/get-pr-comments.ps1` es
 hoy el acceso autorizado: recibe un número de pull request validado, usa
 repositorio fijo y consulta **un único endpoint**
 `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`, con paginación, así que
@@ -64,12 +153,17 @@ Lo que sigue abierto:
   cadena de suministro, scopes y fijación de versión, y a una objeción de
   gobernanza: si el ejecutor resuelve sus propios hilos, deja sin efecto el
   *Require conversation resolution*.
-- **Leer todos los hallazgos de una review sigue siendo requisito previo** para
-  declarar validado un circuito desatendido, y ahora se cumple para los
-  comentarios inline. El cuerpo de la review y sus *suppressed comments* se leen
-  con `gh pr view`, que sí los incluye.
+- **Observabilidad del estado de los hilos.** `isResolved` solo existe en la API
+  GraphQL: el endpoint REST de comentarios no lo trae, y `gh pr view --json` no
+  expone ningún campo de hilos. Con `gh api` denegado, el ejecutor no puede saber
+  qué hilo quedó sin resolver, solo inferirlo desde `mergeStateStatus`.
+
+Los tres canales de una review se leen con lo ya autorizado: los comentarios
+inline con el wrapper, y el cuerpo junto con los suprimidos con `gh pr view`.
 
 ### Evaluación del revisor
+
+**Estado: ABIERTO.**
 
 - Probar un nivel de esfuerzo superior a Lite **sobre código real** y comparar
   calidad y costo. Balanced ya se probó sobre documentación y sobre configuración.
@@ -93,8 +187,10 @@ Lo que sigue abierto:
 
 ### Agente investigador de soluciones externas
 
-Rol todavía **no adoptado**: no figura en el Nivel A de `0009` ni tiene ocupante
-en `equipo.md`.
+**Estado: POSPUESTO.** Rol todavía **no adoptado**: no figura en el Nivel A de
+`0009` ni tiene ocupante en `equipo.md`. El fallback puntual de revisión ya está
+cubierto por las contingencias de `equipo.md`; formalizar el rol completo espera
+a tener evidencia de uso.
 
 - Es un rol **separado** de Arquitecto / Lead y de Ejecutor. Se activa ante un
   hueco, una limitación o una duda material sobre si ya existe una solución.
@@ -111,7 +207,12 @@ en `equipo.md`.
 
 ### Permisos y ejecución no interactiva
 
-Una automatización desatendida no puede quedar bloqueada por prompts de permisos.
+**Estado: PARCIAL.** Una automatización desatendida no puede quedar bloqueada por
+prompts de permisos.
+
+Lo que sigue, hasta el apartado "Estado actual", es **registro histórico** de la
+investigación que produjo la política: explica por qué es como es y no describe
+pendientes activos.
 
 **Verificado sobre la configuración efectiva.** Las reglas concedidas con "Yes,
 and don't ask again" quedan persistidas en `.claude/settings.local.json`. Entre
@@ -144,9 +245,6 @@ ya cubiertos por una regla persistida. **No** implica que el circuito completo d
 una PR se ejecute sin prompts: en la misma sesión aparecieron dos solicitudes de
 autorización, una de edición y otra de shell, descritas abajo.
 
-Los dos apartados que siguen son el **registro histórico de la investigación**,
-anterior a que la política compartida existiera. El estado actual está más abajo.
-
 #### Permisos de edición
 
 Hecho observado: en esa misma sesión nueva, después de que los cuatro comandos de
@@ -173,6 +271,8 @@ namespace de la herramienta, no a la operación. La automatización futura debe
 controlar o contemplar explícitamente **qué herramienta usa para cada
 operación**, en vez de acumular permisos amplios de forma improvisada. Sigue
 pendiente diseñar una política segura y suficientemente determinista.
+
+#### Estado actual
 
 La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDATA
 / EN PRUEBA**. Lo que sigue abierto:
@@ -205,7 +305,7 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
   de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
   Diseñar una prueba controlada antes de tocar ninguna regla.
-- **La redirección sin espacios ya se probó.** Cuatro sondas en el mismo entorno:
+- **Redirección sin espacios: RESUELTO, PROBADO LOCALMENTE.** Cuatro sondas en el mismo entorno:
   escribe en la raíz y en una carpeta común, y queda **bloqueada** en `scripts/`
   y en `.claude/`. Las reglas `deny Edit(...)` alcanzan también a las escrituras
   por subproceso. Lo que sigue siendo cierto es que los patrones `> archivo` y
@@ -216,10 +316,17 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   eliminaría la clase entera de escapes por comodín, en lugar de enumerarlos.
   Reevaluar **después** del cambio de ejecutor: otro ejecutor puede tener otro
   modelo de permisos y volverlo innecesario.
-- **Cuerpo multilínea de una pull request.** La regla general está en
+- **Cuerpo multilínea de una pull request: RESUELTO.** La regla general está en
   `reglas.md`; la evidencia es específica de Claude Code: bajo `dontAsk` un
   cuerpo pasado en línea se troceó por salto de línea y la llamada fue denegada,
   mientras que `--body-file` funcionó.
+- **Resolver hilos de review y mergear quedan fuera de la superficie
+  autorizada.** El cierre de la PR #10 lo confirmó: resolver un hilo exige la API
+  GraphQL, con `gh api` denegado, y `gh pr merge` está en el `deny` de la política
+  compartida. Los dos pasos finales del circuito los hace hoy el director en la
+  interfaz de GitHub. `0008` ya registra el primero como costo conocido, y `0009`
+  aclara que el segundo es el estado de una política candidata, no una regla del
+  modelo.
 - Definir **criterios objetivos que habiliten la integración automática** por
   clase de riesgo, según deja abierto `0009`.
 
@@ -227,10 +334,43 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
 usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
 Todavía no se cumple.
 
+## Para medir durante las primeras PR del MVP
+
+**Estado: ABIERTO.** No bloquean el arranque, pero necesitan evidencia real antes
+de decidirse. Se registran acá para que la evaluación no dependa de que alguien
+se acuerde.
+
+- **Aviso de intervención en la PC.** Si el próximo paso necesita navegador,
+  login interactivo, aplicación de escritorio, `localhost` o aprobación visual,
+  el agente lo avisa **antes** y no manda al director a la computadora por
+  comodidad propia. Medir si el MVP genera ese caso realmente.
+- **Resolución de hilos y merge.** Medir si el paso manual del director se vuelve
+  un cuello de botella con volumen real de pull requests, antes de construir nada.
+  Hay además una objeción de gobernanza pendiente: si el ejecutor resuelve sus
+  propios hilos, deja sin efecto el *Require conversation resolution*.
+- **Espera y reintentos.** Como punto de partida, consultar el estado con un
+  primer intento del orden del minuto y medio, reintentos espaciados y timeout
+  finito. Sin polling agresivo ni infinito. Pasar a eventos solo si la evidencia
+  muestra el cuello de botella.
+- **Registro de huecos del investigador.** Anotar, de forma mínima, cuándo un
+  investigador externo habría ayudado: qué problema, cuánto esfuerzo costó, si se
+  construyó algo propio, si después apareció una solución existente y qué impacto
+  tuvo. Solo si aparece un caso real; no montar el formato antes.
+- **Mantenimiento de archivos protegidos.** Medir si el MVP necesita realmente
+  tocar `scripts/` o `.claude/`, que hoy exigen al director como editor manual.
+  El código del MVP vive en `app/`, que no está protegido.
+- **Depuración de `.claude/settings.local.json` y validación de la política.**
+  Ninguna pull request cuenta como evidencia de validación operativa mientras el
+  circuito dependa de reglas locales amplias para pedir review, reconciliar o
+  publicar.
+- **Esfuerzo del revisor sobre código real**, que es lo único que falta para
+  poder afirmar algo sobre su calidad revisando código.
+
 ## Entregables reutilizables
 
-Dos documentos independientes y de importancia equivalente: uno recoge los
-principios, el otro los patrones operativos probados. Comparten disparador.
+**Estado: POSPUESTO.** Dos documentos independientes y de importancia
+equivalente: uno recoge los principios, el otro los patrones operativos probados.
+Comparten disparador, y ese disparador todavía no se cumplió.
 
 ### Extraer filosofía general de desarrollo con IA
 
