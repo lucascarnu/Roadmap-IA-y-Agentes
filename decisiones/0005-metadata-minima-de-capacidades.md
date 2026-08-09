@@ -79,10 +79,16 @@ herramienta entera y no una acción puntual.
 - Una capacidad sin herramientas que la cubran es invisible salvo que alguien
   abra la carpeta. Hoy no importa; cuando exista la relación entre proyectos y
   capacidades, esa capacidad sin cobertura será justamente un hueco detectable.
+  *Esa relación ya existe, por `0003`: el hueco es detectable desde que un
+  proyecto declara `capacidades_requeridas`.*
 
 ## Queda abierto
 
 - Las relaciones desde proyectos hacia capacidades. No se diseñan todavía.
+  *Resuelto por [0003](0003-metadata-minima-de-proyectos.md), que incorporó
+  `capacidades_requeridas` al bloque de próxima acción de un proyecto. La
+  dirección de la relación no cambia: la declara el proyecto, y un archivo de
+  capacidad sigue sin enumerar nada.*
 - Si una capacidad llega a necesitar frontmatter. Hoy no hay ningún dato
   estructurado que le haga falta.
 - Cualquier jerarquía o agrupación entre capacidades.

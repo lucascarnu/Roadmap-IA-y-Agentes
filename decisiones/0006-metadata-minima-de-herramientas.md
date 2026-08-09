@@ -282,6 +282,11 @@ más expresiva y además ahorra un campo.
 ## Queda abierto
 
 - Las capacidades requeridas por un proyecto, que son una enmienda a `0003`.
+  *Resuelto: esa enmienda ya está incorporada en
+  [0003](0003-metadata-minima-de-proyectos.md), que define
+  `capacidades_requeridas` para la próxima acción de un proyecto. Cruzarlas con
+  este inventario para detectar huecos sigue siendo tarea del recomendador, que
+  continúa fuera de alcance.*
 - La relación entre una herramienta y el proyecto que la originó.
 - El recomendador: seleccionar automáticamente herramientas para un objetivo,
   detectar huecos y proponer construir. Esta decisión define el inventario, no
