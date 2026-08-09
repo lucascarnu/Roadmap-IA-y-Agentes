@@ -86,7 +86,9 @@ Lo que sí está **PROBADO LOCALMENTE** por la pull request #9:
   deduce del nombre de la opción y **no está verificado**, así que pesa como
   riesgo y no como impedimento demostrado.
 - **Bypass vacío.** Una lista de excepciones convierte la barrera en una
-  convención. Sin excepciones, aplica también a quien administra el repositorio.
+  convención. Que esté vacía es un hecho observado; a quién alcanza exactamente
+  la regla en ausencia de excepciones no se verificó, y entra en lo que queda
+  abierto al final de esta decisión.
 
 ## Relación con 0007
 

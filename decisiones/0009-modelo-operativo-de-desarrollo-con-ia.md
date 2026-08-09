@@ -132,23 +132,6 @@ independiente: tiende a confirmarla en vez de mirar el resto.
 - Su resultado se congela antes de compararlo con el de los demás.
 - Recién entonces se cruzan los hallazgos.
 
-## Esfuerzo de la revisión de pull requests
-
-Política inicial durante el MVP para la herramienta que ocupe hoy ese rol,
-revisable por calidad, costo y latencia observados:
-
-- **Balanced por defecto** al solicitar una review. Está disponible y es el valor
-  configurado hoy a nivel de repositorio.
-- **Lite**, disponible, queda para cambios triviales o mecánicos.
-- **Max** figura como *Coming soon* y **todavía no está disponible**. Se reserva
-  conceptualmente para arquitectura, seguridad, riesgo alto o cuando la evidencia
-  indique que Balanced no alcanza, y esa reserva entra en vigor cuando GitHub lo
-  habilite.
-
-`Lite`, `Balanced` y `Max` son **modos de esfuerzo** de la revisión completa.
-`Low` y `High` son **severidades de un hallazgo individual**. No son la misma
-escala y confundirlas lleva a leer mal una review.
-
 ## Coordinación de revisiones
 
 **Una demora fija no es un mecanismo de coordinación.** Esperar "un rato" acopla
@@ -183,6 +166,11 @@ No corren todos los roles en cada pull request.
 - **Arquitectura, seguridad o riesgo alto:** revisión reforzada.
 - **Interfaz:** Arquitecto define, UI/UX diseña, Ejecutor implementa, UI/UX
   verifica fidelidad y el reviewer técnico revisa el código.
+
+El mismo criterio se aplica a la **intensidad de la revisión automática**: se
+gradúa según tamaño y riesgo del cambio. Qué niveles ofrece la herramienta que
+ocupe el rol, cuáles están disponibles y cómo se configuran son datos operativos
+suyos, no del modelo, y se registran junto al resto de su evidencia.
 
 ## Aprendizaje del director
 

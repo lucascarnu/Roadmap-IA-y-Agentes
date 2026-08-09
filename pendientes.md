@@ -15,8 +15,10 @@ entidad.
 Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 [0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md),
 [0008](decisiones/0008-proteccion-server-side-de-main.md) y
-[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md). Acá quedan
-únicamente las acciones futuras que se derivan de ellas.
+[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md). Acá quedan las
+acciones futuras que se derivan de ellas, junto con el estado y los resultados
+observados **mínimos para entender por qué siguen abiertas** o por qué dejaron de
+estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 
 ### Solicitud y lectura de revisiones
 
