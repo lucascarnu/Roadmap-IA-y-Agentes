@@ -59,6 +59,42 @@ Provisional, contextual y revisable. **Es un estado, no un requisito.**
 **Codex, Claude, Copilot, Windows y Python no son requisitos permanentes del
 modelo.** Ninguno aparece en el Nivel A, y ninguno debería aparecer.
 
+### Roles combinados durante el MVP
+
+Codex sobre Windows puede ocupar **provisionalmente Arquitecto / Lead y Ejecutor
+a la vez**, cuando el tamaño y el riesgo del cambio no justifiquen separar las
+dos funciones. Separarlas siempre, en un proyecto de una persona y un MVP local,
+agregaría coordinación sin agregar seguridad.
+
+**La independencia se conserva donde importa: en la revisión y en la
+validación.** Diseñar e implementar puede hacerlo el mismo agente; juzgar si el
+resultado está bien construido y si funciona, no.
+
+Es una asignación provisional y revisable por evidencia, como todo el Nivel B.
+
+### Otros proveedores
+
+Cualquier otro modelo o proveedor —por ejemplo Kimi— puede ocupar cualquiera de
+los roles si la competencia, el acceso al entorno, el costo, la eficiencia o la
+evidencia lo justifican. Se aplican los mismos criterios que a los ocupantes
+actuales, sin trato preferencial ni exclusión previa.
+
+Kimi hoy no tiene integración ni asignación en este proyecto. Se lo nombra para
+dejar claro que la lista del Nivel B es un estado, no una lista cerrada de
+candidatos admisibles.
+
+### Servicios fuera del camino crítico
+
+**Ningún servicio interactivo cuya disponibilidad no está garantizada puede ser
+una dependencia obligatoria del circuito automático.** Aplica a ChatGPT y a
+cualquier otro consultor externo.
+
+Si ese servicio no está disponible, el circuito continúa, siempre que los gates
+obligatorios puedan satisfacerse con los ejecutores, revisores y pipeline
+autorizados. Lo que **no** se hace es saltear un gate obligatorio porque quien
+solía cubrirlo no responde: o existe un reemplazo que lo cubre, o el circuito se
+detiene de forma segura.
+
 ### Cómo se decide una asignación
 
 Por competencia demostrada para la tarea, acceso al entorno necesario, capacidad
@@ -105,6 +141,38 @@ independiente: tiende a confirmarla en vez de mirar el resto.
 - **No se le adelantan los defectos que otro revisor sospecha.**
 - Su resultado se congela antes de compararlo con el de los demás.
 - Recién entonces se cruzan los hallazgos.
+
+## Esfuerzo de la revisión complementaria
+
+Política inicial para Copilot Code Review durante el MVP, revisable por calidad,
+costo y latencia observados:
+
+- **Balanced por defecto** al solicitar una review.
+- **Lite** queda para cambios triviales o mecánicos.
+- **Max** queda para arquitectura, seguridad, riesgo alto, o cuando la evidencia
+  indique que Balanced no alcanza.
+
+`Lite`, `Balanced` y `Max` son **modos de esfuerzo** de la revisión completa.
+`Low` y `High` son **severidades de un hallazgo individual**. No son la misma
+escala y confundirlas lleva a leer mal una review.
+
+## Coordinación de revisiones
+
+**Una demora fija no es un mecanismo de coordinación.** Esperar "un rato" acopla
+el circuito a una latencia que nadie controla: si el servicio tarda más, se lee
+un estado incompleto; si tarda menos, se desperdicia tiempo.
+
+- Avanzar por **estado observable** siempre que sea posible.
+- Como punto de partida es aceptable consultar el estado con un timeout y
+  reintentos razonables, sin polling agresivo.
+- La evolución natural es pasar a un esquema **basado en eventos**, con GitHub
+  Actions o webhooks, si la evidencia justifica esa complejidad. No antes.
+
+**Una review vale para el commit que revisó.** Antes de considerarla válida, se
+verifica que corresponda al HEAD actual. Si hubo cambios materiales después, se
+solicita una revisión nueva o se revalida el HEAD nuevo, según corresponda: una
+review sobre un commit anterior no dice nada sobre el código que se va a
+integrar.
 
 ## Revisión y validación no son lo mismo
 
@@ -160,7 +228,8 @@ esta decisión extiende.
 
 ## Queda abierto
 
-- Qué agente ocupa el rol de Arquitecto / Lead, hoy sin asignación explícita.
+- Hasta qué tamaño y riesgo sigue siendo razonable que Arquitecto / Lead y
+  Ejecutor sean el mismo agente, y qué señal indicaría que conviene separarlos.
 - Qué criterios objetivos por clase de riesgo habilitarían la integración
   automática.
 - Cómo se registra la evidencia de rendimiento que sostiene o cambia una
