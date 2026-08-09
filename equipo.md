@@ -41,7 +41,7 @@ cualquiera de estos roles si la evidencia lo justifica, con los criterios de
 `0009`. Hoy ninguno tiene asignación activa ni integración técnica.
 
 El rol de investigador de soluciones externas todavía no está adoptado; su
-alcance y su candidato inicial están en `pendientes.md`.
+alcance y los candidatos a evaluar están en `pendientes.md`.
 
 ## Cómo se cambia
 

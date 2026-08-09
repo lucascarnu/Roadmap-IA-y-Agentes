@@ -69,9 +69,16 @@ ocupante**, cuando el tamaño y el riesgo del cambio no justifiquen separar las
 dos funciones. Separarlas siempre, en un proyecto de una persona y un MVP local,
 agregaría coordinación sin agregar seguridad.
 
-**La independencia se conserva donde importa: en la revisión y en la
-validación.** Diseñar e implementar puede hacerlo el mismo agente; juzgar si el
-resultado está bien construido y si funciona, no.
+**La independencia obligatoria es la del Reviewer independiente y la de QA cuando
+participan.** Diseñar e implementar puede hacerlo el mismo ocupante; juzgar si el
+resultado está bien construido o si funciona corresponde a roles que no deben
+recaer en quien lo implementó.
+
+La proporcionalidad puede omitir esos dos roles en cambios pequeños, y conviene
+decirlo sin adornos: en esos casos **no hay juicio independiente**, solo el gate
+de cierre del Arquitecto / Lead, que puede ser el mismo ocupante que implementó.
+Es un intercambio deliberado, no una garantía. Si un cambio no tolera quedarse sin
+juicio independiente, entonces no es un cambio pequeño.
 
 ### Servicios fuera del camino crítico
 
@@ -211,7 +218,8 @@ esta decisión extiende.
   de adelantarle lo que ya se sospecha.
 - Delegar decisiones técnicas implica que algunas se van a tomar mal. El costo se
   acepta a cambio de no convertir al director en cuello de botella, y se acota
-  con revisión independiente y con la reversibilidad como criterio.
+  con revisión independiente —cuando participa— y con la reversibilidad como
+  criterio.
 
 ## Queda abierto
 

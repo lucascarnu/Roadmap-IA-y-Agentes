@@ -103,7 +103,8 @@ en `equipo.md`.
   construir".
 - Devuelve **alternativas, fuentes, riesgos y una recomendación**. No implementa
   ni decide arquitectura.
-- **Gemini** queda como candidato inicial preferente, sin asignación todavía.
+- **Gemini** queda como candidato a evaluar, sin asignación todavía y sin trato
+  preferencial: la evidencia que lo justifique o lo descarte todavía no existe.
 - Objetivo futuro: que el ejecutor y el arquitecto puedan consultarlo sin que el
   director haga de intermediario.
 
