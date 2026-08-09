@@ -26,6 +26,15 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Eliminar la rama una vez integrada o descartada.
 - No agregar trailers `Co-Authored-By` a los commits.
 
+## Ejecución de comandos
+
+- Los comandos de Git y de la plataforma de repositorios se ejecutan siempre por el mismo intérprete, para que las autorizaciones no dependan de cuál se elija en cada momento. Qué intérprete es lo declara el adaptador del ejecutor.
+- Usar comandos simples, uno por operación. Evitar lógica de shell cuando el exit code y la salida directa ya alcanzan.
+- Al publicar una rama, nombrarla explícitamente en el comando en vez de depender de cuál esté activa.
+- Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
+- El circuito automático termina con la pull request lista para integrar, no con la integración.
+- Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
+
 ## Intervención crítica del agente
 
 - Estas reglas aplican a cualquier agente, modelo o ejecutor que trabaje en el proyecto.
