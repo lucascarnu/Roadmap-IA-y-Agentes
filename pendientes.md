@@ -192,9 +192,11 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
 - **Reconciliar una rama contra `main` tampoco está autorizado.** `git merge` no
   figura en la política compartida: la reconciliación de la PR #10 funcionó por
   la regla amplia `PowerShell(git *)` de `.claude/settings.local.json`. Al
-  depurar ese archivo, el circuito pierde la capacidad de rebasar o reconciliar,
-  que es un paso normal cuando hay más de una PR abierta. Hace falta una
-  capacidad compartida y acotada; no se resuelve ahora.
+  depurar ese archivo, el circuito pierde la capacidad de **reconciliar por
+  merge**, que es un paso normal cuando hay más de una PR abierta. Rebasar no se
+  pierde porque nunca estuvo disponible: `PowerShell(git rebase*)` está en el
+  `deny` de la política compartida, que prevalece sobre cualquier `allow`. Hace
+  falta una capacidad compartida y acotada; no se resuelve ahora.
 - **`git branch -d claude/*` fue denegado** al terminar la PR #9, pese a existir
   una regla `allow` que aparentemente lo cubre, y la rama local no pudo
   limpiarse de forma autónoma. La denegación es un **hecho observado**. Como

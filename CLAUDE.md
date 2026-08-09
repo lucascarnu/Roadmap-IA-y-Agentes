@@ -26,10 +26,11 @@ La documentación oficial que respalda el diseño está registrada en
 **Límites conocidos de la política candidata.** Se registran para no confundirlos
 con problemas resueltos:
 
-- `main` tiene protección server-side efectiva, documentada en
-  [0008](decisiones/0008-proteccion-server-side-de-main.md). Ese ruleset **no
-  cubre las ramas `claude/*`** de `origin`: su borrado y su reescritura dependen
-  por ahora de guardarraíles locales de esta política.
+- `main` está cubierta por un ruleset server-side activo, documentado en
+  [0008](decisiones/0008-proteccion-server-side-de-main.md) con el alcance de
+  evidencia que allí se establece. Ese ruleset **no cubre las ramas `claude/*`**
+  de `origin`: su borrado y su reescritura dependen por ahora de guardarraíles
+  locales de esta política.
 - Las reglas `deny Edit(...)` alcanzan también a las escrituras por redirección
   de un subproceso, no solo a las herramientas de edición. Probado con cuatro
   sondas: `scripts/` y `.claude/` quedaron bloqueadas, y una carpeta común sin
