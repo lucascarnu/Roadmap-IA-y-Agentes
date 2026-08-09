@@ -25,7 +25,7 @@ esto esté cerrado, la compuerta queda abierta.
 
 ### Gobernanza del ejecutor principal
 
-**Estado: PARCIAL. Evidencia: PROBADO LOCALMENTE.** La parte neutral quedó
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** La parte neutral quedó
 escrita en `AGENTS.md`; la configuración concreta se verificó en el alcance que
 se enumera abajo.
 
@@ -49,11 +49,14 @@ Lo verificado en este entorno, al 2026-08-09:
 - Su archivo de instrucciones globales del usuario está vacío, así que hoy no
   contradice nada de lo que fija este repositorio.
 
-Lo único que queda por comprobar es el circuito mutable completo en una tarea
-real: rama → cambio → verificación → commit → push → pull request, sin
-autorizaciones manuales inesperadas. Esta primera pull request usa **PowerShell**
-como intérprete para Git y GitHub CLI. El asunto permanece `PARCIAL` hasta que la
-pull request exista y se integre.
+El circuito mutable completo se ejecutó en la pull request #14 y quedó integrado:
+rama → cambio → verificación → commit → push → pull request → revisión
+independiente → convergencia → integración. Se usó **PowerShell** como intérprete
+para Git y GitHub CLI, y no hubo ninguna aprobación manual en ninguno de los
+pasos. La revisión independiente sobre el HEAD exacto no encontró hallazgos
+materiales. La evidencia corresponde a una sola corrida completa; para alcanzar
+VALIDADO OPERATIVAMENTE hacen falta varias pull requests reales consecutivas con
+el mismo resultado y evidencia suficiente para confiar en el circuito.
 
 ### Prueba de sustitución del ocupante de contingencia
 
@@ -106,7 +109,7 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 vive acá: es regla estable en `0009`, "Coordinación de revisiones". Lo que queda
 son las capacidades que al circuito todavía le faltan.
 
-- **Solicitud automática: RESUELTA.** Evidencia: PROBADO LOCALMENTE.
+- **Solicitud automática — Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.**
   `gh pr edit <PR> --add-reviewer "@copilot"` produjo una review real sobre el
   commit indicado, sin intervención humana. Queda pendiente el **Re-request
   review** que GitHub ofrece después de nuevos commits en una PR ya revisada.
@@ -298,7 +301,7 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
   de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
   Diseñar una prueba controlada antes de tocar ninguna regla.
-- **Redirección sin espacios: RESUELTO.** Evidencia: PROBADO LOCALMENTE. Cuatro
+- **Redirección sin espacios — Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** Cuatro
   sondas en el mismo entorno:
   escribe en la raíz y en una carpeta común, y queda **bloqueada** en `scripts/`
   y en `.claude/`. Las reglas `deny Edit(...)` alcanzan también a las escrituras
