@@ -48,11 +48,12 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 
 #### Lectura automática de comentarios inline
 
-**Resuelto para lectura.** `scripts/get-pr-comments.ps1` es hoy el acceso
-autorizado: recibe un número de pull request validado, usa repositorio fijo y
-consulta **un único endpoint** `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`,
-con paginación, así que puede hacer una solicitud por página. `gh api` directo
-sigue denegado. El ejecutor lee los hallazgos inline sin intervención humana.
+**Resuelto para lectura, PROBADO LOCALMENTE.** `scripts/get-pr-comments.ps1` es
+hoy el acceso autorizado: recibe un número de pull request validado, usa
+repositorio fijo y consulta **un único endpoint**
+`GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`, con paginación, así que
+puede hacer una solicitud por página. `gh api` directo sigue denegado. El
+ejecutor lee los hallazgos inline sin intervención humana.
 
 Lo que sigue abierto:
 

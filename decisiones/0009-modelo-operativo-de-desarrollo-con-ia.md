@@ -207,8 +207,10 @@ un ejecutor concreto**, no una regla de este modelo.
 ## Relación con 0007
 
 Supera la asignación de roles de `0007`, que describía el momento en que se
-escribió. El resto de `0007` sigue vigente, incluida la reemplazabilidad, que
-esta decisión extiende.
+escribió, y también el punto que asignaba al ejecutor la evaluación de los
+hallazgos de la revisión: auditarlos y decidir el cierre de la unidad de trabajo
+corresponde al Arquitecto / Lead. El resto de `0007` sigue vigente, incluida la
+reemplazabilidad, que esta decisión extiende.
 
 ## Costos conocidos
 

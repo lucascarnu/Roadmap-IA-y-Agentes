@@ -202,8 +202,9 @@ proyecto**, su cuerpo registra además cuatro datos:
 - **Versión o contexto**, cuando sea relevante: la versión de la herramienta, del
   servicio o del entorno contra el cual se verificó.
 - **Qué afirmación respalda.** Concreta y enumerable, no "documentación sobre X".
-  Si ninguna afirmación del proyecto se apoya en una parte de la fuente, esa
-  parte no se lista.
+  Se enumeran **afirmaciones, no entidades relacionadas**: una fuente sigue sin
+  enumerar los nodos que la citan, como fija "Relaciones". Si ninguna afirmación
+  del proyecto se apoya en una parte de la fuente, esa parte no se lista.
 - **Condición de revalidación.** Qué tendría que cambiar para volver a
   comprobarla.
 

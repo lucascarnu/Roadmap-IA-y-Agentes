@@ -36,9 +36,11 @@ con problemas resueltos:
   sondas: `scripts/` y `.claude/` quedaron bloqueadas, y una carpeta común sin
   regla propia, no. Los patrones `> archivo` y `>> archivo` del `deny` no cubren
   las formas sin espacios, pero la capa de escritura decide antes que ellos.
-- De una review solo se pueden **leer** los comentarios inline, con
-  `scripts/get-pr-comments.ps1`, que es el único acceso autorizado. Responder y
-  resolver hilos sigue fuera de alcance, y `gh api` directo sigue denegado.
+- De una review se pueden **leer** sus tres canales, cada uno por su vía: los
+  comentarios inline con `scripts/get-pr-comments.ps1`, que es su único acceso
+  autorizado, y el cuerpo de la review junto con sus *suppressed comments* con
+  `gh pr view`, que sí los incluye. `gh api` directo sigue denegado, y responder
+  o resolver conversaciones sigue fuera de alcance.
 
 **Consecuencia del modo `dontAsk`.** En ese modo `AskUserQuestion` queda
 denegada, así que durante una corrida automática no hay forma de pedir una
