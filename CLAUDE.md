@@ -25,11 +25,10 @@ La documentación oficial que respalda el diseño está registrada en
 **Límites conocidos de la política candidata.** Se registran para no confundirlos
 con problemas resueltos:
 
-- `main` tiene protección server-side efectiva: el ruleset `Proteger main`, sobre
-  la rama por defecto, bloquea borrado y force push, exige pull request y
-  historial lineal, admite solo squash y no tiene lista de bypass.
-- Ese ruleset **no cubre las ramas `claude/*`** de `origin`. Su borrado y su
-  reescritura dependen por ahora de guardarraíles locales.
+- `main` tiene protección server-side efectiva, documentada en
+  [0008](decisiones/0008-proteccion-server-side-de-main.md). Ese ruleset **no
+  cubre las ramas `claude/*`** de `origin`: su borrado y su reescritura dependen
+  por ahora de guardarraíles locales de esta política.
 - La protección contra redirecciones solo fue probada para las formas con
   espacios, `> archivo` y `>> archivo`. Las formas sin espacios siguen abiertas.
 - La autorización mínima para leer comentarios inline de una review se

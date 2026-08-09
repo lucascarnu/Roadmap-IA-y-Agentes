@@ -13,26 +13,77 @@ entidad.
 ## Automatización del workflow de desarrollo asistido
 
 Las decisiones del workflow y las mediciones de las pruebas son canónicas en
-[0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md). Acá
-quedan únicamente las acciones futuras que se derivan de ellas.
+[0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md),
+[0008](decisiones/0008-proteccion-server-side-de-main.md) y
+[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md). Acá quedan
+únicamente las acciones futuras que se derivan de ellas.
 
 ### Solicitud y lectura de revisiones
 
-- Automatizar la solicitud de revisión, incluido el **Re-request review** que
-  GitHub ofrece después de nuevos commits en una PR ya revisada.
+- **Solicitud automática: probada localmente.**
+  `gh pr edit <PR> --add-reviewer "@copilot"` produjo una review real sobre el
+  commit indicado, sin intervención humana. Queda pendiente el **Re-request
+  review** que GitHub ofrece después de nuevos commits en una PR ya revisada.
+- **`gh pr edit` no está autorizado por la política compartida.** Hoy funciona
+  por la regla amplia de `.claude/settings.local.json`. Al depurar ese archivo,
+  el circuito pierde la capacidad de solicitar revisiones y de actualizar cuerpos
+  de pull request, salvo que se agregue al `allow` compartido.
 - Diseñar la espera: consultar estado **sin polling agresivo**, con timeout y
   reintentos razonables. Las latencias observadas están en `0007`.
+- **Falta un mecanismo autorizado de espera y reintento** para estados remotos.
+  Hoy no hay forma permitida de esperar entre consultas, así que el circuito no
+  puede seguir por sí mismo el estado de una revisión en curso.
+- Evaluar coordinación **basada en eventos** con GitHub Actions o webhooks, si
+  las pull requests reales demuestran que esperar es un cuello de botella.
 - Al procesar una review, leer las **tres** fuentes: el cuerpo de la review, los
   comentarios inline y los *suppressed comments*. Una review puede declarar
   "0 new comments" y traer igualmente hallazgos en el cuerpo.
 - Verificar que la automatización permita sustituir ejecutor y revisor, según el
   principio de reemplazabilidad de `0007`.
-- Resolver cómo **leer y responder reviews de forma automática** sin abrir
-  permisos excesivos. Hoy `gh api` está denegado por completo, así que los
-  comentarios inline quedan fuera del alcance del circuito.
 - **Resolución de conversaciones.** La PR #9 demostró que un hilo de review sin
   resolver deja la pull request en `BLOCKED` y el merge no se ofrece. El circuito
   automático futuro tiene que incorporar ese paso.
+
+#### Lectura automática de comentarios inline
+
+Es el hueco más importante del circuito: hoy los hallazgos inline de una review
+no llegan al ejecutor.
+
+- `gh pr view` **no cubre esta necesidad**. Ni el cuerpo de la review ni sus
+  campos JSON incluyen los comentarios inline.
+- La vía nativa preferida para **solo lectura** es la API oficial de GitHub por
+  su CLI, con el endpoint
+  `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
+  Para este repositorio el comando candidato es
+  `gh api repos/lucascarnu/Roadmap-IA-y-Agentes/pulls/<PR>/comments`.
+  Una sola llamada devuelve `body`, `path`, `line`, `pull_request_review_id` y
+  autor de cada comentario, así que basta para atribuir cada hallazgo a su
+  review.
+- **No está habilitada.** El deny general `PowerShell(gh api *)` impide cualquier
+  allowlist más estrecha, porque `deny` prevalece sobre `allow` y una regla de
+  denegación no admite excepciones.
+- **Retirar ese deny y confiar en `dontAsk` para bloquear el resto no debe
+  hacerse todavía**: esa equivalencia depende del modo, y el modo desde
+  `.claude/settings.json` sigue sin validarse en una sesión limpia y sin la
+  contaminación de `.claude/settings.local.json`.
+- La regla parametrizada analizada, `…/pulls/*/comments` sin comodín final,
+  conserva un **riesgo residual por el comodín intermedio**, que absorbe espacios.
+  Sirve como guardarraíl frente a un error de composición, **no** como frontera
+  infranqueable.
+- `agynio/gh-pr-review` queda como **candidato posterior**, sobre todo para
+  responder y resolver hilos, que la vía de solo lectura no cubre. Sujeto a
+  evaluar cadena de suministro, scopes, fijación de versión, y a la objeción de
+  gobernanza: si el ejecutor resuelve sus propios hilos, deja sin efecto el
+  *Require conversation resolution*.
+
+**La lectura manual de los comentarios inline en la PR #10 fue una excepción de
+transición, no un mecanismo.** El diseño objetivo no puede depender de que una
+persona abra GitHub, copie comentarios, mande capturas ni confirme que una review
+terminó.
+
+**Leer automáticamente todos los hallazgos de una review es requisito previo para
+declarar validado un circuito desatendido o nocturno.** No lo es para empezar el
+MVP, pero sí para operar el harness sin supervisión.
 
 ### Evaluación del revisor
 
@@ -45,8 +96,13 @@ quedan únicamente las acciones futuras que se derivan de ellas.
   documentación, no una conclusión general sobre los modos.
 - El modo solicitado se observó en el **timeline** de GitHub. No hay evidencia de
   que `gh pr view --json` lo exponga como campo estructurado, y no se consultó la
-  API REST. **Anotar el modo al solicitar cada review** para que la comparación
-  sea reproducible.
+  API REST.
+- El **Review effort level se configura a nivel de repositorio**, en Settings →
+  Copilot → Code review. En este repositorio el valor observado es **Balanced**,
+  así que no hace falta elegir el modo en cada solicitud. **Max** figura como
+  *Coming soon* y todavía no está disponible, de modo que la política de `0009`
+  que lo reserva para arquitectura y seguridad describe un modo que aún no puede
+  usarse.
 - Definir qué debe entregar el revisor cuando detecte un problema real con
   solución clara: explicar el problema, señalar dónde está, proponer una
   corrección concreta y evitar cambios meramente cosméticos.

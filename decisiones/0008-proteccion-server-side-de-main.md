@@ -56,7 +56,7 @@ opción ante cada forma de comando. La semántica exacta —por ejemplo, si
 *Restrict deletions* alcanza toda forma de refspec de borrado— no fue verificada
 contra documentación oficial de GitHub ni por prueba, y queda pendiente.
 
-Lo que sí está **PROBADO OPERATIVAMENTE** por la pull request #9:
+Lo que sí está **PROBADO LOCALMENTE** por la pull request #9:
 
 - una conversación de review sin resolver deja la pull request en
   `mergeStateStatus: BLOCKED`, y el merge no se ofrece;
@@ -75,8 +75,10 @@ Lo que sí está **PROBADO OPERATIVAMENTE** por la pull request #9:
   haciendo: un commit por pull request, sin merge commits.
 - **Target solo la rama por defecto.** Las ramas de trabajo son efímeras y
   existen también en local, así que su pérdida es recuperable. Extender el
-  ruleset a todas las ramas bloquearía además el borrado de ramas ya integradas,
-  que es parte del ciclo normal.
+  ruleset a todas las ramas tendría además un efecto a comprobar: podría impedir
+  el borrado de ramas ya integradas, que es parte del ciclo normal. Ese efecto se
+  deduce del nombre de la opción y **no está verificado**, así que pesa como
+  riesgo y no como impedimento demostrado.
 - **Bypass vacío.** Una lista de excepciones convierte la barrera en una
   convención. Sin excepciones, aplica también a quien administra el repositorio.
 
@@ -101,6 +103,7 @@ El resto de `0007` sigue vigente.
 
 - Verificar la semántica de cada regla del ruleset contra documentación oficial,
   registrando la fuente según `0002`.
-- Decidir si el ruleset debe extenderse a las ramas de trabajo, y con qué reglas,
-  sabiendo que *Restrict deletions* sobre todas las ramas impediría la limpieza
-  posterior a la integración.
+- Decidir si el ruleset debe extenderse a las ramas de trabajo, y con qué reglas.
+  Antes hay que comprobar si *Restrict deletions* sobre todas las ramas impide la
+  limpieza posterior a la integración: es el riesgo principal de esa extensión y
+  hoy es una suposición, no un resultado.

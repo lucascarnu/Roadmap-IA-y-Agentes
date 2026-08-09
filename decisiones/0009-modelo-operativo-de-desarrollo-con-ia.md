@@ -147,10 +147,13 @@ independiente: tiende a confirmarla en vez de mirar el resto.
 Política inicial para Copilot Code Review durante el MVP, revisable por calidad,
 costo y latencia observados:
 
-- **Balanced por defecto** al solicitar una review.
-- **Lite** queda para cambios triviales o mecánicos.
-- **Max** queda para arquitectura, seguridad, riesgo alto, o cuando la evidencia
-  indique que Balanced no alcanza.
+- **Balanced por defecto** al solicitar una review. Está disponible y es el valor
+  configurado hoy a nivel de repositorio.
+- **Lite**, disponible, queda para cambios triviales o mecánicos.
+- **Max** figura como *Coming soon* y **todavía no está disponible**. Se reserva
+  conceptualmente para arquitectura, seguridad, riesgo alto o cuando la evidencia
+  indique que Balanced no alcanza, y esa reserva entra en vigor cuando GitHub lo
+  habilite.
 
 `Lite`, `Balanced` y `Max` son **modos de esfuerzo** de la revisión completa.
 `Low` y `High` son **severidades de un hallazgo individual**. No son la misma

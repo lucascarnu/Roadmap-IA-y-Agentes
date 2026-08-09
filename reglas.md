@@ -32,7 +32,7 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Usar comandos simples, uno por operación. Evitar lógica de shell cuando el exit code y la salida directa ya alcanzan.
 - Al publicar una rama, nombrarla explícitamente en el comando en vez de depender de cuál esté activa.
 - Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
-- El circuito automático termina con la pull request lista para integrar, no con la integración.
+- El circuito automático llega hasta donde lo autoricen las garantías objetivas disponibles. Hoy termina con la pull request lista para integrar; las condiciones bajo las cuales la integración misma puede automatizarse se definen en la decisión sobre el modelo operativo.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
 
 ## Estados de evidencia
@@ -106,8 +106,9 @@ Puede omitirse cuando:
 
 ## Buscar antes de construir
 
+- Antes de diseñar un wrapper, una extensión, un script o infraestructura propia para resolver una limitación operativa, buscar primero una capacidad nativa de la plataforma que ya se usa, y preferir su configuración o su API oficial cuando satisfagan la necesidad y la seguridad.
 - Antes de proponer o iniciar una herramienta, app, plugin, skill, integración u otra solución propia para cubrir una capacidad, revisar las herramientas ya registradas para esa capacidad.
-- Si ninguna cubre suficientemente la necesidad, investigar alternativas externas reutilizables razonables.
+- Si ninguna cubre suficientemente la necesidad, investigar alternativas externas reutilizables razonables, que se justifican por la ventaja concreta que aportan.
 - Proponer construir cuando el hueco persista, indicando qué se revisó.
 - El esfuerzo de búsqueda es proporcional al costo y a la importancia de la construcción.
 - No hace falta repetir la comparación cuando la decisión de construir en lugar de reutilizar ya fue evaluada explícitamente, aprobada y sigue vigente.
