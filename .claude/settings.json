@@ -21,11 +21,13 @@
       "PowerShell(gh pr create *)",
       "PowerShell(gh pr view *)",
       "PowerShell(gh pr list *)",
-      "PowerShell(gh pr diff *)"
+      "PowerShell(gh pr diff *)",
+      "PowerShell(.\\scripts\\get-pr-comments.ps1 *)"
     ],
     "deny": [
       "Edit(/.claude/**)",
       "Edit(/.git/**)",
+      "Edit(/scripts/**)",
       "PowerShell(git reset --hard*)",
       "PowerShell(git clean *)",
       "PowerShell(git branch -D*)",

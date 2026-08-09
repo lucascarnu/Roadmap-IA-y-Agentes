@@ -31,9 +31,9 @@ con problemas resueltos:
   por ahora de guardarraíles locales de esta política.
 - La protección contra redirecciones solo fue probada para las formas con
   espacios, `> archivo` y `>> archivo`. Las formas sin espacios siguen abiertas.
-- La autorización mínima para leer comentarios inline de una review se
-  determinará durante una prueba real del circuito de review. Hoy `gh api` está
-  denegado por completo.
+- De una review solo se pueden **leer** los comentarios inline, con
+  `scripts/get-pr-comments.ps1`, que es el único acceso autorizado. Responder y
+  resolver hilos sigue fuera de alcance, y `gh api` directo sigue denegado.
 
 **Consecuencia del modo `dontAsk`.** En ese modo `AskUserQuestion` queda
 denegada, así que durante una corrida automática no hay forma de pedir una
