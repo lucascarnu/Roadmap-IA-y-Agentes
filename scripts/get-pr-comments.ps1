@@ -5,7 +5,7 @@
 # Ante cualquier entrada invalida falla sin invocar nada.
 
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [string]$Pr
 )
 
