@@ -64,6 +64,13 @@ mismo y su silencio no equivale a validación.
   usuario en lugar de resolverlo por jerarquía entre agentes.
 - Por ahora las revisiones **se solicitan manualmente**.
 
+> **Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md) y
+> [equipo.md](../equipo.md).** Copilot ocupa hoy el rol de revisión
+> independiente de pull requests, y quien audita sus hallazgos y decide el cierre
+> es el Arquitecto / Lead, no el ejecutor. Lo demás de esta sección sigue
+> vigente: no es autoridad final, no aprueba por sí mismo y su silencio no
+> equivale a validación.
+
 ### Lo que no se activa todavía
 
 No se habilita automatic code review, no se agrega branch protection adicional y

@@ -125,10 +125,10 @@ independiente: tiende a confirmarla en vez de mirar el resto.
 - Su resultado se congela antes de compararlo con el de los demás.
 - Recién entonces se cruzan los hallazgos.
 
-## Esfuerzo de la revisión complementaria
+## Esfuerzo de la revisión de pull requests
 
-Política inicial para Copilot Code Review durante el MVP, revisable por calidad,
-costo y latencia observados:
+Política inicial durante el MVP para la herramienta que ocupe hoy ese rol,
+revisable por calidad, costo y latencia observados:
 
 - **Balanced por defecto** al solicitar una review. Está disponible y es el valor
   configurado hoy a nivel de repositorio.

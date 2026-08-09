@@ -17,8 +17,7 @@ decide una asignación y cuándo se reevalúa— está en
 | Director / Product Owner | Lucas |
 | Arquitecto / Lead | Claude |
 | Ejecutor principal | Codex |
-| Reviewer independiente | *sin asignar* |
-| Reviewer complementario | GitHub Copilot Code Review |
+| Reviewer independiente | GitHub Copilot Code Review, solo sobre pull requests |
 | QA / Validación | Un entorno capaz de ejecutar realmente el comportamiento objetivo |
 | Especialistas bajo demanda | Según necesidad |
 
@@ -26,13 +25,27 @@ decide una asignación y cuándo se reevalúa— está en
 lo consulta por hitos, no de forma continua. Como todo servicio externo, no puede
 ser dependencia obligatoria del circuito automático.
 
-## Nota sobre el reviewer independiente
+## Alcance de Copilot
 
-Queda sin asignar de forma explícita. Con Claude en Arquitecto / Lead y Codex en
-Ejecutor, el candidato natural es Claude, pero entonces revisaría la
-implementación de un diseño propio: independiente del ejecutor, no del diseño.
-`0009` exige independencia en revisión y validación, así que conviene decidirlo
-antes de la primera pull request real del MVP.
+Copilot revisa el cambio ya publicado en una pull request de GitHub y produce
+hallazgos independientes. **Eso es todo lo que hace.** No forma parte del
+circuito operativo general de agentes: no define tareas, no decide arquitectura,
+no coordina al ejecutor, no implementa, no ejecuta QA y no decide el cierre de
+una unidad de trabajo.
+
+Quien recibe la implementación, las pruebas y los hallazgos de Copilot, los
+audita en conjunto y decide si hay que corregir, si la unidad de trabajo puede
+cerrarse o si corresponde entregar la siguiente tarea al ejecutor, es el
+Arquitecto / Lead.
+
+## Candidatos sin asignación
+
+Otros modelos y proveedores —por ejemplo Kimi— pueden ocupar o reemplazar
+cualquiera de estos roles si la evidencia lo justifica, con los criterios de
+`0009`. Hoy ninguno tiene asignación activa ni integración técnica.
+
+El rol de investigador de soluciones externas todavía no está adoptado; su
+alcance y su candidato inicial están en `pendientes.md`.
 
 ## Cómo se cambia
 
