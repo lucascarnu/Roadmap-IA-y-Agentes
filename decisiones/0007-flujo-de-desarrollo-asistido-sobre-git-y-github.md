@@ -64,12 +64,12 @@ mismo y su silencio no equivale a validación.
   usuario en lugar de resolverlo por jerarquía entre agentes.
 - Por ahora las revisiones **se solicitan manualmente**.
 
-> **Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md) y
-> [equipo.md](../equipo.md).** Copilot ocupa hoy el rol de revisión
-> independiente de pull requests, y quien audita sus hallazgos y decide el cierre
-> es el Arquitecto / Lead, no el ejecutor. Lo demás de esta sección sigue
-> vigente: no es autoridad final, no aprueba por sí mismo y su silencio no
-> equivale a validación.
+> **Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md).** El rol
+> pasó a llamarse revisión independiente de pull requests, y quien audita sus
+> hallazgos y decide el cierre es el Arquitecto / Lead, no el ejecutor. Quién lo
+> ocupa hoy está en [equipo.md](../equipo.md) y solo ahí. Lo demás de esta
+> sección sigue vigente: no es autoridad final, no aprueba por sí mismo y su
+> silencio no equivale a validación.
 
 ### Lo que no se activa todavía
 
@@ -142,6 +142,8 @@ sin necesidad de pruebas dedicadas.
 - La revisión llega como `COMMENTED` y **no bloquea la integración**. Sin
   branch protection, un hallazgo válido puede pasar inadvertido si nadie lee la
   pull request. Es aceptado a cambio de no agregar todavía esa capa.
+  *Superado por [0008](0008-proteccion-server-side-de-main.md): la capa existe, y
+  un hilo de conversación sin resolver bloquea la integración.*
 - Solicitar las revisiones a mano es un paso manual que puede olvidarse.
 - Un revisor que ocasionalmente señala problemas inexistentes entrena a
   ignorarlo. Es un riesgo del rol complementario, y el motivo de que los
@@ -151,7 +153,8 @@ sin necesidad de pruebas dedicadas.
 
 ## Queda abierto
 
-- Cuándo y bajo qué criterio activar automatic code review o branch protection.
+- Cuándo y bajo qué criterio activar automatic code review. *La branch protection
+  ya se activó; ver [0008](0008-proteccion-server-side-de-main.md).*
 - Si Claude Code, Copilot Code Review y GitHub CLI deben registrarse como
   entidades en `herramientas/` bajo la capacidad `desarrollo-asistido-por-ia`.
 - Cómo se registra la experiencia acumulada con el revisor a medida que aparezca

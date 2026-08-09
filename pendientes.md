@@ -46,44 +46,25 @@ Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 
 #### Lectura automática de comentarios inline
 
-Es el hueco más importante del circuito: hoy los hallazgos inline de una review
-no llegan al ejecutor.
+**Resuelto para lectura.** `scripts/get-pr-comments.ps1` es hoy el acceso
+autorizado: recibe un número de pull request validado, usa repositorio fijo y
+ejecuta una sola llamada de lectura contra
+`GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`. `gh api` directo sigue
+denegado. El ejecutor lee los hallazgos inline sin intervención humana.
 
-- `gh pr view` **no cubre esta necesidad**. Ni el cuerpo de la review ni sus
-  campos JSON incluyen los comentarios inline.
-- La vía nativa preferida para **solo lectura** es la API oficial de GitHub por
-  su CLI, con el endpoint
-  `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
-  Para este repositorio el comando candidato es
-  `gh api repos/lucascarnu/Roadmap-IA-y-Agentes/pulls/<PR>/comments`.
-  Una sola llamada devuelve `body`, `path`, `line`, `pull_request_review_id` y
-  autor de cada comentario, así que basta para atribuir cada hallazgo a su
-  review.
-- **No está habilitada.** El deny general `PowerShell(gh api *)` impide cualquier
-  allowlist más estrecha, porque `deny` prevalece sobre `allow` y una regla de
-  denegación no admite excepciones.
-- **Retirar ese deny y confiar en `dontAsk` para bloquear el resto no debe
-  hacerse todavía**: esa equivalencia depende del modo, y el modo desde
-  `.claude/settings.json` sigue sin validarse en una sesión limpia y sin la
-  contaminación de `.claude/settings.local.json`.
-- La regla parametrizada analizada, `…/pulls/*/comments` sin comodín final,
-  conserva un **riesgo residual por el comodín intermedio**, que absorbe espacios.
-  Sirve como guardarraíl frente a un error de composición, **no** como frontera
-  infranqueable.
-- `agynio/gh-pr-review` queda como **candidato posterior**, sobre todo para
-  responder y resolver hilos, que la vía de solo lectura no cubre. Sujeto a
-  evaluar cadena de suministro, scopes, fijación de versión, y a la objeción de
+Lo que sigue abierto:
+
+- **Responder y resolver hilos.** El wrapper es de solo lectura, así que el
+  circuito todavía no puede desbloquear una pull request detenida por
+  conversaciones sin resolver.
+- `agynio/gh-pr-review` queda como **candidato** para ese tramo. Sujeto a evaluar
+  cadena de suministro, scopes y fijación de versión, y a una objeción de
   gobernanza: si el ejecutor resuelve sus propios hilos, deja sin efecto el
   *Require conversation resolution*.
-
-**La lectura manual de los comentarios inline en la PR #10 fue una excepción de
-transición, no un mecanismo.** El diseño objetivo no puede depender de que una
-persona abra GitHub, copie comentarios, mande capturas ni confirme que una review
-terminó.
-
-**Leer automáticamente todos los hallazgos de una review es requisito previo para
-declarar validado un circuito desatendido o nocturno.** No lo es para empezar el
-MVP, pero sí para operar el harness sin supervisión.
+- **Leer todos los hallazgos de una review sigue siendo requisito previo** para
+  declarar validado un circuito desatendido, y ahora se cumple para los
+  comentarios inline. El cuerpo de la review y sus *suppressed comments* se leen
+  con `gh pr view`, que sí los incluye.
 
 ### Evaluación del revisor
 
@@ -159,6 +140,9 @@ tramo PowerShell no cubierto (`if (...)`), no a un `git merge-base` simple.
 ya cubiertos por una regla persistida. **No** implica que el circuito completo de
 una PR se ejecute sin prompts: en la misma sesión aparecieron dos solicitudes de
 autorización, una de edición y otra de shell, descritas abajo.
+
+Los dos apartados que siguen son el **registro histórico de la investigación**,
+anterior a que la política compartida existiera. El estado actual está más abajo.
 
 #### Permisos de edición
 

@@ -23,8 +23,10 @@ denylist local no tiene estado final.
 ## Decisión
 
 **La integridad de `main` no depende de patrones locales del ejecutor.** Se apoya
-en una regla del servidor, que se aplica sobre la referencia y no sobre el texto
-del comando, y que por lo tanto no se puede evadir reescribiendo la invocación.
+en una regla del servidor. La propiedad que se busca es que se aplique sobre la
+referencia y no sobre el texto del comando, y que por lo tanto no se pueda evadir
+reescribiendo la invocación. Es la **intención de diseño**: su alcance exacto no
+fue verificado y queda entre lo abierto al final de esta decisión.
 
 **GitHub Pro** es la condición que permitió activar rulesets sobre este
 repositorio privado.
@@ -68,9 +70,12 @@ Lo que sí está **PROBADO LOCALMENTE** por la pull request #9:
 - **Approvals en 0.** Exigir aprobaciones no aportaría hoy: el equipo es una
   persona y los revisores son agentes que comentan, no aprueban. La pull request
   sigue siendo obligatoria, que es lo que fuerza el punto de revisión.
-- **Conversation resolution activo.** Es la garantía barata de que un hallazgo de
-  review no se integre sin haber sido leído. `0007` aceptaba ese riesgo por no
-  tener la capa; ahora la tiene.
+- **Conversation resolution activo.** Es la garantía barata de que un hallazgo
+  **publicado como conversación inline** no se integre sin haber sido leído.
+  `0007` aceptaba ese riesgo por no tener la capa; ahora la tiene. No alcanza a
+  los hallazgos del cuerpo de la review ni a los *suppressed comments*, que no
+  crean conversación y por lo tanto no bloquean nada: leerlos sigue siendo
+  responsabilidad de quien procesa la review.
 - **Historial lineal y solo squash.** Formalizan lo que el repositorio ya venía
   haciendo: un commit por pull request, sin merge commits.
 - **Target solo la rama por defecto.** Las ramas de trabajo son efímeras y
