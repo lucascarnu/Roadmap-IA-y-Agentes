@@ -31,10 +31,17 @@ Neutrales respecto de proveedor. Describen responsabilidades, no productos.
 1. **Director / Product Owner.** Define intención, prioridades, experiencia
    buscada, restricciones, presupuesto y tolerancia al riesgo. Conserva el veto.
 2. **Arquitecto / Lead.** Autoridad técnica delegada: diseño, coherencia del
-   sistema y arbitraje técnico entre agentes.
+   sistema y arbitraje técnico entre agentes. **Recibe la implementación, sus
+   pruebas y los hallazgos de la revisión, los audita en conjunto y decide** si
+   hay que corregir, si la unidad de trabajo puede cerrarse o si corresponde
+   entregar la siguiente tarea al ejecutor.
 3. **Ejecutor.** Implementa, prueba lo que puede probar y publica el trabajo para
    revisión.
-4. **Reviewer independiente.** Responde si el cambio está bien construido.
+4. **Reviewer independiente.** Responde si el cambio está bien construido,
+   revisando lo ya publicado en la pull request y produciendo hallazgos. **Eso es
+   todo lo que hace**: no define tareas, no decide arquitectura, no coordina al
+   ejecutor, no implementa, no ejecuta QA y no decide el cierre de una unidad de
+   trabajo.
 5. **QA / Validación.** Responde si funciona realmente, ejecutándolo.
 6. **Especialistas bajo demanda.** Product Design y UI/UX, seguridad, datos y
    otros, cuando el trabajo lo justifique.

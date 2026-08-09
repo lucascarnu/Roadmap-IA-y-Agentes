@@ -34,18 +34,6 @@ por hitos y fuera del circuito operativo cotidiano. Como todo servicio cuya
 disponibilidad no está garantizada, no puede ser dependencia obligatoria del
 circuito automático.
 
-## Alcance de la revisión independiente
-
-Quien ocupe este rol revisa el cambio ya publicado en una pull request y produce
-hallazgos independientes. **Eso es todo lo que hace.** No forma parte del
-circuito operativo general de agentes: no define tareas, no decide arquitectura,
-no coordina al ejecutor, no implementa, no ejecuta QA y no decide el cierre de
-una unidad de trabajo.
-
-Quien recibe la implementación, las pruebas y esos hallazgos, los audita en
-conjunto y decide si hay que corregir, si la unidad de trabajo puede cerrarse o
-si corresponde entregar la siguiente tarea al ejecutor, es el Arquitecto / Lead.
-
 ## Candidatos sin asignación
 
 Otros modelos y proveedores —por ejemplo Kimi— pueden ocupar o reemplazar
@@ -57,10 +45,11 @@ alcance y su candidato inicial están en `pendientes.md`.
 
 ## Cómo se cambia
 
-Se edita la tabla. Nada más: el resto de este archivo describe roles, no
-ocupantes, y **ningún otro documento repite la asignación vigente**. Las
-decisiones conservan asignaciones históricas, marcadas como superadas, que
-describen el momento en que se escribieron y no el estado actual.
+Se edita la tabla. Nada más: el resto de este archivo describe estado y
+condiciones, no responsabilidades del modelo —esas están en `0009`—, y **ningún
+otro documento repite la asignación vigente**. Las decisiones conservan
+asignaciones históricas, marcadas como superadas, que describen el momento en que
+se escribieron y no el estado actual.
 
 Si el cambio responde a evidencia acumulada o a un cambio de contexto de los que
 `0009` enumera, conviene dejarlo dicho en el mensaje del commit.
