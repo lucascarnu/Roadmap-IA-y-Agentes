@@ -34,11 +34,45 @@ por hitos y fuera del circuito operativo cotidiano. Como todo servicio cuya
 disponibilidad no está garantizada, no puede ser dependencia obligatoria del
 circuito automático.
 
+## Contingencias
+
+Un ocupante puede quedarse sin cuota o sin disponibilidad en cualquier momento.
+Estas son las sustituciones previstas, para que el circuito no tenga que
+inventarlas en ese momento. **Ninguna está activa hoy.**
+
+**Reviewer independiente.** Si el ocupante asignado no está disponible, no pudo
+ejecutar la revisión o agotó su cuota:
+
+1. usar un reviewer independiente alternativo, al que se le entrega un paquete
+   autocontenido con el problema, el cambio y la evidencia;
+2. si no hay ninguno disponible y la revisión es obligatoria, detener el cierre
+   de forma segura;
+3. nunca interpretar la indisponibilidad como aprobación.
+
+El procedimiento del paquete autocontenido está **PROBADO LOCALMENTE**: sobre la
+pull request #10, dos reviewers externos sin acceso al repositorio produjeron
+hallazgos materiales correctos a partir del paquete, y uno de ellos revalidó
+después el delta corregido. No está automatizado, y para esto no hace falta que
+lo esté.
+
+**Arquitecto / Lead y Ejecutor principal.** Si su ocupante no está disponible o
+se queda sin cuota, **Kimi** puede ocupar temporalmente cualquiera de los dos.
+Condiciones:
+
+- tiene que poder reconstruir el estado desde el repositorio, las ramas y las
+  pull requests, sin que el director le reconstruya la historia a mano;
+- si ocupa Arquitecto / Lead o Ejecutor en una tarea, **no puede ser reviewer
+  independiente de esa misma tarea**, por la independencia que fija `0009`.
+
+Es una previsión documentada, no una asignación: no tiene integración técnica y
+la sustitución todavía no se probó. La prueba está registrada en `pendientes.md`.
+
 ## Candidatos sin asignación
 
-Otros modelos y proveedores —por ejemplo Kimi— pueden ocupar o reemplazar
-cualquiera de estos roles si la evidencia lo justifica, con los criterios de
-`0009`. Hoy ninguno tiene asignación activa ni integración técnica.
+Otros modelos y proveedores pueden ocupar o reemplazar cualquiera de estos roles
+si la evidencia lo justifica, con los criterios de `0009`. Hoy ninguno tiene
+asignación activa ni integración técnica, incluidos los que aparecen arriba como
+contingencia.
 
 El rol de investigador de soluciones externas todavía no está adoptado; su
 alcance y los candidatos a evaluar están en `pendientes.md`.
