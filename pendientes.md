@@ -11,8 +11,11 @@ trabajamos, qué falta probar, qué habría que extraer— que no encajan en nin
 entidad.
 
 Cada asunto declara su **estado**: `ABIERTO`, `PARCIAL`, `RESUELTO` o
-`POSPUESTO`. Un asunto `RESUELTO` se conserva mientras su evidencia siga
-explicando por qué el sistema es como es; cuando deje de aportar, se retira.
+`POSPUESTO`. Las afirmaciones sobre cómo se comporta el sistema declaran por
+separado su **evidencia**, según los estados definidos en
+[`reglas.md`](reglas.md#estados-de-evidencia). Un asunto `RESUELTO` se conserva
+mientras su evidencia siga explicando por qué el sistema es como es; cuando deje
+de aportar, se retira.
 
 ## Compuerta PRE-MVP
 
@@ -22,8 +25,9 @@ esto esté cerrado, la compuerta queda abierta.
 
 ### Gobernanza del ejecutor principal
 
-**Estado: PARCIAL.** La parte neutral quedó escrita en `AGENTS.md`; la
-configuración concreta no está verificada.
+**Estado: PARCIAL. Evidencia: PROBADO LOCALMENTE.** La parte neutral quedó
+escrita en `AGENTS.md`; la configuración concreta se verificó en el alcance que
+se enumera abajo.
 
 Lo verificado en este entorno, al 2026-08-09:
 
@@ -33,18 +37,23 @@ Lo verificado en este entorno, al 2026-08-09:
   **nivel de confianza del proyecto** más un modo de sandbox. Es un modelo
   distinto del de `.claude/settings.json`, y por eso no corresponde inventarle un
   equivalente.
-- **Este repositorio todavía no figura entre sus proyectos de confianza.**
+- Este repositorio figura entre sus proyectos de confianza.
+- El sandbox opera en modo elevado y acepta automáticamente las solicitudes
+  elegibles de escalada puntual; durante la prueba no apareció ninguna ventana
+  de aprobación manual.
+- Python 3.13.14 funciona mediante escalada puntual.
+- GitHub CLI está autenticado como `lucascarnu` y el remoto Git responde.
+- El ejecutor sincronizó `main` con `origin/main`, incluida la escritura
+  necesaria en `.git`.
+- La prueba no modificó la configuración local de permisos de ningún ejecutor.
 - Su archivo de instrucciones globales del usuario está vacío, así que hoy no
   contradice nada de lo que fija este repositorio.
 
-Lo que falta, y **requiere intervención en la PC del director**: abrir este
-repositorio con ese ejecutor y otorgarle el nivel de confianza necesario. No se
-puede hacer desde acá.
-
-Después de esa configuración queda por comprobar, ya en una tarea real, si puede
-completar el circuito rama → commit → push → pull request sin autorizaciones
-inesperadas, y con qué intérprete. Ese intérprete se declara en su primera pull
-request.
+Lo único que queda por comprobar es el circuito mutable completo en una tarea
+real: rama → cambio → verificación → commit → push → pull request, sin
+autorizaciones manuales inesperadas. Esta primera pull request usa **PowerShell**
+como intérprete para Git y GitHub CLI. El asunto permanece `PARCIAL` hasta que la
+pull request exista y se integre.
 
 ### Prueba de sustitución del ocupante de contingencia
 
@@ -61,7 +70,7 @@ Si lo logra, la contingencia queda PROBADA LOCALMENTE. Si falla, se documentan
 
 ### Prueba de reconstrucción del consultor externo
 
-**Estado: RESUELTO, PROBADO LOCALMENTE.** Ejecutada el 2026-08-09.
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** Ejecutada el 2026-08-09.
 
 Se le pidió al consultor externo por hitos que `equipo.md` registra que, leyendo
 únicamente un checkout del repositorio, explicara el estado del proyecto, el
@@ -97,7 +106,7 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 vive acá: es regla estable en `0009`, "Coordinación de revisiones". Lo que queda
 son las capacidades que al circuito todavía le faltan.
 
-- **Solicitud automática: RESUELTA, PROBADO LOCALMENTE.**
+- **Solicitud automática: RESUELTA.** Evidencia: PROBADO LOCALMENTE.
   `gh pr edit <PR> --add-reviewer "@copilot"` produjo una review real sobre el
   commit indicado, sin intervención humana. Queda pendiente el **Re-request
   review** que GitHub ofrece después de nuevos commits en una PR ya revisada.
@@ -120,7 +129,8 @@ son las capacidades que al circuito todavía le faltan.
 
 #### Lectura automática de comentarios inline
 
-**Estado: PARCIAL. Resuelto para lectura, PROBADO LOCALMENTE.** `scripts/get-pr-comments.ps1` es
+**Estado: PARCIAL.** Resuelto para lectura. **Evidencia: PROBADO LOCALMENTE.**
+`scripts/get-pr-comments.ps1` es
 hoy el acceso autorizado: recibe un número de pull request validado, usa
 repositorio fijo y consulta **un único endpoint**
 `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`, con paginación, así que
@@ -288,7 +298,8 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
   de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
   Diseñar una prueba controlada antes de tocar ninguna regla.
-- **Redirección sin espacios: RESUELTO, PROBADO LOCALMENTE.** Cuatro sondas en el mismo entorno:
+- **Redirección sin espacios: RESUELTO.** Evidencia: PROBADO LOCALMENTE. Cuatro
+  sondas en el mismo entorno:
   escribe en la raíz y en una carpeta común, y queda **bloqueada** en `scripts/`
   y en `.claude/`. Las reglas `deny Edit(...)` alcanzan también a las escrituras
   por subproceso. Lo que sigue siendo cierto es que los patrones `> archivo` y
