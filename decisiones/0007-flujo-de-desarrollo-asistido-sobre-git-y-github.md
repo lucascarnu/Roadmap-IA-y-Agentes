@@ -146,9 +146,11 @@ sin necesidad de pruebas dedicadas.
   *Superado por [0008](0008-proteccion-server-side-de-main.md): la capa existe, y
   un hilo de conversación sin resolver bloquea la integración.*
 - Solicitar las revisiones a mano es un paso manual que puede olvidarse.
+  *Superado: pedirlas está automatizado y probado localmente.*
 - Un revisor que ocasionalmente señala problemas inexistentes entrena a
-  ignorarlo. Es un riesgo del rol complementario, y el motivo de que los
-  hallazgos los evalúe el ejecutor en lugar de aplicarlos sin más.
+  ignorarlo. Es el motivo de que sus hallazgos se evalúen en lugar de aplicarse
+  sin más. *Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md):
+  quien los audita es el Arquitecto / Lead, no el ejecutor.*
 - Las dos mediciones registradas envejecen. Sirven como orden de magnitud
   inicial y no deberían citarse como si siguieran vigentes.
 
