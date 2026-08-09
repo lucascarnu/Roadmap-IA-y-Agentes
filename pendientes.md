@@ -20,25 +20,6 @@ Lo que tiene que quedar cerrado **antes de la primera pull request de código**
 del MVP, según la regla de transición entre fases de `reglas.md`. Cuando todo
 esto esté cerrado, la compuerta queda abierta.
 
-### Revisión independiente obligatoria en las primeras PR de código
-
-**Estado: ABIERTO.** Excepción operativa y temporal a la proporcionalidad de
-`0009`.
-
-Durante las primeras pull requests de código real del MVP, **toda** pull request
-de código lleva revisión independiente, incluso si el cambio parece pequeño o
-mecánico. La regla general de `0009` sigue vigente a largo plazo; esto la
-suspende mientras no exista evidencia propia.
-
-El motivo es que toda la evidencia acumulada sobre la calidad de la revisión es
-sobre documentación y configuración. `0007` lo dice sin adornos: la calidad del
-revisor frente a bugs de código **no está demostrada**. Hasta tenerla, "cambio
-pequeño" no es un juicio confiable sobre código.
-
-Se reevalúa después de acumular evidencia suficiente en varias pull requests
-reales de código. No se fija un número acá: cuántas hacen falta es una
-preferencia del director que la evidencia todavía no puede resolver.
-
 ### Gobernanza del ejecutor principal
 
 **Estado: PARCIAL.** La parte neutral quedó escrita en `AGENTS.md`; la
@@ -80,23 +61,25 @@ Si lo logra, la contingencia queda PROBADA LOCALMENTE. Si falla, se documentan
 
 ### Prueba de reconstrucción del consultor externo
 
-**Estado: ABIERTO.** Requiere configuración previa.
+**Estado: RESUELTO, PROBADO LOCALMENTE.** Ejecutada el 2026-08-09.
 
-El consultor externo por hitos que `equipo.md` registra debe poder, usando
-únicamente el repositorio y la configuración disponible:
+Se le pidió al consultor externo por hitos que `equipo.md` registra que, leyendo
+únicamente un checkout del repositorio, explicara el estado del proyecto, el
+siguiente paso y qué no debe hacerse todavía.
 
-1. explicar el estado actual del proyecto;
-2. decir cuál es el siguiente paso;
-3. decir qué **no** debe hacerse todavía.
+Reconstruyó correctamente objetivo, estado general, fase, próxima acción, qué no
+hacer, roles, pendientes, y el stack y el alcance del MVP. Además detectó dos
+huecos documentales reales, que esta misma pull request corrige.
 
-El objetivo no es sumar una herramienta: es comprobar que el repositorio alcanza
-como memoria crítica del proyecto y que ninguna conversación larga es
-insustituible. Si pasa, no se agrega documentación nueva. Si falla, se documentan
-solo los huecos concretos.
+Con eso queda comprobado lo que la prueba buscaba: **el repositorio alcanza como
+memoria crítica del proyecto**, sin que ninguna conversación larga sea
+insustituible y sin necesidad de un resumen auxiliar fuera de él. Por eso no se
+agregó documentación nueva: se corrigió lo que la prueba encontró mal.
 
-**INTERVENCIÓN EN PC REQUERIDA**: configurar ese servicio y lanzar la prueba
-necesita al director en su computadora. Ningún agente puede hacerlo desde el
-repositorio.
+Alcance de lo que se afirma: vale para este consultor, en esta lectura y con el
+repositorio en este estado. No es una propiedad permanente del repositorio, y
+conviene repetir la prueba si el volumen de documentación crece mucho o si cambia
+de forma material cómo está organizada.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -365,6 +348,26 @@ se acuerde.
   publicar.
 - **Esfuerzo del revisor sobre código real**, que es lo único que falta para
   poder afirmar algo sobre su calidad revisando código.
+
+### Revisión independiente obligatoria mientras tanto
+
+**Estado: ABIERTO.** Lo abierto es **cuándo se levanta**, no la obligación
+misma: esa rige desde la primera pull request de código y no hay nada que cerrar
+antes de empezar.
+
+Durante las primeras pull requests de código real del MVP, **toda** pull request
+de código lleva revisión independiente, incluso si el cambio parece pequeño o
+mecánico. Suspende, solo para código y solo por ahora, la proporcionalidad de
+`0009`, que sigue siendo la regla general a largo plazo.
+
+El motivo es que toda la evidencia acumulada sobre la calidad de la revisión es
+sobre documentación y configuración. `0007` lo dice sin adornos: la calidad del
+revisor frente a bugs de código **no está demostrada**. Hasta tenerla, "cambio
+pequeño" no es un juicio confiable sobre código.
+
+Se levanta después de acumular evidencia suficiente en varias pull requests
+reales de código. No se fija un número acá: cuántas hacen falta es una
+preferencia del director que la evidencia todavía no puede resolver.
 
 ## Entregables reutilizables
 

@@ -216,7 +216,9 @@ inventario:
 - recomendación automática de herramientas para un objetivo;
 - detección automática de huecos;
 - búsqueda web automática;
-- capacidades requeridas por proyectos, que serían una enmienda a `0003`;
+- cruzar las `capacidades_requeridas` de un proyecto con el inventario de
+  herramientas para detectar huecos o proponer combinaciones, que `0003` ya deja
+  en manos del recomendador;
 - construcción automática de soluciones;
 - la relación entre una herramienta y el proyecto que la originó;
 - el ranking `bronce`;
@@ -361,3 +363,14 @@ relación entre herramienta y fuentes en ambos sentidos, y la corrección de qu�
 vista inversa es parcial.
 
 Sin ampliar el alcance: son reglas que ya existían y no estaban declaradas acá.
+
+**2026-08-09 — Corregida una exclusión desactualizada.**
+
+"Fuera del primer prototipo" seguía listando las capacidades requeridas por un
+proyecto como una enmienda pendiente a `0003`. Esa enmienda ya está incorporada:
+`capacidades_requeridas` existe, este proyecto lo usa en su propio frontmatter y
+el prototipo ya valida sus identificadores. Lo que sigue fuera de alcance es
+cruzar ese campo con el inventario de herramientas para recomendar o detectar
+huecos, que es el recomendador.
+
+Sin cambio de alcance: el prototipo hace hoy lo mismo que antes de la corrección.
