@@ -179,9 +179,10 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
 - **Depurar `.claude/settings.local.json`**, que conserva reglas amplias, muertas
   y redundantes. Recién después se puede probar la política compartida sin
   contaminación local. Nunca recurrir a modos globales de bypass.
-- **Validar `defaultMode: dontAsk` en una sesión nueva y limpia**, comprobando
-  que se aplica realmente desde `.claude/settings.json`. Es la hipótesis central
-  de la política y hoy solo está probado el modo activado por bandera de CLI.
+- `defaultMode: dontAsk` **ya se validó** en una sesión nueva y limpia, sin
+  `settings.local.json`: un comando autorizado se ejecutó, uno no autorizado se
+  denegó solo, y no hubo prompts. Era la hipótesis central de la política. Lo que
+  falta es ejercitarla en el circuito real, no volver a probar el modo.
 - **Volver a una rama `claude/*` existente no está autorizado.** La política
   permite crear ramas `claude/*` y volver a `main`, pero no regresar a una rama
   de trabajo ya creada. Observado durante la PR #9.
@@ -197,8 +198,12 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
   de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
   Diseñar una prueba controlada antes de tocar ninguna regla.
-- **La redirección sin espacios** —`>archivo`, `2>archivo`— sigue sin prueba ni
-  cierre. Solo está probada la forma con espacios. No darla por resuelta.
+- **La redirección sin espacios ya se probó.** Cuatro sondas en el mismo entorno:
+  escribe en la raíz y en una carpeta común, y queda **bloqueada** en `scripts/`
+  y en `.claude/`. Las reglas `deny Edit(...)` alcanzan también a las escrituras
+  por subproceso. Lo que sigue siendo cierto es que los patrones `> archivo` y
+  `>> archivo` del `deny` no cubren las formas sin espacios: no son ellos los que
+  protegen, sino la capa de escritura, que decide antes.
 - **Wrapper seguro de push: propuesta pendiente, no decisión.** Un script
   versionado que publique la rama actual sin aceptar flags ni refspecs
   eliminaría la clase entera de escapes por comodín, en lugar de enumerarlos.

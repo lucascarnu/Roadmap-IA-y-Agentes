@@ -70,12 +70,13 @@ Lo que sí está **PROBADO LOCALMENTE** por la pull request #9:
 - **Approvals en 0.** Exigir aprobaciones no aportaría hoy: el equipo es una
   persona y los revisores son agentes que comentan, no aprueban. La pull request
   sigue siendo obligatoria, que es lo que fuerza el punto de revisión.
-- **Conversation resolution activo.** Es la garantía barata de que un hallazgo
-  **publicado como conversación inline** no se integre sin haber sido leído.
-  `0007` aceptaba ese riesgo por no tener la capa; ahora la tiene. No alcanza a
-  los hallazgos del cuerpo de la review ni a los *suppressed comments*, que no
-  crean conversación y por lo tanto no bloquean nada: leerlos sigue siendo
-  responsabilidad de quien procesa la review.
+- **Conversation resolution activo.** Obliga a que todo hallazgo **publicado como
+  conversación inline** quede resuelto explícitamente antes de integrar. `0007`
+  aceptaba ese riesgo por no tener la capa; ahora la tiene. Es una garantía de
+  gesto, no de lectura: resolver un hilo no demuestra haberlo entendido. Y no
+  alcanza a los hallazgos del cuerpo de la review ni a los *suppressed comments*,
+  que no crean conversación y por lo tanto no bloquean nada. Leer las tres
+  fuentes sigue siendo responsabilidad de quien procesa la review.
 - **Historial lineal y solo squash.** Formalizan lo que el repositorio ya venía
   haciendo: un commit por pull request, sin merge commits.
 - **Target solo la rama por defecto.** Las ramas de trabajo son efímeras y

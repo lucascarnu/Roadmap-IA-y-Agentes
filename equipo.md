@@ -18,13 +18,21 @@ decide una asignación y cuándo se reevalúa— está en
 | Arquitecto / Lead | Claude |
 | Ejecutor principal | Codex |
 | Reviewer independiente | GitHub Copilot Code Review, solo sobre pull requests |
-| QA / Validación | Un entorno capaz de ejecutar realmente el comportamiento objetivo |
-| Especialistas bajo demanda | Según necesidad |
-| Consultor externo | ChatGPT Work, por hitos y fuera del circuito cotidiano |
+| QA / Validación | *Sin asignar.* Se activa por tarea |
+| Especialistas bajo demanda | *Sin asignar.* Se activan por tarea |
 
-Un consultor externo se consulta por hitos, no de forma continua, y como todo
-servicio cuya disponibilidad no está garantizada, no puede ser dependencia
-obligatoria del circuito automático.
+**QA / Validación no tiene ocupante permanente**, y no conviene inventarle uno.
+Se activa cuando una tarea necesita demostrar que algo funciona, y quien lo ocupe
+tiene que poder **ejecutar el comportamiento objetivo en su entorno real**: es un
+requisito para ocupar el rol, no un ocupante. `0009` fija además que no puede
+declarar validado quien no pudo ejecutar.
+
+## Servicios externos
+
+No son roles y no aparecen en la tabla. Hoy hay uno: **ChatGPT Work**, consultado
+por hitos y fuera del circuito operativo cotidiano. Como todo servicio cuya
+disponibilidad no está garantizada, no puede ser dependencia obligatoria del
+circuito automático.
 
 ## Alcance de la revisión independiente
 
@@ -50,6 +58,9 @@ alcance y su candidato inicial están en `pendientes.md`.
 ## Cómo se cambia
 
 Se edita la tabla. Nada más: el resto de este archivo describe roles, no
-ocupantes, y ningún otro documento nombra a un ocupante en un rol. Si el cambio
-responde a evidencia acumulada o a un cambio de contexto de los que `0009`
-enumera, conviene dejarlo dicho en el mensaje del commit.
+ocupantes, y **ningún otro documento repite la asignación vigente**. Las
+decisiones conservan asignaciones históricas, marcadas como superadas, que
+describen el momento en que se escribieron y no el estado actual.
+
+Si el cambio responde a evidencia acumulada o a un cambio de contexto de los que
+`0009` enumera, conviene dejarlo dicho en el mensaje del commit.
