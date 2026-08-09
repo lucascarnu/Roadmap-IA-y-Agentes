@@ -32,8 +32,20 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Usar comandos simples, uno por operación. Evitar lógica de shell cuando el exit code y la salida directa ya alcanzan.
 - Al publicar una rama, nombrarla explícitamente en el comando en vez de depender de cuál esté activa.
 - Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
-- El circuito automático termina con la pull request lista para integrar, no con la integración.
+- El circuito automático llega hasta donde lo autoricen las garantías objetivas disponibles. Hoy termina con la pull request lista para integrar. Las condiciones bajo las cuales la integración misma podría automatizarse todavía no están definidas: la decisión sobre el modelo operativo las deja explícitamente abiertas.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
+
+## Estados de evidencia
+
+Toda afirmación sobre cómo se comporta el sistema declara en cuál de estos tres estados se apoya. No son sinónimos ni grados de confianza: se distinguen por el tipo de evidencia que los sostiene.
+
+- **DOCUMENTADO.** Lo respalda documentación oficial de quien produce la herramienta. Dice cómo debería comportarse, no que se haya comprobado acá. Se cita con su fuente y envejece con las versiones.
+- **PROBADO LOCALMENTE.** Se ejecutó una prueba concreta en un entorno concreto y se observó el resultado. Vale para ese entorno y para lo que la prueba efectivamente cubrió, no para el caso general.
+- **VALIDADO OPERATIVAMENTE.** El circuito objetivo se comportó como se espera, en el entorno donde realmente corre, de forma repetida y con evidencia suficiente para confiar en él.
+
+Un agente **no puede declarar VALIDADO OPERATIVAMENTE algo que su entorno no le permite probar**. Puede documentarlo, puede señalar qué haría falta para validarlo, y puede pedir que lo valide quien tenga acceso a ese entorno; lo que no puede es dar por demostrado lo que no ejecutó.
+
+De ahí se sigue una separación de roles: quien revisa responde si algo está bien construido, y quien valida responde si funciona realmente. Son preguntas distintas y no siempre las puede contestar el mismo agente.
 
 ## Intervención crítica del agente
 
@@ -94,8 +106,9 @@ Puede omitirse cuando:
 
 ## Buscar antes de construir
 
+- Antes de diseñar un wrapper, una extensión, un script o infraestructura propia para resolver una limitación operativa, buscar primero una capacidad nativa de la plataforma que ya se usa, y preferir su configuración o su API oficial cuando satisfagan la necesidad y la seguridad.
 - Antes de proponer o iniciar una herramienta, app, plugin, skill, integración u otra solución propia para cubrir una capacidad, revisar las herramientas ya registradas para esa capacidad.
-- Si ninguna cubre suficientemente la necesidad, investigar alternativas externas reutilizables razonables.
+- Si ninguna cubre suficientemente la necesidad, investigar alternativas externas reutilizables razonables, que se justifican por la ventaja concreta que aportan.
 - Proponer construir cuando el hueco persista, indicando qué se revisó.
 - El esfuerzo de búsqueda es proporcional al costo y a la importancia de la construcción.
 - No hace falta repetir la comparación cuando la decisión de construir en lugar de reutilizar ya fue evaluada explícitamente, aprobada y sigue vigente.

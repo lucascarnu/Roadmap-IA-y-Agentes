@@ -48,3 +48,23 @@ varios prompts es una regla permanente todavía no escrita.
 
 Acá queda solo el origen: cuándo, con quién y en qué contexto se decidió cada
 cosa.
+
+## Trazabilidad
+
+*Sección agregada el 2026-08-08 por la ampliación de trazabilidad de `0002`. La
+fuente se capturó antes de que esa exigencia existiera.*
+
+- **Fecha de consulta:** 2026-08-06, el mismo día de la conversación.
+- **Versión o contexto:** no aplica. Es una conversación de trabajo cerrada, sin
+  versión ni edición posterior.
+- **Qué sustenta:** que `reglas.md` es la fuente única y neutral de las reglas
+  permanentes, redactada sin dirigirse a ningún agente ni herramienta concreta;
+  que `CLAUDE.md` y `AGENTS.md` son adaptadores delgados, que identifican al
+  destinatario y apuntan a `reglas.md` sin contener reglas propias; y la
+  separación entre tareas de consulta, que son de solo lectura, y tareas de
+  ejecución, que hoy es la sección "Alcance y autorización de cambios" de
+  `reglas.md`.
+- **Condición de revalidación:** ninguna por antigüedad. Una conversación no
+  envejece ni cambia sola. Habría que revisarla solo si la práctica contradijera
+  alguno de sus criterios, y en ese caso lo que se revisa es el criterio, no la
+  fuente.

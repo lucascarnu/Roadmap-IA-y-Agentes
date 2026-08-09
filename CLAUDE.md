@@ -4,6 +4,10 @@ Instrucciones y contexto para que Claude trabaje de forma consistente en este pr
 
 Las reglas de trabajo compartidas están en [reglas.md](reglas.md).
 
+El modelo de roles está en
+[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md); quién ocupa
+cada uno hoy, en [equipo.md](equipo.md).
+
 El intérprete que `reglas.md` deja a cargo del adaptador es, para este ejecutor,
 **PowerShell**: `Bash(git *)` y `Bash(gh *)` están denegados.
 
@@ -22,16 +26,21 @@ La documentación oficial que respalda el diseño está registrada en
 **Límites conocidos de la política candidata.** Se registran para no confundirlos
 con problemas resueltos:
 
-- `main` tiene protección server-side efectiva: el ruleset `Proteger main`, sobre
-  la rama por defecto, bloquea borrado y force push, exige pull request y
-  historial lineal, admite solo squash y no tiene lista de bypass.
-- Ese ruleset **no cubre las ramas `claude/*`** de `origin`. Su borrado y su
-  reescritura dependen por ahora de guardarraíles locales.
-- La protección contra redirecciones solo fue probada para las formas con
-  espacios, `> archivo` y `>> archivo`. Las formas sin espacios siguen abiertas.
-- De una review solo se pueden **leer** los comentarios inline, con
-  `scripts/get-pr-comments.ps1`, que es el único acceso autorizado. Responder y
-  resolver hilos sigue fuera de alcance, y `gh api` directo sigue denegado.
+- `main` está cubierta por un ruleset server-side activo, documentado en
+  [0008](decisiones/0008-proteccion-server-side-de-main.md) con el alcance de
+  evidencia que allí se establece. Ese ruleset **no cubre las ramas `claude/*`**
+  de `origin`: su borrado y su reescritura dependen por ahora de guardarraíles
+  locales de esta política.
+- Las reglas `deny Edit(...)` alcanzan también a las escrituras por redirección
+  de un subproceso, no solo a las herramientas de edición. Probado con cuatro
+  sondas: `scripts/` y `.claude/` quedaron bloqueadas, y una carpeta común sin
+  regla propia, no. Los patrones `> archivo` y `>> archivo` del `deny` no cubren
+  las formas sin espacios, pero la capa de escritura decide antes que ellos.
+- De una review se pueden **leer** sus tres canales, cada uno por su vía: los
+  comentarios inline con `scripts/get-pr-comments.ps1`, que es su único acceso
+  autorizado, y el cuerpo de la review junto con sus *suppressed comments* con
+  `gh pr view`, que sí los incluye. `gh api` directo sigue denegado, y responder
+  o resolver conversaciones sigue fuera de alcance.
 
 **Consecuencia del modo `dontAsk`.** En ese modo `AskUserQuestion` queda
 denegada, así que durante una corrida automática no hay forma de pedir una

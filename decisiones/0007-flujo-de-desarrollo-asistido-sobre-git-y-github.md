@@ -43,6 +43,11 @@ lectura de la revisión—, no quién lo ejecuta.
 - Sustituir cualquiera de los dos no debería exigir cambiar el flujo, solo el
   agente que ocupa ese rol.
 
+> **Superado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md).** La
+> asignación de roles descrita arriba corresponde al momento de esta decisión.
+> `0009` separa los roles de quién los ocupa y mantiene vigente el principio de
+> reemplazabilidad.
+
 Es el mismo principio de independencia que `0004` aplica a `app/`, aplicado
 ahora al workflow: si el proceso empieza a depender de un proveedor concreto
 para funcionar, se habrá violado esta decisión.
@@ -59,6 +64,14 @@ mismo y su silencio no equivale a validación.
   usuario en lugar de resolverlo por jerarquía entre agentes.
 - Por ahora las revisiones **se solicitan manualmente**.
 
+> **Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md).** El rol
+> pasó a llamarse revisión independiente de pull requests, y quien audita sus
+> hallazgos y decide el cierre es el Arquitecto / Lead, no el ejecutor. Quién lo
+> ocupa hoy está en [equipo.md](../equipo.md) y solo ahí. Tampoco sigue vigente
+> que las revisiones se soliciten a mano: pedirlas está automatizado y probado
+> localmente. Lo demás de esta sección se mantiene: no es autoridad final, no
+> aprueba por sí mismo y su silencio no equivale a validación.
+
 ### Lo que no se activa todavía
 
 No se habilita automatic code review, no se agrega branch protection adicional y
@@ -68,6 +81,11 @@ Ninguna de las tres está descartada. Se agregan cuando exista una necesidad rea
 que las justifique, en línea con el principio de no anticipar complejidad. Hoy
 el volumen de trabajo no la produce, y cada capa agregada antes de tiempo sería
 configuración que hay que mantener sin problema que resuelva.
+
+> **Superado en parte por [0008](0008-proteccion-server-side-de-main.md).** La
+> branch protection sí se activó, cuando la autonomía del ejecutor produjo la
+> necesidad que aquí faltaba. Automatic code review y el harness multiagente
+> propio siguen sin activarse.
 
 ## Observaciones iniciales, no compromisos
 
@@ -125,16 +143,21 @@ sin necesidad de pruebas dedicadas.
 - La revisión llega como `COMMENTED` y **no bloquea la integración**. Sin
   branch protection, un hallazgo válido puede pasar inadvertido si nadie lee la
   pull request. Es aceptado a cambio de no agregar todavía esa capa.
+  *Superado por [0008](0008-proteccion-server-side-de-main.md): la capa existe, y
+  un hilo de conversación sin resolver bloquea la integración.*
 - Solicitar las revisiones a mano es un paso manual que puede olvidarse.
+  *Superado: pedirlas está automatizado y probado localmente.*
 - Un revisor que ocasionalmente señala problemas inexistentes entrena a
-  ignorarlo. Es un riesgo del rol complementario, y el motivo de que los
-  hallazgos los evalúe el ejecutor en lugar de aplicarlos sin más.
+  ignorarlo. Es el motivo de que sus hallazgos se evalúen en lugar de aplicarse
+  sin más. *Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md):
+  quien los audita es el Arquitecto / Lead, no el ejecutor.*
 - Las dos mediciones registradas envejecen. Sirven como orden de magnitud
   inicial y no deberían citarse como si siguieran vigentes.
 
 ## Queda abierto
 
-- Cuándo y bajo qué criterio activar automatic code review o branch protection.
+- Cuándo y bajo qué criterio activar automatic code review. *La branch protection
+  ya se activó; ver [0008](0008-proteccion-server-side-de-main.md).*
 - Si Claude Code, Copilot Code Review y GitHub CLI deben registrarse como
   entidades en `herramientas/` bajo la capacidad `desarrollo-asistido-por-ia`.
 - Cómo se registra la experiencia acumulada con el revisor a medida que aparezca
