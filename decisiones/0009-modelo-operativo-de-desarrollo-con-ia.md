@@ -161,11 +161,17 @@ OPERATIVAMENTE**, por buena que sea su lectura del código.
 
 No corren todos los roles en cada pull request.
 
-- **Cambio mecánico y pequeño:** ejecutor y sus pruebas pueden alcanzar.
+- **Cambio mecánico y pequeño:** pueden omitirse el reviewer independiente y QA;
+  alcanzan el ejecutor y sus pruebas.
 - **Cambio normal:** se suma reviewer independiente.
 - **Arquitectura, seguridad o riesgo alto:** revisión reforzada.
 - **Interfaz:** Arquitecto define, UI/UX diseña, Ejecutor implementa, UI/UX
   verifica fidelidad y el reviewer técnico revisa el código.
+
+Lo que la proporcionalidad omite son **roles adicionales, no la decisión de
+cierre**. El Arquitecto / Lead recibe siempre la evidencia disponible —más o
+menos según el caso— y decide. En un cambio pequeño eso es leer el diff y sus
+pruebas, no convocar a nadie más.
 
 El mismo criterio se aplica a la **intensidad de la revisión automática**: se
 gradúa según tamaño y riesgo del cambio. Qué niveles ofrece la herramienta que

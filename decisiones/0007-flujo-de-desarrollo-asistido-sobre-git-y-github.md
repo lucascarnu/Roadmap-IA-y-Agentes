@@ -67,9 +67,10 @@ mismo y su silencio no equivale a validación.
 > **Precisado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md).** El rol
 > pasó a llamarse revisión independiente de pull requests, y quien audita sus
 > hallazgos y decide el cierre es el Arquitecto / Lead, no el ejecutor. Quién lo
-> ocupa hoy está en [equipo.md](../equipo.md) y solo ahí. Lo demás de esta
-> sección sigue vigente: no es autoridad final, no aprueba por sí mismo y su
-> silencio no equivale a validación.
+> ocupa hoy está en [equipo.md](../equipo.md) y solo ahí. Tampoco sigue vigente
+> que las revisiones se soliciten a mano: pedirlas está automatizado y probado
+> localmente. Lo demás de esta sección se mantiene: no es autoridad final, no
+> aprueba por sí mismo y su silencio no equivale a validación.
 
 ### Lo que no se activa todavía
 

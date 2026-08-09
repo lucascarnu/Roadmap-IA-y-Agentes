@@ -83,9 +83,8 @@ Lo que sigue abierto:
 - El **Review effort level se configura a nivel de repositorio**, en Settings →
   Copilot → Code review. En este repositorio el valor observado es **Balanced**,
   así que no hace falta elegir el modo en cada solicitud. **Max** figura como
-  *Coming soon* y todavía no está disponible, de modo que la política de `0009`
-  que lo reserva para arquitectura y seguridad describe un modo que aún no puede
-  usarse.
+  *Coming soon* y todavía no está disponible: es una opción del reviewer actual,
+  no una política del proyecto.
 - Definir qué debe entregar el revisor cuando detecte un problema real con
   solución clara: explicar el problema, señalar dónde está, proponer una
   corrección concreta y evitar cambios meramente cosméticos.
