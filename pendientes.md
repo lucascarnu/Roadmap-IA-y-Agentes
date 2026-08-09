@@ -48,9 +48,9 @@ Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 
 **Resuelto para lectura.** `scripts/get-pr-comments.ps1` es hoy el acceso
 autorizado: recibe un número de pull request validado, usa repositorio fijo y
-ejecuta una sola llamada de lectura contra
-`GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`. `gh api` directo sigue
-denegado. El ejecutor lee los hallazgos inline sin intervención humana.
+consulta **un único endpoint** `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`,
+con paginación, así que puede hacer una solicitud por página. `gh api` directo
+sigue denegado. El ejecutor lee los hallazgos inline sin intervención humana.
 
 Lo que sigue abierto:
 
@@ -179,10 +179,12 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
 - **Depurar `.claude/settings.local.json`**, que conserva reglas amplias, muertas
   y redundantes. Recién después se puede probar la política compartida sin
   contaminación local. Nunca recurrir a modos globales de bypass.
-- `defaultMode: dontAsk` **ya se validó** en una sesión nueva y limpia, sin
-  `settings.local.json`: un comando autorizado se ejecutó, uno no autorizado se
-  denegó solo, y no hubo prompts. Era la hipótesis central de la política. Lo que
-  falta es ejercitarla en el circuito real, no volver a probar el modo.
+- `defaultMode: dontAsk` desde `.claude/settings.json` está **PROBADO
+  LOCALMENTE**: en una sesión nueva y limpia, sin `settings.local.json`, un
+  comando autorizado se ejecutó, uno no autorizado se denegó solo y no hubo
+  prompts. Era la hipótesis central de la política. Falta **validarlo
+  operativamente**, con varias pull requests reales consecutivas dentro del
+  circuito normal; no volver a probar el modo.
 - **Volver a una rama `claude/*` existente no está autorizado.** La política
   permite crear ramas `claude/*` y volver a `main`, pero no regresar a una rama
   de trabajo ya creada. Observado durante la PR #9.
