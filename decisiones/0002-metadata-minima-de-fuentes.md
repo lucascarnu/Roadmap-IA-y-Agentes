@@ -190,6 +190,30 @@ secciones es obligatoria, y su presencia se deriva del contenido en lugar de
 declararse con campos booleanos: un indicador que espeja el cuerpo queda
 desactualizado la primera vez que alguien edita uno de los dos.
 
+### Trazabilidad
+
+*Ampliación incorporada el 2026-08-08. No formaba parte de la decisión original.*
+
+Cuando una fuente **sustenta una afirmación, una regla o una decisión del
+proyecto**, su cuerpo registra además cuatro datos:
+
+- **Fecha de consulta.** Cuándo se leyó. Una fuente viva cambia sin avisar, y sin
+  esta fecha no hay forma de saber a qué versión corresponde lo que se afirmó.
+- **Versión o contexto**, cuando sea relevante: la versión de la herramienta, del
+  servicio o del entorno contra el cual se verificó.
+- **Qué afirmación respalda.** Concreta y enumerable, no "documentación sobre X".
+  Si ninguna afirmación del proyecto se apoya en una parte de la fuente, esa
+  parte no se lista.
+- **Condición de revalidación.** Qué tendría que cambiar para volver a
+  comprobarla.
+
+Van en el cuerpo y no en el frontmatter: son texto explicativo de longitud
+variable, y llevarlos a campos convertiría el frontmatter en un formulario que
+encarece capturar.
+
+Una fuente consumida solo para aprender no necesita estos cuatro datos. La
+exigencia aparece cuando algo del sistema **depende** de ella.
+
 ### Relaciones
 
 Las fuentes no enumeran los nodos relacionados. Son los nodos los que declaran

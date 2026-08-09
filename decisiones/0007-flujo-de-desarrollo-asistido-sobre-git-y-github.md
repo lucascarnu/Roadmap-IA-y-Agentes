@@ -43,6 +43,11 @@ lectura de la revisión—, no quién lo ejecuta.
 - Sustituir cualquiera de los dos no debería exigir cambiar el flujo, solo el
   agente que ocupa ese rol.
 
+> **Superado por [0009](0009-modelo-operativo-de-desarrollo-con-ia.md).** La
+> asignación de roles descrita arriba corresponde al momento de esta decisión.
+> `0009` separa los roles de quién los ocupa y mantiene vigente el principio de
+> reemplazabilidad.
+
 Es el mismo principio de independencia que `0004` aplica a `app/`, aplicado
 ahora al workflow: si el proceso empieza a depender de un proveedor concreto
 para funcionar, se habrá violado esta decisión.
@@ -68,6 +73,11 @@ Ninguna de las tres está descartada. Se agregan cuando exista una necesidad rea
 que las justifique, en línea con el principio de no anticipar complejidad. Hoy
 el volumen de trabajo no la produce, y cada capa agregada antes de tiempo sería
 configuración que hay que mantener sin problema que resuelva.
+
+> **Superado en parte por [0008](0008-proteccion-server-side-de-main.md).** La
+> branch protection sí se activó, cuando la autonomía del ejecutor produjo la
+> necesidad que aquí faltaba. Automatic code review y el harness multiagente
+> propio siguen sin activarse.
 
 ## Observaciones iniciales, no compromisos
 

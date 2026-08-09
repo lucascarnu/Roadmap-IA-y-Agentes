@@ -35,6 +35,18 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - El circuito automático termina con la pull request lista para integrar, no con la integración.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
 
+## Estados de evidencia
+
+Toda afirmación sobre cómo se comporta el sistema declara en cuál de estos tres estados se apoya. No son sinónimos ni grados de confianza: se distinguen por el tipo de evidencia que los sostiene.
+
+- **DOCUMENTADO.** Lo respalda documentación oficial de quien produce la herramienta. Dice cómo debería comportarse, no que se haya comprobado acá. Se cita con su fuente y envejece con las versiones.
+- **PROBADO LOCALMENTE.** Se ejecutó una prueba concreta en un entorno concreto y se observó el resultado. Vale para ese entorno y para lo que la prueba efectivamente cubrió, no para el caso general.
+- **VALIDADO OPERATIVAMENTE.** El circuito objetivo se comportó como se espera, en el entorno donde realmente corre, de forma repetida y con evidencia suficiente para confiar en él.
+
+Un agente **no puede declarar VALIDADO OPERATIVAMENTE algo que su entorno no le permite probar**. Puede documentarlo, puede señalar qué haría falta para validarlo, y puede pedir que lo valide quien tenga acceso a ese entorno; lo que no puede es dar por demostrado lo que no ejecutó.
+
+De ahí se sigue una separación de roles: quien revisa responde si algo está bien construido, y quien valida responde si funciona realmente. Son preguntas distintas y no siempre las puede contestar el mismo agente.
+
 ## Intervención crítica del agente
 
 - Estas reglas aplican a cualquier agente, modelo o ejecutor que trabaje en el proyecto.

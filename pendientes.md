@@ -27,11 +27,26 @@ quedan únicamente las acciones futuras que se derivan de ellas.
   "0 new comments" y traer igualmente hallazgos en el cuerpo.
 - Verificar que la automatización permita sustituir ejecutor y revisor, según el
   principio de reemplazabilidad de `0007`.
+- Resolver cómo **leer y responder reviews de forma automática** sin abrir
+  permisos excesivos. Hoy `gh api` está denegado por completo, así que los
+  comentarios inline quedan fuera del alcance del circuito.
+- **Resolución de conversaciones.** La PR #9 demostró que un hilo de review sin
+  resolver deja la pull request en `BLOCKED` y el merge no se ofrece. El circuito
+  automático futuro tiene que incorporar ese paso.
 
 ### Evaluación del revisor
 
 - Probar un nivel de esfuerzo superior a Lite **sobre código real** y comparar
-  calidad y costo. Balanced ya se probó sobre documentación.
+  calidad y costo. Balanced ya se probó sobre documentación y sobre configuración.
+- Los modos observados son **Lite**, **Balanced** y **Max**. `Low` y `High` son
+  severidades de un hallazgo individual, no modos de esfuerzo: no confundirlos.
+- En la PR #9, sobre el mismo commit, Balanced expuso hallazgos materiales que
+  Lite no había mostrado. Es evidencia **de esa prueba**, sobre configuración y
+  documentación, no una conclusión general sobre los modos.
+- El modo solicitado se observó en el **timeline** de GitHub. No hay evidencia de
+  que `gh pr view --json` lo exponga como campo estructurado, y no se consultó la
+  API REST. **Anotar el modo al solicitar cada review** para que la comparación
+  sea reproducible.
 - Definir qué debe entregar el revisor cuando detecte un problema real con
   solución clara: explicar el problema, señalar dónde está, proponer una
   corrección concreta y evitar cambios meramente cosméticos.
@@ -99,29 +114,43 @@ controlar o contemplar explícitamente **qué herramienta usa para cada
 operación**, en vez de acumular permisos amplios de forma improvisada. Sigue
 pendiente diseñar una política segura y suficientemente determinista.
 
-- Preferir **comandos simples** cuyo exit code pueda interpretar el agente.
-- Evitar construcciones PowerShell (`if`, `Test-Path`) que solo reformatean un
-  resultado que el agente ya puede leer directamente y que, además, crean tramos
-  de permiso nuevos sin aportar información.
-- Definir la **estrategia segura de permisos para automatización desatendida**:
-  qué debe quedar autorizado de antemano para que un circuito autónomo no se
-  bloquee, sin abrir más superficie de la necesaria.
-- Decidir si conviene mantener reglas amplias del tipo `PowerShell(git *)` y
-  `PowerShell(gh *)` o reemplazarlas por permisos más acotados.
-- Resolver la **edición no interactiva** de archivos como parte de la misma
-  política, no como un caso aparte que se aprueba a mano en cada sesión.
-- Contemplar el **namespace de la herramienta** (`Bash` vs `PowerShell`) al
-  definir la política, y hacer determinista qué ejecutor usa cada operación.
+La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDATA
+/ EN PRUEBA**. Lo que sigue abierto:
+
 - Registrar como **bloqueo de automatización** cualquier solicitud interactiva
   inesperada dentro de un flujo que debería ser autónomo.
-- La política compartida ya vive en `.claude/settings.json`, en estado
-  **CANDIDATA / EN PRUEBA**. Falta depurar `.claude/settings.local.json`, que
-  conserva reglas muertas y redundantes. Nunca recurrir a modos globales de
-  bypass.
+- **Depurar `.claude/settings.local.json`**, que conserva reglas amplias, muertas
+  y redundantes. Recién después se puede probar la política compartida sin
+  contaminación local. Nunca recurrir a modos globales de bypass.
+- **Validar `defaultMode: dontAsk` en una sesión nueva y limpia**, comprobando
+  que se aplica realmente desde `.claude/settings.json`. Es la hipótesis central
+  de la política y hoy solo está probado el modo activado por bandera de CLI.
+- **Volver a una rama `claude/*` existente no está autorizado.** La política
+  permite crear ramas `claude/*` y volver a `main`, pero no regresar a una rama
+  de trabajo ya creada. Observado durante la PR #9.
+- **`git branch -d claude/*` fue denegado** al terminar la PR #9, pese a existir
+  una regla `allow` que aparentemente lo cubre, y la rama local no pudo
+  limpiarse de forma autónoma. La denegación es un **hecho observado**. Como
+  **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
+  de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
+  Diseñar una prueba controlada antes de tocar ninguna regla.
+- **La redirección sin espacios** —`>archivo`, `2>archivo`— sigue sin prueba ni
+  cierre. Solo está probada la forma con espacios. No darla por resuelta.
+- **Wrapper seguro de push: propuesta pendiente, no decisión.** Un script
+  versionado que publique la rama actual sin aceptar flags ni refspecs
+  eliminaría la clase entera de escapes por comodín, en lugar de enumerarlos.
+  Reevaluar **después** del cambio de ejecutor: otro ejecutor puede tener otro
+  modelo de permisos y volverlo innecesario.
+- **Cuerpo multilínea de una pull request.** La regla general está en
+  `reglas.md`; la evidencia es específica de Claude Code: bajo `dontAsk` un
+  cuerpo pasado en línea se troceó por salto de línea y la llamada fue denegada,
+  mientras que `--body-file` funcionó.
+- Definir **criterios objetivos que habiliten la integración automática** por
+  clase de riesgo, según deja abierto `0009`.
 
 **Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
 usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
-Todavía no se cumple: el circuito de esta misma PR requirió dos autorizaciones.
+Todavía no se cumple.
 
 ## Entregables reutilizables
 
