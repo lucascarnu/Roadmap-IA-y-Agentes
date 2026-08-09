@@ -31,10 +31,10 @@ que fija son las condiciones bajo las que este ejecutor trabaja acá.
 - Declarar en la primera pull request qué intérprete se usa para Git y para la
   plataforma de repositorios, y mantenerlo, según fija `reglas.md`.
 
-## Lo que todavía no está verificado
+## Estado de la gobernanza del ejecutor
 
 Este ejecutor **no se gobierna por listas de comandos permitidos y denegados**,
 así que no le corresponde un equivalente de la política del otro ejecutor del
-repositorio. Qué autoriza exactamente su entorno, y qué hace falta configurar
-antes de su primera pull request, está en `pendientes.md` y todavía no se probó
-en una tarea real.
+repositorio. El circuito completo se probó en una tarea real, con PowerShell y
+sin aprobaciones manuales. El detalle de lo verificado y el alcance de la
+evidencia están en `pendientes.md`.
