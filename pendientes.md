@@ -108,6 +108,23 @@ MVP, pero sí para operar el harness sin supervisión.
   corrección concreta y evitar cambios meramente cosméticos.
 - Evaluar proporcionalidad documental sin imponer máximos rígidos de líneas.
 
+### Agente investigador de soluciones externas
+
+Rol todavía **no adoptado**: no figura en el Nivel A de `0009` ni tiene ocupante
+en `equipo.md`.
+
+- Es un rol **separado** de Arquitecto / Lead y de Ejecutor. Se activa ante un
+  hueco, una limitación o una duda material sobre si ya existe una solución.
+- Busca primero capacidades nativas de la plataforma que ya se usa, y después
+  APIs, configuraciones, skills, plugins, MCP, extensiones, librerías y
+  herramientas. Es el orden que `reglas.md` ya fija en "Buscar antes de
+  construir".
+- Devuelve **alternativas, fuentes, riesgos y una recomendación**. No implementa
+  ni decide arquitectura.
+- **Gemini** queda como candidato inicial preferente, sin asignación todavía.
+- Objetivo futuro: que el ejecutor y el arquitecto puedan consultarlo sin que el
+  director haga de intermediario.
+
 ### Permisos y ejecución no interactiva
 
 Una automatización desatendida no puede quedar bloqueada por prompts de permisos.

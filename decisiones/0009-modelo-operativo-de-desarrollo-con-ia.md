@@ -43,26 +43,22 @@ Los roles son estables; **sus ocupantes, herramientas y entornos son
 reemplazables**. Es el principio de reemplazabilidad de `0007`, aplicado a la
 organización del trabajo.
 
-## Nivel B — Asignación actual
+## Nivel B — Quién ocupa cada rol
 
-Provisional, contextual y revisable. **Es un estado, no un requisito.**
+**La asignación vigente vive en [equipo.md](../equipo.md), y solo ahí.** No se
+enumera en esta decisión, a propósito: cambiar de ocupante es un cambio de
+estado, y no debería obligar a reescribir un documento estructural.
 
-- **Ejecutor principal:** Codex sobre Windows, candidato para el próximo tramo.
-- **Reviewer independiente:** Claude, que además puede actuar como ejecutor
-  alternativo.
-- **Reviewer complementario:** Copilot Code Review sobre GitHub.
-- **QA / Validación:** debe ocurrir en un entorno capaz de ejecutar realmente el
-  comportamiento objetivo.
-- **Product Design / UI/UX:** especialista bajo demanda, cuando haya interfaz.
-- **Consultor externo opcional:** ChatGPT, fuera del camino crítico.
+Ninguna herramienta, modelo, proveedor, sistema operativo ni lenguaje concreto es
+requisito permanente del modelo. Ninguno aparece en el Nivel A, y ninguno debería
+aparecer. **La lista de ocupantes es un estado, no una lista cerrada de
+candidatos admisibles**: cualquier proveedor puede ocupar cualquier rol si lo
+justifican los criterios de abajo, sin trato preferencial ni exclusión previa.
 
-**Codex, Claude, Copilot, Windows y Python no son requisitos permanentes del
-modelo.** Ninguno aparece en el Nivel A, y ninguno debería aparecer.
+### Roles combinados
 
-### Roles combinados durante el MVP
-
-Codex sobre Windows puede ocupar **provisionalmente Arquitecto / Lead y Ejecutor
-a la vez**, cuando el tamaño y el riesgo del cambio no justifiquen separar las
+Arquitecto / Lead y Ejecutor pueden recaer **provisionalmente en el mismo
+ocupante**, cuando el tamaño y el riesgo del cambio no justifiquen separar las
 dos funciones. Separarlas siempre, en un proyecto de una persona y un MVP local,
 agregaría coordinación sin agregar seguridad.
 
@@ -70,24 +66,11 @@ agregaría coordinación sin agregar seguridad.
 validación.** Diseñar e implementar puede hacerlo el mismo agente; juzgar si el
 resultado está bien construido y si funciona, no.
 
-Es una asignación provisional y revisable por evidencia, como todo el Nivel B.
-
-### Otros proveedores
-
-Cualquier otro modelo o proveedor —por ejemplo Kimi— puede ocupar cualquiera de
-los roles si la competencia, el acceso al entorno, el costo, la eficiencia o la
-evidencia lo justifican. Se aplican los mismos criterios que a los ocupantes
-actuales, sin trato preferencial ni exclusión previa.
-
-Kimi hoy no tiene integración ni asignación en este proyecto. Se lo nombra para
-dejar claro que la lista del Nivel B es un estado, no una lista cerrada de
-candidatos admisibles.
-
 ### Servicios fuera del camino crítico
 
 **Ningún servicio interactivo cuya disponibilidad no está garantizada puede ser
-una dependencia obligatoria del circuito automático.** Aplica a ChatGPT y a
-cualquier otro consultor externo.
+una dependencia obligatoria del circuito automático.** Aplica a cualquier
+consultor externo.
 
 Si ese servicio no está disponible, el circuito continúa, siempre que los gates
 obligatorios puedan satisfacerse con los ejecutores, revisores y pipeline

@@ -4,8 +4,9 @@ Instrucciones y contexto para que Claude trabaje de forma consistente en este pr
 
 Las reglas de trabajo compartidas están en [reglas.md](reglas.md).
 
-Los roles del trabajo asistido y su asignación vigente están en
-[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md).
+El modelo de roles está en
+[0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md); quién ocupa
+cada uno hoy, en [equipo.md](equipo.md).
 
 El intérprete que `reglas.md` deja a cargo del adaptador es, para este ejecutor,
 **PowerShell**: `Bash(git *)` y `Bash(gh *)` están denegados.
@@ -29,8 +30,11 @@ con problemas resueltos:
   [0008](decisiones/0008-proteccion-server-side-de-main.md). Ese ruleset **no
   cubre las ramas `claude/*`** de `origin`: su borrado y su reescritura dependen
   por ahora de guardarraíles locales de esta política.
-- La protección contra redirecciones solo fue probada para las formas con
-  espacios, `> archivo` y `>> archivo`. Las formas sin espacios siguen abiertas.
+- Las reglas `deny Edit(...)` alcanzan también a las escrituras por redirección
+  de un subproceso, no solo a las herramientas de edición. Probado con cuatro
+  sondas: `scripts/` y `.claude/` quedaron bloqueadas, y una carpeta común sin
+  regla propia, no. Los patrones `> archivo` y `>> archivo` del `deny` no cubren
+  las formas sin espacios, pero la capa de escritura decide antes que ellos.
 - De una review solo se pueden **leer** los comentarios inline, con
   `scripts/get-pr-comments.ps1`, que es el único acceso autorizado. Responder y
   resolver hilos sigue fuera de alcance, y `gh api` directo sigue denegado.
