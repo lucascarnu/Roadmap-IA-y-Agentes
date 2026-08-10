@@ -220,6 +220,10 @@ evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
 de los commits ni el prefijo de la rama sirven para atribuirlo, porque todos los
 agentes commitean con la misma identidad Git.
 
+El hueco que eso dejaba —que nada producía el dato en el momento de ejecutar—
+quedó cerrado hacia adelante por la convención de destinatario y firma de
+`reglas.md`. Los registros históricos siguen `NO_VERIFICADO`.
+
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
 resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde

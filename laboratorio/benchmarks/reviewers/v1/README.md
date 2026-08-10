@@ -120,6 +120,14 @@ separado:
 Cuando el ejecutor no pueda establecerse con evidencia, se escribe
 `NO_VERIFICADO`. No se infiere.
 
+Desde ahora ese dato se produce al ejecutar y no se reconstruye después:
+`reglas.md`, en "Destinatario y firma de ejecución", exige un encabezado de
+destinatario al inicio de toda tarea operativa y una firma al final con ejecutor
+real, entorno, modelo, esfuerzo, sujeto evaluado, vía y fecha. Para las corridas
+de este benchmark esa firma incluye además el auditor posterior. La convención
+rige hacia adelante y no reinterpreta los registros históricos de la tabla de
+abajo.
+
 **Dos cosas que no sirven para atribuir ejecutor, y conviene tenerlas escritas
 porque las dos invitan al error:**
 
