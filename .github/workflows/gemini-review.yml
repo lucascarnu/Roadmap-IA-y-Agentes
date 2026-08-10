@@ -23,12 +23,24 @@ jobs:
   review:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 7
+    env:
+      GEMINI_CLI_TRUST_WORKSPACE: 'true'
     permissions:
       contents: 'read'
       pull-requests: 'write'
     steps:
       - name: 'Checkout repository'
         uses: 'actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8' # v6
+
+      - name: 'Install pinned Gemini CLI'
+        run: 'npm install --global @google/gemini-cli@0.54.4'
+
+      - name: 'Install pinned code review extension'
+        run: >-
+          gemini extensions install
+          https://github.com/gemini-cli-extensions/code-review
+          --ref dd1a10d2c9d07b2ebade866590fdfa59cd8f9d04
+          --consent
 
       - name: 'Run Gemini pull request review'
         uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # v0.1.22
@@ -43,6 +55,7 @@ jobs:
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_cli_version: '0.54.4'
           workflow_name: 'gemini-review'
           github_pr_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
           settings: |-
@@ -86,8 +99,4 @@ jobs:
                 ]
               }
             }
-          extensions: |
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
           prompt: '/pr-code-review'
