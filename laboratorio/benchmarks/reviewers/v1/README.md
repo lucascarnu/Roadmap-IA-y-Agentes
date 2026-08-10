@@ -101,3 +101,63 @@ Siempre se distinguen:
 - la decisión de adopción.
 
 El benchmark no adopta automáticamente al reviewer con más hallazgos.
+
+## Procedencia de ejecución
+
+Quién es evaluado y quién ejecuta la prueba son cosas distintas, y confundirlas
+ya produjo una atribución equivocada en este benchmark. Cada corrida registra por
+separado:
+
+- **`SUJETO_EVALUADO`** — el reviewer que se está midiendo.
+- **`MODELO_ALIAS`** — el identificador de modelo observable, o
+  `MODELO_EFECTIVO_NO_OBSERVABLE`.
+- **`VIA`** — la vía de acceso: API de la plataforma, membresía, u otra.
+- **`EJECUTOR_DE_LA_PRUEBA`** — el agente que preparó, disparó y materializó la
+  ejecución. No es el sujeto.
+- **`AUDITOR_POSTERIOR`** — quien evaluó la calidad de los hallazgos, cuando esa
+  auditoría exista.
+
+Cuando el ejecutor no pueda establecerse con evidencia, se escribe
+`NO_VERIFICADO`. No se infiere.
+
+**Dos cosas que no sirven para atribuir ejecutor, y conviene tenerlas escritas
+porque las dos invitan al error:**
+
+- **El autor de los commits.** En este repositorio todos los agentes commitean
+  bajo la misma identidad Git, así que el campo `author` no distingue nada.
+- **El prefijo de la rama.** Una rama `codex/*` indica la convención de nombre
+  con la que se abrió la tarea, no quién la ejecutó después.
+
+Cambiar de ejecutor **no crea por sí solo una versión nueva del benchmark**, si
+el input, la política, las restricciones y las condiciones materiales se
+mantienen equivalentes. Pero se registra igual, porque puede afectar el proceso
+operativo y la reproducibilidad.
+
+### Trazabilidad de las tareas del benchmark
+
+Reconstruida a partir del historial de Git y de los artefactos persistidos. La
+certeza se declara; no se rellena con suposiciones.
+
+| Commits | Tarea | Ejecutor | Certeza |
+| --- | --- | --- | --- |
+| `8c2b693`, `e223d6a`, `0b3c77a`, `0139471` | Instalación y corrección del reviewer de Gemini | `NO_VERIFICADO` | — |
+| `cba4a90` | Primera prueba del reviewer Kimi | `NO_VERIFICADO` | — |
+| `e46ed74`, `e5772d6`, `6ac0829`, `2587b3c` | Protocolo de dos rondas y calibración manual | `NO_VERIFICADO` | — |
+| `374f620`, `7f041a1`, `eb1020d`, `1939ce0` | Área de laboratorio, benchmark v1, Caso C congelado y cierre de la limitación histórica | `NO_VERIFICADO` | — |
+| `c81ba40`, `a2763ca` | Runner canónico del Caso C y su porte a workflow | `NO_VERIFICADO` | — |
+| `0d79a0c` | Registro del intento canónico fallido de Open Platform | `NO_VERIFICADO` | — |
+| `eafc25b` | Registro del benchmark de Kimi Code por membresía | `NO_VERIFICADO` | ver nota |
+| `97df625` | Auditoría cualitativa de Kimi Code Moderato Run 1 | Claude | Alta, por observación directa |
+
+Nota sobre `eafc25b`: la **preparación local** —instalación de Kimi Code CLI
+`0.34.0`, home y workspace aislados fuera del repositorio, validación de los seis
+hashes del Caso C y redacción de la instrucción del reviewer— la realizó Claude,
+y está verificada por observación directa. La **materialización de la corrida** y
+su registro ocurrieron después, con un mecanismo distinto del preparado —agent
+file con todas las herramientas deshabilitadas, en lugar de reglas `deny` en
+`config.toml`—, así que el ejecutor de esa parte queda `NO_VERIFICADO`.
+
+Que el ejecutor de varias tareas no esté verificado **no degrada la validez
+experimental** de los resultados, mientras se mantengan la integridad del input
+congelado, la política, las restricciones y la telemetría, que sí están
+documentadas y verificadas en cada archivo de resultado.

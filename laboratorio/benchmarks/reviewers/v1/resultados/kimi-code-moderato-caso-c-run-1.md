@@ -2,12 +2,20 @@
 
 ## Identidad
 
-- Reviewer: Kimi Code.
-- Vía: membresía Kimi mediante OAuth administrado `managed:kimi-code`.
+- `SUJETO_EVALUADO`: Kimi Code.
+- `VIA`: membresía Kimi mediante OAuth administrado `managed:kimi-code`.
+- `EJECUTOR_DE_LA_PRUEBA`: `NO_VERIFICADO`. La preparación local del entorno
+  —instalación de la CLI, aislamiento de home y workspace, validación de hashes y
+  redacción de la instrucción— la hizo Claude; la materialización de la corrida
+  usó un mecanismo distinto del preparado y no pudo atribuirse con evidencia. Ver
+  "Procedencia de ejecución" en el README del benchmark.
+- `AUDITOR_POSTERIOR`: Claude, en una tarea independiente y posterior. Es
+  independiente del sujeto evaluado, que es Kimi.
 - Caso: Caso C — PR #16.
 - Run: 1.
 - Input: `CANONICAL_FROZEN_INPUT`.
-- Rama del ejecutor: `codex/instalar-review-gemini`.
+- Rama sobre la que se trabajaba: `codex/instalar-review-gemini`. El prefijo es la
+  convención de nombre de la tarea y **no indica el ejecutor**.
 - HEAD del repositorio al ejecutar:
   `0d79a0c426c4a463b292efcd07a2f59674aa4333`.
 - Estado: `COMPLETED`.

@@ -214,6 +214,12 @@ que es lo único que permite distinguir si esos puntos del caso son ambiguos o s
 hay una tendencia propia del reviewer a elevar hipótesis no verificadas a impacto
 material.
 
+La procedencia de esas corridas quedó corregida: el benchmark ahora separa sujeto
+evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
+`NO_VERIFICADO` donde el ejecutor no puede establecerse con evidencia. Ni el autor
+de los commits ni el prefijo de la rama sirven para atribuirlo, porque todos los
+agentes commitean con la misma identidad Git.
+
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
 resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde

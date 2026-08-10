@@ -2,9 +2,13 @@
 
 ## Identidad
 
-- Reviewer: Kimi K2.7 Code.
-- Vía: Open Platform API.
-- Modelo: `kimi-k2.7-code`.
+- `SUJETO_EVALUADO`: Kimi K2.7 Code.
+- `VIA`: Open Platform API.
+- `MODELO_ALIAS`: `kimi-k2.7-code`.
+- `EJECUTOR_DE_LA_PRUEBA`: `NO_VERIFICADO`. El intento se materializó mediante el
+  workflow de Actions enlazado abajo; qué agente lo preparó y disparó no pudo
+  establecerse con evidencia.
+- `AUDITOR_POSTERIOR`: no aplica; el intento no produjo respuesta que auditar.
 - Caso: Caso C — PR #16.
 - Input: `CANONICAL_FROZEN_INPUT`.
 - Identificador: `Canonical attempt 1`.

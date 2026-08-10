@@ -2,8 +2,12 @@
 
 ## Identidad
 
-- Reviewer: Kimi K2.7 Code
-- Vía: Kimi Open Platform API
+- `SUJETO_EVALUADO`: Kimi K2.7 Code
+- `VIA`: Kimi Open Platform API
+- `EJECUTOR_DE_LA_PRUEBA`: `NO_VERIFICADO`. La corrida se materializó mediante el
+  workflow de Actions enlazado abajo; qué agente la preparó y disparó no pudo
+  establecerse con evidencia
+- `AUDITOR_POSTERIOR`: `NO_VERIFICADO`
 - Caso: Caso C — PR #16
 - Run: 1
 - HEAD: `2587b3cfd3db9831386b6a04fbfa3807444fd458`
