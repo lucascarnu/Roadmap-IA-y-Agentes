@@ -201,10 +201,18 @@ evaluar consistencia entre corridas y comparar con reviewers vía membresía.
 El [primer intento canónico con input congelado](laboratorio/benchmarks/reviewers/v1/resultados/kimi-open-platform-canonical-attempt-1.md)
 confirmó la integridad del paquete, pero terminó con `read ECONNRESET` antes de
 recibir respuesta; quedó registrado como fallo de transporte y no se repetirá de
-inmediato. La comparación prioritaria siguiente es Kimi Code vía membresía sobre
-el mismo Caso C congelado. Una nueva corrida canónica de Open Platform puede
-hacerse más adelante si hace falta completar la comparación exacta. Este intento
-no adopta ni descarta Open Platform.
+inmediato. Una nueva corrida canónica de Open Platform puede hacerse más adelante
+si hace falta completar la comparación exacta. Este intento no adopta ni descarta
+Open Platform.
+
+La comparación por membresía ya se ejecutó y se auditó: [Caso C, Kimi Code
+Moderato, Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-code-moderato-caso-c-run-1.md),
+seis hallazgos, decisión `COMMENT` también afectada por un falso positivo
+material. **La calidad global sigue NO VALIDADA.** Lo pendiente ahora es correr el
+mismo Caso C congelado con un reviewer distinto —no otra vía del mismo modelo—,
+que es lo único que permite distinguir si esos puntos del caso son ambiguos o si
+hay una tendencia propia del reviewer a elevar hipótesis no verificadas a impacto
+material.
 
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
