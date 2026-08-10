@@ -250,7 +250,12 @@ La prueba integrada en Actions está bloqueada hasta configurar credenciales de
 CI para ambos reviewers. Al comprobar los nombres de secrets del repositorio el
 2026-08-10 sólo estaban `GEMINI_API_KEY` y `KIMI_API_KEY`; el workflow requiere
 `ANTHROPIC_API_KEY` y `OPENAI_API_KEY`. Esto no implica que falten sesiones por
-membresía en la máquina local.
+membresía en la máquina local. Además, GitHub no registra para despacho manual
+un workflow nuevo que todavía no existe en la rama por defecto: la consulta del
+workflow publicado en esta rama respondió 404. La primera corrida integrada
+requiere primero integrar el harness confiable en `main` y luego despacharlo
+manualmente sobre una PR adecuada; no corresponde agregar un trigger automático
+transitorio para eludir esa condición.
 
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
