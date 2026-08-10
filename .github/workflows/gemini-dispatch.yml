@@ -91,7 +91,13 @@ jobs:
       - 'dispatch'
       - 'review'
     if: |-
-      ${{ always() && !cancelled() && (failure() || needs.dispatch.outputs.command == 'fallthrough') }}
+      ${{ always() && (
+        needs.dispatch.result == 'failure' ||
+        needs.review.result == 'failure' ||
+        needs.review.result == 'cancelled' ||
+        (needs.review.result == 'skipped' && needs.dispatch.outputs.command == 'review') ||
+        needs.dispatch.outputs.command == 'fallthrough'
+      ) }}
     runs-on: 'ubuntu-latest'
     permissions:
       issues: 'write'
