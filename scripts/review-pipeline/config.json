@@ -1,0 +1,29 @@
+{
+  "defaults": {
+    "principal": "claude",
+    "shadow": "codex",
+    "shadow_trigger": "always",
+    "publish": "none"
+  },
+  "reviewers": {
+    "claude": {
+      "model": "opus",
+      "effort": "high",
+      "executable": "claude"
+    },
+    "codex": {
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "executable": "codex"
+    }
+  },
+  "sampling_modulus": 5,
+  "risk_path_patterns": [
+    "^\\.github/workflows/",
+    "^\\.github/actions/",
+    "^\\.(claude|codex)/",
+    "(^|/)(auth|permissions?|credentials?|secrets?)([._/-]|$)",
+    "(^|/)(Dockerfile|docker-compose\\.ya?ml)$",
+    "^(infra|infrastructure|terraform)/"
+  ]
+}
