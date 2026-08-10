@@ -213,8 +213,11 @@ material. El mismo Caso C congelado ya se ejecutó con [Claude Code Opus, Run
 su auditoría cualitativa sigue pendiente. El [primer intento canónico con
 Codex](laboratorio/benchmarks/reviewers/v1/resultados/codex-gpt-5-6-sol-caso-c-canonical-attempt-1.md)
 falló en el harness por codificación de stdin antes de iniciar la inferencia y no
-se repitió. Por lo tanto, Codex Run 1 y su auditoría siguen pendientes, al igual
-que la comparación final. **La calidad global sigue NO VALIDADA.**
+se repitió dentro de esa tarea. [Codex GPT-5.6 Sol, Run
+1](laboratorio/benchmarks/reviewers/v1/resultados/codex-gpt-5-6-sol-caso-c-run-1.md)
+se ejecutó después en una sesión nueva con reasoning `high`; su auditoría sigue
+pendiente. También siguen pendientes la auditoría de Claude y la comparación
+final. **La calidad global sigue NO VALIDADA.**
 
 La procedencia de esas corridas quedó corregida: el benchmark ahora separa sujeto
 evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
