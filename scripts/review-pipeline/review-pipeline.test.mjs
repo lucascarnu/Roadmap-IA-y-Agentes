@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
+  buildCommonReview,
   createManifest,
   evaluateShadow,
   fuseReviews,
@@ -13,10 +15,12 @@ import {
   parseDiffAnchors,
   publishReview,
   validateCommonReview,
+  validateReviewPayload,
   verifyInputManifest,
 } from "./review-pipeline.mjs";
 
 const HEAD = "a".repeat(40);
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 function finding(overrides = {}) {
   return {
@@ -47,6 +51,39 @@ function git(cwd, ...args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
+}
+
+function initializeRepository(repo) {
+  git(repo, "init", "-b", "main");
+  git(repo, "config", "user.name", "Test");
+  git(repo, "config", "user.email", "test@example.invalid");
+}
+
+function commitAll(repo, message) {
+  git(repo, "add", ".");
+  git(repo, "commit", "-m", message);
+  return git(repo, "rev-parse", "HEAD");
+}
+
+function createTrustedHarness(policy = "POLÍTICA GOBERNANTE A") {
+  const trusted = mkdtempSync(join(tmpdir(), "blind-trusted-"));
+  initializeRepository(trusted);
+  const contents = {
+    "AGENTS.md": "AGENTS CONFIABLE",
+    "reviewer-policy.md": policy,
+    "vision.md": "VISIÓN CONFIABLE",
+    "reglas.md": "REGLAS CONFIABLES",
+  };
+  for (const [name, content] of Object.entries(contents)) writeFileSync(join(trusted, name), `${content}\n`, "utf8");
+  return { root: trusted, sha: commitAll(trusted, "trusted harness") };
+}
+
+function prMetadata(number, base, head) {
+  return { number, title: "Caso", body: "", base: { ref: "main", sha: base }, head: { ref: "topic", sha: head } };
+}
+
+function payload(hallazgos = []) {
+  return { decision_preliminar: "COMMENT", resumen: "Resumen", hallazgos };
 }
 
 test("valida el contrato común y falla cerrado ante evidencia incoherente", () => {
@@ -87,6 +124,10 @@ test("riesgo usa una lista corta de paths", () => {
   assert.equal(result.run_shadow, true);
 });
 
+test("shadow_trigger inválido falla antes de leer la review", () => {
+  assert.throws(() => evaluateShadow({ principal: null, prNumber: 1, changedPaths: [], mode: "otro" }), /shadow_trigger inválido/);
+});
+
 test("manifiesto detecta contaminación del input ciego", () => {
   const root = mkdtempSync(join(tmpdir(), "blind-manifest-"));
   mkdirSync(join(root, "context"));
@@ -100,27 +141,77 @@ test("manifiesto detecta contaminación del input ciego", () => {
 
 test("prepare congela HEAD, diff, contexto y schema sin ejecutar el caso", async () => {
   const repo = mkdtempSync(join(tmpdir(), "blind-prepare-repo-"));
-  for (const name of ["AGENTS.md", "reviewer-policy.md", "vision.md", "reglas.md"]) writeFileSync(join(repo, name), `${name}\n`, "utf8");
+  const trusted = createTrustedHarness();
   writeFileSync(join(repo, "change.txt"), "base\n", "utf8");
-  git(repo, "init");
-  git(repo, "config", "user.name", "Test");
-  git(repo, "config", "user.email", "test@example.invalid");
-  git(repo, "add", ".");
-  git(repo, "commit", "-m", "base");
-  const base = git(repo, "rev-parse", "HEAD");
+  initializeRepository(repo);
+  const base = commitAll(repo, "base");
   writeFileSync(join(repo, "change.txt"), "base\nchanged\n", "utf8");
-  git(repo, "add", "change.txt");
-  git(repo, "commit", "-m", "change");
-  const head = git(repo, "rev-parse", "HEAD");
+  const head = commitAll(repo, "change");
   const out = join(repo, "artifacts");
   const prPath = join(repo, "pr.json");
-  writeFileSync(prPath, JSON.stringify({ number: 7, title: "Caso", body: "", base: { ref: "main", sha: base }, head: { ref: "topic", sha: head } }), "utf8");
-  await main(["prepare", "--repo", repo, "--pr-json", prPath, "--head-sha", head, "--out", out]);
+  writeFileSync(prPath, JSON.stringify(prMetadata(7, base, head)), "utf8");
+  await main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", trusted.sha, "--pr-json", prPath, "--head-sha", head, "--out", out]);
   const manifest = JSON.parse(readFileSync(join(out, "input", "input-manifest.json"), "utf8"));
   assert.equal(manifest.head_sha, head);
   assert.equal(verifyInputManifest(join(out, "input"), manifest), true);
   assert.match(readFileSync(join(out, "input", "review-prompt.txt"), "utf8"), /Diff completo/);
-  await assert.rejects(() => main(["prepare", "--repo", repo, "--pr-json", prPath, "--head-sha", "b".repeat(40), "--out", out]), /HEAD movido/);
+  await assert.rejects(() => main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", trusted.sha, "--pr-json", prPath, "--head-sha", "b".repeat(40), "--out", out]), /HEAD movido/);
+});
+
+test("prepare usa merge-base y excluye cambios posteriores de main", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "blind-three-dot-"));
+  const trusted = createTrustedHarness();
+  initializeRepository(repo);
+  writeFileSync(join(repo, "base.txt"), "base\n", "utf8");
+  commitAll(repo, "base");
+  git(repo, "switch", "-c", "topic");
+  writeFileSync(join(repo, "pr-only.txt"), "CAMBIO EXCLUSIVO DE PR\n", "utf8");
+  const head = commitAll(repo, "pr change");
+  git(repo, "switch", "main");
+  writeFileSync(join(repo, "main-only.txt"), "CAMBIO POSTERIOR DE MAIN\n", "utf8");
+  const advancedBase = commitAll(repo, "main advanced");
+  git(repo, "switch", "topic");
+  const prPath = join(repo, "pr.json");
+  const out = join(repo, "artifacts");
+  writeFileSync(prPath, JSON.stringify(prMetadata(8, advancedBase, head)), "utf8");
+  await main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", trusted.sha, "--pr-json", prPath, "--head-sha", head, "--out", out]);
+  const diff = readFileSync(join(out, "input", "diff.patch"), "utf8");
+  const metadata = JSON.parse(readFileSync(join(out, "input", "pr-metadata.json"), "utf8"));
+  assert.match(diff, /CAMBIO EXCLUSIVO DE PR/);
+  assert.doesNotMatch(diff, /main-only\.txt|CAMBIO POSTERIOR DE MAIN/);
+  assert.deepEqual(metadata.changed_paths, ["pr-only.txt"]);
+  assert.notEqual(metadata.merge_base_sha, advancedBase);
+});
+
+test("la política gobernante proviene del harness y la propuesta de la PR queda sólo en el diff", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "blind-policy-target-"));
+  const trusted = createTrustedHarness("POLÍTICA A DESDE TRUSTED");
+  initializeRepository(repo);
+  writeFileSync(join(repo, "reviewer-policy.md"), "POLÍTICA ORIGINAL DEL TARGET\n", "utf8");
+  const base = commitAll(repo, "base policy");
+  git(repo, "switch", "-c", "topic");
+  writeFileSync(join(repo, "reviewer-policy.md"), "POLÍTICA B PROPUESTA POR PR\n", "utf8");
+  const head = commitAll(repo, "change policy");
+  const prPath = join(repo, "pr.json");
+  const out = join(repo, "artifacts");
+  writeFileSync(prPath, JSON.stringify(prMetadata(9, base, head)), "utf8");
+  await main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", trusted.sha, "--pr-json", prPath, "--head-sha", head, "--out", out]);
+  const prompt = readFileSync(join(out, "input", "review-prompt.txt"), "utf8");
+  const [governing, reviewedDiff] = prompt.split("## Diff completo bajo revisión");
+  assert.match(governing, /POLÍTICA A DESDE TRUSTED/);
+  assert.doesNotMatch(governing, /POLÍTICA B PROPUESTA POR PR/);
+  assert.match(reviewedDiff, /POLÍTICA B PROPUESTA POR PR/);
+  assert.equal(readFileSync(join(out, "input", "context", "trusted-reviewer-policy.md"), "utf8").trim(), "POLÍTICA A DESDE TRUSTED");
+  writeFileSync(join(trusted.root, "reviewer-policy.md"), "POLÍTICA LOCAL NO COMMITTEADA\n", "utf8");
+  const secondOut = join(repo, "artifacts-second");
+  await main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", trusted.sha, "--pr-json", prPath, "--head-sha", head, "--out", secondOut]);
+  const secondPrompt = readFileSync(join(secondOut, "input", "review-prompt.txt"), "utf8");
+  assert.match(secondPrompt, /POLÍTICA A DESDE TRUSTED/);
+  assert.doesNotMatch(secondPrompt, /POLÍTICA LOCAL NO COMMITTEADA/);
+  writeFileSync(join(trusted.root, "reviewer-policy.md"), "", "utf8");
+  const emptyPolicySha = commitAll(trusted.root, "empty governing policy");
+  await assert.rejects(() => main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", emptyPolicySha, "--pr-json", prPath, "--head-sha", head, "--out", join(repo, "artifacts-empty")]), /Contexto gobernante confiable vacío/);
+  await assert.rejects(() => main(["prepare", "--repo", repo, "--trusted-root", trusted.root, "--trusted-sha", "b".repeat(40), "--pr-json", prPath, "--head-sha", head, "--out", out]), /HEAD movido/);
 });
 
 test("fusión conserva severidad mayor para el mismo path+line", () => {
@@ -170,6 +261,66 @@ test("parsea líneas del lado nuevo del diff como anclas válidas", () => {
   const anchors = parseDiffAnchors("diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,2 +1,3 @@\n contexto\n+agregado\n viejo");
   assert.equal(anchors.has("src/a.js:2"), true);
   assert.equal(anchors.has("src/a.js:1"), true);
+});
+
+test("resetea el estado de anclas al comenzar cada archivo", () => {
+  const diff = [
+    "diff --git a/one.txt b/one.txt",
+    "--- a/one.txt",
+    "+++ b/one.txt",
+    "@@ -0,0 +1 @@",
+    "+uno",
+    "diff --git a/two.txt b/two.txt",
+    "similarity index 100%",
+    "index 1111111..2222222 100644",
+    "--- a/two.txt",
+    "+++ b/two.txt",
+    "@@ -10 +10 @@",
+    "+dos",
+  ].join("\n");
+  const anchors = parseDiffAnchors(diff);
+  assert.equal(anchors.has("one.txt:1"), true);
+  assert.equal(anchors.has("one.txt:2"), false);
+  assert.equal(anchors.has("two.txt:10"), true);
+});
+
+test("la telemetría pertenece sólo al harness y model_runtime conserva tipo string", () => {
+  assert.throws(() => validateReviewPayload({ ...payload(), telemetria: { falsa: true } }), /campos incompatibles/);
+  const common = buildCommonReview({
+    reviewer: "claude",
+    role: "principal",
+    manifest: {
+      head_sha: HEAD,
+      input_fingerprint: "fingerprint",
+      files: [{ path: "review-prompt.txt", sha256: "prompt" }],
+    },
+    adapter: { model: "modelo", effort: "high", durationMs: 12 },
+    payload: payload(),
+    providerUsage: { input_tokens: 10, output_tokens: 2 },
+    modelRuntime: "modelo-runtime",
+  });
+  assert.equal(common.telemetria.model_runtime, "modelo-runtime");
+  assert.equal(typeof common.telemetria.model_runtime, "string");
+  assert.equal(common.telemetria.duration_ms, 12);
+  assert.equal("falsa" in common.telemetria, false);
+  assert.throws(() => buildCommonReview({
+    reviewer: "codex", role: "shadow", manifest: common.telemetria,
+    adapter: { model: "modelo", effort: "high", durationMs: 1 }, payload: payload(),
+    providerUsage: null, modelRuntime: ["tipo", "inconsistente"],
+  }), /model_runtime debe ser string/);
+});
+
+test("workflow serializa por PR y exige harness de la rama por defecto", () => {
+  const workflow = readFileSync(join(HERE, "..", "..", ".github", "workflows", "blind-review-pipeline.yml"), "utf8");
+  const concurrencyLine = workflow.split(/\r?\n/).find((line) => line.trim().startsWith("group:"));
+  assert.match(concurrencyLine, /blind-review-pipeline/);
+  assert.match(concurrencyLine, /github\.repository/);
+  assert.match(concurrencyLine, /inputs\.pr_number/);
+  assert.doesNotMatch(concurrencyLine, /workflow_sha/);
+  assert.match(workflow, /ref: refs\/heads\/\$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.match(workflow, /WORKFLOW_SHA.*HARNESS_SHA/s);
+  assert.match(workflow, /DISPATCH_REF.*EXPECTED_REF/s);
+  assert.match(workflow, /--trusted-root harness/);
 });
 
 test("publish=none nunca toca la red", async () => {

@@ -37,7 +37,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: blind-review-${{ inputs.pr_number }}-${{ github.workflow_sha }}
+  group: blind-review-pipeline-${{ github.repository }}-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 jobs:
@@ -55,14 +55,31 @@ jobs:
             exit 1
           fi
 
-      # The harness is frozen at the commit that supplied this workflow. The PR
-      # under review is checked out separately and is treated only as input data.
+      # The secret-bearing harness always comes from the repository default
+      # branch. A dispatch against any other ref fails before reviewer secrets.
       - name: Check out trusted harness
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          ref: ${{ github.workflow_sha }}
+          ref: refs/heads/${{ github.event.repository.default_branch }}
           path: harness
+          fetch-depth: 1
           persist-credentials: false
+
+      - name: Validate trusted harness identity
+        id: trusted
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          EXPECTED_REF="refs/heads/${DEFAULT_BRANCH}"
+          HARNESS_SHA="$(git -C harness rev-parse HEAD)"
+          REMOTE_DEFAULT_SHA="$(git -C harness rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")"
+          if [ "$DISPATCH_REF" != "$EXPECTED_REF" ] || [ "$WORKFLOW_SHA" != "$HARNESS_SHA" ] || [ "$HARNESS_SHA" != "$REMOTE_DEFAULT_SHA" ]; then
+            echo "FAIL_CLOSED: trusted harness identity could not be demonstrated" >&2
+            exit 1
+          fi
+          echo "sha=${HARNESS_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Check out frozen pull request head
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -86,10 +103,18 @@ jobs:
         run: |
           mkdir -p harness/artifacts
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > harness/artifacts/pr.json
+          BASE_SHA="$(jq -r '.base.sha' harness/artifacts/pr.json)"
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "FAIL_CLOSED: invalid PR base SHA" >&2
+            exit 1
+          fi
+          git -C target cat-file -e "${BASE_SHA}^{commit}"
           HEAD_SHA="$(git -C target rev-parse HEAD)"
           echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           node harness/scripts/review-pipeline/review-pipeline.mjs prepare \
             --repo target \
+            --trusted-root harness \
+            --trusted-sha '${{ steps.trusted.outputs.sha }}' \
             --pr-json harness/artifacts/pr.json \
             --head-sha "$HEAD_SHA" \
             --out harness/artifacts
