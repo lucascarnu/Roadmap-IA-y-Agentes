@@ -233,11 +233,24 @@ La arquitectura que consumirá esta comparación ya está decidida en
 [0010](decisiones/0010-revision-con-principal-y-segunda-opinion-ciega.md):
 un reviewer principal sobre el 100% de las pull requests, un shadow ciego
 activado por materialidad, muestreo determinista o riesgo, fusión determinista de
-las dos reviews y una única review consolidada. **Falta implementarla**, y falta
-completar la calibración que elige cuál de los reviewers ocupa `principal`: para
-eso hacen falta las auditorías pendientes y la comparación final. El benchmark
-sobre el Caso C congelado mide calidad; la calibración de `0010` corre sobre pull
-requests reales y es la que decide la asignación.
+las dos reviews y una única review consolidada. La [v1 KISS del
+pipeline](scripts/review-pipeline/README.md) ya implementa el contrato común, la
+ceguera comprobable por hashes, los tres triggers, la fusión/decisión
+deterministas, `publish=none|consolidada` y fallos cerrados; su lógica
+determinista está probada localmente sin consumir reviews. **Falta validar la
+integración real** con una corrida manual `shadow_trigger=always` y
+`publish=none`, y falta completar la calibración que elige cuál de los reviewers
+ocupa `principal`: para eso hacen falta esa prueba, las auditorías pendientes y
+la comparación final. El benchmark sobre el Caso C congelado mide calidad; la
+calibración de `0010` corre sobre pull requests reales y es la que decide la
+asignación. La asignación inicial Claude/Codex del workflow es sólo configuración
+intercambiable de calibración, no una elección de ganador.
+
+La prueba integrada en Actions está bloqueada hasta configurar credenciales de
+CI para ambos reviewers. Al comprobar los nombres de secrets del repositorio el
+2026-08-10 sólo estaban `GEMINI_API_KEY` y `KIMI_API_KEY`; el workflow requiere
+`ANTHROPIC_API_KEY` y `OPENAI_API_KEY`. Esto no implica que falten sesiones por
+membresía en la máquina local.
 
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
