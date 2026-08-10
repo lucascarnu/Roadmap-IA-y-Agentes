@@ -59,6 +59,19 @@ De ahí se sigue una separación de roles: quien revisa responde si algo está b
 - Una vez tomada la decisión, ejecutarla sin reabrir el mismo punto salvo que aparezca información nueva.
 - El rol del agente puede ser diseño, revisión, ejecución o validación; estas reglas se aplican en cualquiera de esos roles.
 
+## Evaluación y persistencia de resultados
+
+- Antes de atribuir una falla cualitativa a un agente o modelo, evaluar primero
+  el contexto entregado, la evidencia disponible, las herramientas y fuentes a
+  su alcance, el protocolo y el prompt, el formato de salida exigido y el alcance
+  de la tarea. Solo después corresponde preguntarse si el agente es
+  suficientemente bueno: un mal resultado suele decir más del pedido que de
+  quien lo respondió.
+- Una recomendación material aceptada no continúa como conversación. Antes de
+  seguir trabajando se convierte en decisión, regla, pendiente o estado
+  documentado, según corresponda. Si no queda escrita, no fue aceptada: fue
+  comentada.
+
 ## Completitud de una entrega
 
 - Una entrega responde lo que se pidió y, además, incluye la información **directa y material** que el agente descubrió durante la tarea y que el rol o la decisión siguientes necesitan para continuar correctamente, aunque no figurara entre los campos pedidos.

@@ -181,6 +181,26 @@ inline con el wrapper, y el cuerpo junto con los suprimidos con `gh pr view`.
   corrección concreta y evitar cambios meramente cosméticos.
 - Evaluar proporcionalidad documental sin imponer máximos rígidos de líneas.
 
+#### Reviewer independiente en dos rondas
+
+**Estado: PARCIAL. Funcionalidad: PROBADA LOCALMENTE. Calidad como reviewer: no
+validada.**
+
+La primera review sirve como calibración del harness, no como medición del
+modelo: se ejecutó con un protocolo que no ofrecía una salida legítima para la
+incertidumbre y, para varios hallazgos, sin contexto suficiente. La primera
+review bajo el protocolo nuevo cuenta como la primera evidencia cualitativa.
+
+Durante reviews reales hay que medir por separado cuántas solicitudes requieren
+`OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
+resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde
+decidir si se habilita documentación externa, mediante una lista blanca de
+dominios y límites de tamaño.
+
+Si el protocolo se sostiene durante varias reviews reales, corresponde
+promoverlo a una decisión en `decisiones/`. Hoy no: todavía no corrió una vez y
+el proyecto no congela lo que no probó.
+
 ### Agente investigador de soluciones externas
 
 **Estado: POSPUESTO.** Rol todavía **no adoptado**: no figura en el Nivel A de
