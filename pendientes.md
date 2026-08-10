@@ -229,6 +229,16 @@ El hueco que eso dejaba —que nada producía el dato en el momento de ejecutar�
 quedó cerrado hacia adelante por la convención de destinatario y firma de
 `reglas.md`. Los registros históricos siguen `NO_VERIFICADO`.
 
+La arquitectura que consumirá esta comparación ya está decidida en
+[0010](decisiones/0010-revision-con-principal-y-segunda-opinion-ciega.md):
+un reviewer principal sobre el 100% de las pull requests, un shadow ciego
+activado por materialidad, muestreo determinista o riesgo, fusión determinista de
+las dos reviews y una única review consolidada. **Falta implementarla**, y falta
+completar la calibración que elige cuál de los reviewers ocupa `principal`: para
+eso hacen falta las auditorías pendientes y la comparación final. El benchmark
+sobre el Caso C congelado mide calidad; la calibración de `0010` corre sobre pull
+requests reales y es la que decide la asignación.
+
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
 resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde
