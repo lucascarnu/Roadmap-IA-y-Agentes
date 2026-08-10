@@ -210,9 +210,11 @@ Moderato, Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-code-modera
 seis hallazgos, decisión `COMMENT` también afectada por un falso positivo
 material. El mismo Caso C congelado ya se ejecutó con [Claude Code Opus, Run
 1](laboratorio/benchmarks/reviewers/v1/resultados/claude-code-opus-caso-c-run-1.md);
-su auditoría cualitativa sigue pendiente. **La calidad global sigue NO
-VALIDADA.** Después de auditar esa corrida, todavía falta ejecutar el benchmark
-con Codex como reviewer.
+su auditoría cualitativa sigue pendiente. El [primer intento canónico con
+Codex](laboratorio/benchmarks/reviewers/v1/resultados/codex-gpt-5-6-sol-caso-c-canonical-attempt-1.md)
+falló en el harness por codificación de stdin antes de iniciar la inferencia y no
+se repitió. Por lo tanto, Codex Run 1 y su auditoría siguen pendientes, al igual
+que la comparación final. **La calidad global sigue NO VALIDADA.**
 
 La procedencia de esas corridas quedó corregida: el benchmark ahora separa sujeto
 evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
