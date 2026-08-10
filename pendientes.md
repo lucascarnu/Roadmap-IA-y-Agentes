@@ -208,11 +208,11 @@ Open Platform.
 La comparación por membresía ya se ejecutó y se auditó: [Caso C, Kimi Code
 Moderato, Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-code-moderato-caso-c-run-1.md),
 seis hallazgos, decisión `COMMENT` también afectada por un falso positivo
-material. **La calidad global sigue NO VALIDADA.** Lo pendiente ahora es correr el
-mismo Caso C congelado con un reviewer distinto —no otra vía del mismo modelo—,
-que es lo único que permite distinguir si esos puntos del caso son ambiguos o si
-hay una tendencia propia del reviewer a elevar hipótesis no verificadas a impacto
-material.
+material. El mismo Caso C congelado ya se ejecutó con [Claude Code Opus, Run
+1](laboratorio/benchmarks/reviewers/v1/resultados/claude-code-opus-caso-c-run-1.md);
+su auditoría cualitativa sigue pendiente. **La calidad global sigue NO
+VALIDADA.** Después de auditar esa corrida, todavía falta ejecutar el benchmark
+con Codex como reviewer.
 
 La procedencia de esas corridas quedó corregida: el benchmark ahora separa sujeto
 evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
