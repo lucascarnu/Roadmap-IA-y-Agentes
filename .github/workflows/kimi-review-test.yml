@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: false
+      canonical_benchmark_run:
+        description: 'Ejecuta Reviewer Benchmark v1 / Caso C con input congelado'
+        required: true
+        type: boolean
+        default: false
   pull_request:
     types: [synchronize]
 
@@ -17,6 +22,38 @@ permissions:
   pull-requests: write
 
 jobs:
+  canonical_benchmark:
+    if: >-
+      github.repository == 'lucascarnu/Roadmap-IA-y-Agentes' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.canonical_benchmark_run == true &&
+      inputs.calibration_run == false &&
+      github.ref == 'refs/heads/codex/instalar-review-gemini'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 'Checkout exact runner revision'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: 'Run Kimi on canonical frozen Case C'
+        env:
+          KIMI_API_KEY: '${{ secrets.KIMI_API_KEY }}'
+          BENCHMARK_OUTPUT_PATH: '${{ runner.temp }}/kimi-open-platform-run-2.json'
+        run: node laboratorio/benchmarks/reviewers/v1/runners/kimi-open-platform-case-c.js
+
+      - name: 'Preserve raw benchmark result'
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: 'kimi-open-platform-run-2'
+          path: '${{ runner.temp }}/kimi-open-platform-run-2.json'
+          if-no-files-found: error
+          retention-days: 30
+
   review:
     if: >-
       github.repository == 'lucascarnu/Roadmap-IA-y-Agentes' &&
