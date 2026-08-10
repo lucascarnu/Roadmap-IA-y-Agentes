@@ -39,7 +39,9 @@ resultados anteriores.
 limitaciones. Cuatro bloques auxiliares y el resto del input canónico se
 reconstruyeron desde fuentes congeladas. El texto exacto del bloque histórico de
 Actions no quedó persistido: `contexto/actions-evidence.txt` documenta esa
-limitación y no es un sustituto entregable.
+`LIMITACION_HISTORICA_NO_RECUPERABLE` y no es un sustituto entregable. La
+investigación final confirmó el algoritmo histórico y descartó que el estado
+final hoy expuesto por GitHub reproduzca la representación transitoria servida.
 
 Por esa razón, el paquete es parcialmente reproducible y el manifiesto declara
 `exact_reproduction: false`.
