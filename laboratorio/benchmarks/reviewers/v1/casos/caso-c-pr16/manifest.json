@@ -1,0 +1,98 @@
+{
+  "benchmark": "reviewer-v1",
+  "case": "caso-c-pr16",
+  "repository": "lucascarnu/Roadmap-IA-y-Agentes",
+  "pr": 16,
+  "base_sha": "62411360bf36aa649c94f5a0a109caeb9b887acc",
+  "head_sha": "2587b3cfd3db9831386b6a04fbfa3807444fd458",
+  "input_files": [
+    "diff.patch",
+    "pr-metadata.json",
+    "contexto/reviewer-policy.md",
+    "contexto/vision-extracto.md",
+    "contexto/reglas.md",
+    "contexto/decision-0004.md"
+  ],
+  "limitation_records": [
+    "contexto/actions-evidence.txt"
+  ],
+  "excluded_from_reviewer_delivery": [
+    "contexto/actions-evidence.txt"
+  ],
+  "hash_algorithm": "sha256",
+  "hash_basis": "canonical repository bytes (UTF-8, LF)",
+  "hashes": {
+    "diff.patch": "1d492c83267a45821467b2ec2fc80f7be3556731b2fcb7d1016a42d66fa78b7e",
+    "pr-metadata.json": "e755a42bd6feb832e3e7030f5d88a82a32aa02a057197e5b4d9a74dbc9b2ce03",
+    "contexto/reviewer-policy.md": "6b14a9435d2b6391d54878c55c3d1f121a6c6d76c3b94f7a31e66353e4718b27",
+    "contexto/vision-extracto.md": "57cd6c643af2f9d42d5ed862b87861fe78a3253f32ab5de17e2b981956c21b20",
+    "contexto/reglas.md": "52edcd7ce17d1670b19cf902822bc3a02bb106ff40e288e7f799a9596a64fb67",
+    "contexto/decision-0004.md": "cf724a56ec4f398de6c04a6340790083ee17fb25e2086bd4e8d5e205f64ec861",
+    "contexto/actions-evidence.txt": "5e568c3df3099164fb59fe7a0cc63859ffdf8963d83e0b9d531b8a9965a0fde2"
+  },
+  "context_blocks": [
+    {
+      "name": "Política gobernante",
+      "path": "contexto/reviewer-policy.md",
+      "source": "reviewer-policy.md@2587b3cfd3db9831386b6a04fbfa3807444fd458",
+      "estimated_tokens": 946,
+      "prompt_characters": 3047,
+      "prompt_bytes_utf8": 3094,
+      "truncated": false,
+      "exact_reproduction": true,
+      "deliver_to_reviewer": true
+    },
+    {
+      "name": "Visión del repositorio",
+      "path": "contexto/vision-extracto.md",
+      "source": "first 12 lines of vision.md@2587b3cfd3db9831386b6a04fbfa3807444fd458",
+      "estimated_tokens": 180,
+      "prompt_characters": 576,
+      "prompt_bytes_utf8": 584,
+      "prompt_sha256": "a8b6915697d6b55eeef2ae809deb9effe6fd9edcf0c94521c3125fa766c7de80",
+      "file_has_packaging_terminal_lf": true,
+      "truncated": false,
+      "exact_reproduction": true,
+      "deliver_to_reviewer": true
+    },
+    {
+      "name": "Última corrida de Actions sobre el HEAD",
+      "input_path": null,
+      "limitation_record": "contexto/actions-evidence.txt",
+      "source": "transient state of Actions run 31392556384 observed by run 31392565012",
+      "estimated_tokens": 90,
+      "prompt_characters": 246,
+      "prompt_bytes_utf8": 251,
+      "truncated": false,
+      "exact_reproduction": false,
+      "deliver_to_reviewer": false
+    },
+    {
+      "name": "Reglas",
+      "path": "contexto/reglas.md",
+      "source": "reglas.md@2587b3cfd3db9831386b6a04fbfa3807444fd458",
+      "estimated_tokens": 3622,
+      "prompt_characters": 12920,
+      "prompt_bytes_utf8": 13132,
+      "truncated": false,
+      "exact_reproduction": true,
+      "deliver_to_reviewer": true
+    },
+    {
+      "name": "Decisión 0004",
+      "path": "contexto/decision-0004.md",
+      "source": "decisiones/0004-stack-y-ubicacion-del-prototipo.md@2587b3cfd3db9831386b6a04fbfa3807444fd458",
+      "estimated_tokens": 2452,
+      "prompt_characters": 8403,
+      "prompt_bytes_utf8": 8539,
+      "truncated": false,
+      "exact_reproduction": true,
+      "deliver_to_reviewer": true
+    }
+  ],
+  "exact_reproduction": false,
+  "known_limitations": [
+    "The exact text of the Actions evidence block was not persisted. Historical logs preserve its source run, token estimate, character count and byte count, but the source run was in a transient state and its exact representation cannot be reconstructed unambiguously.",
+    "contexto/actions-evidence.txt records this limitation and must not be delivered as a substitute for the missing historical block."
+  ]
+}

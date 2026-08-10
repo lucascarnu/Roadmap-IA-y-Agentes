@@ -1,0 +1,18 @@
+[NO REPRODUCIDO EXACTAMENTE]
+
+El harness seleccionó la corrida automática 31392556384, distinta de la
+calibración manual 31392565012, mientras todavía estaba cambiando de estado.
+
+Datos históricos verificados del bloque servido:
+- nombre: Última corrida de Actions sobre 2587b3cfd3db9831386b6a04fbfa3807444fd458
+- tokens estimados: 90
+- caracteres finales: 246
+- bytes finales UTF-8: 251
+- recortado: no
+
+Los logs de la calibración conservaron estas medidas, pero no el texto del bloque.
+El endpoint actual solo expone el estado final de la corrida y no permite
+reconstruir inequívocamente el estado transitorio observado por el harness.
+
+Este archivo registra la limitación. No debe entregarse a un reviewer como
+sustituto del bloque histórico.

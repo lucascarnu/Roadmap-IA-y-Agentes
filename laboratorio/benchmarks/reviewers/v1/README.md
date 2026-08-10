@@ -20,12 +20,21 @@ Comparar reviewers de IA bajo condiciones reproducibles y medir:
 
 - Caso A: PR pequeña. Pendiente de seleccionar y congelar.
 - Caso B: PR mediana. Pendiente de seleccionar y congelar.
-- [Caso C: PR compleja](casos/caso-c-pr16.md). Congelado en la PR #16.
+- [Caso C: PR compleja](casos/caso-c-pr16/README.md). Congelado en la PR #16.
 
 Por ahora, solo el Caso C está congelado.
 
 Resultado registrado: [Kimi Open Platform — Caso C — Run
 1](resultados/kimi-open-platform-run-1.md).
+
+## Artefactos
+
+- Este README define el benchmark.
+- `casos/` conserva los inputs congelados.
+- `resultados/` conserva la salida y la auditoría de cada run.
+
+Una nueva corrida de un caso congelado no debe tomar el HEAD vivo de una PR si
+ese HEAD ya cambió. Debe usar el paquete congelado del caso.
 
 ## Comparabilidad
 
