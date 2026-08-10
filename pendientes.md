@@ -236,7 +236,8 @@ activado por materialidad, muestreo determinista o riesgo, fusión determinista 
 las dos reviews y una única review consolidada. La [v1 KISS del
 pipeline](scripts/review-pipeline/README.md) ya implementa el contrato común, la
 ceguera comprobable por hashes, los tres triggers, la fusión/decisión
-deterministas, `publish=none|consolidada` y fallos cerrados; su lógica
+deterministas, el diff desde `merge-base`, la política obtenida del harness
+confiable, `publish=none|consolidada` y fallos cerrados; su lógica
 determinista está probada localmente sin consumir reviews. **Falta validar la
 integración real** con una corrida manual `shadow_trigger=always` y
 `publish=none`, y falta completar la calibración que elige cuál de los reviewers

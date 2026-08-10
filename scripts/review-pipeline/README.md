@@ -28,13 +28,20 @@ schema, el prompt, los gates ni la fusión.
 
 ## Invariantes
 
-- El HEAD y el diff se congelan antes de revisar.
+- El HEAD se congela y el diff se calcula contra su `merge-base` con la base de
+  la PR; cambios posteriores de la rama base no se atribuyen a la PR.
+- `AGENTS.md`, `reviewer-policy.md`, `vision.md` y `reglas.md` gobernantes se
+  leen directamente del objeto Git del SHA confiable, nunca del checkout bajo
+  revisión ni de cambios locales no commiteados. Una propuesta de cambio a esos
+  archivos aparece sólo dentro del diff revisado.
 - El prompt se construye una sola vez y su hash queda en el manifiesto.
 - Principal y shadow reciben ese mismo prompt en workspaces separados, sin
   herramientas ni resultados previos.
 - El shadow no recibe el motivo que lo activó.
 - Los reviewers no publican. `publish=consolidada` se ejecuta después de la
   fusión y crea una sola review sin comentarios inline.
+- Las corridas del mismo workflow y PR se serializan. El marcador de publicación
+  duplicada es una segunda defensa, no un lock atómico.
 - Cualquier ausencia, incompatibilidad o contaminación detectable falla cerrado.
 
 ## Triggers
@@ -50,8 +57,10 @@ semántica ni sustituye una revisión de seguridad.
 ## Ejecución y credenciales
 
 El workflow usa los CLIs oficiales fijados en `@anthropic-ai/claude-code@2.1.226`
-y `@openai/codex@0.147.0`. El harness debe provenir de una revisión confiable;
-el checkout de la PR se trata sólo como datos y nunca se ejecuta con secretos.
+y `@openai/codex@0.147.0`. El harness se obtiene de la rama por defecto y, antes
+de exponer secretos, se exige que el ref despachado, `github.workflow_sha`, el
+checkout y `origin/<rama-por-defecto>` identifiquen el mismo commit. El checkout
+de la PR se trata sólo como datos y nunca se ejecuta con secretos.
 
 La integración en GitHub Actions requiere `ANTHROPIC_API_KEY` y
 `OPENAI_API_KEY`. El runner local también puede reutilizar las sesiones ya
