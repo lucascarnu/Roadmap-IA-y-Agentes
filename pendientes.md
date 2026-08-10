@@ -198,6 +198,14 @@ La funcionalidad queda PROBADA LOCALMENTE; la calidad todavía NO VALIDADA. La
 decisión `REQUEST_CHANGES` estuvo afectada por un falso positivo material. Falta
 evaluar consistencia entre corridas y comparar con reviewers vía membresía.
 
+El [primer intento canónico con input congelado](laboratorio/benchmarks/reviewers/v1/resultados/kimi-open-platform-canonical-attempt-1.md)
+confirmó la integridad del paquete, pero terminó con `read ECONNRESET` antes de
+recibir respuesta; quedó registrado como fallo de transporte y no se repetirá de
+inmediato. La comparación prioritaria siguiente es Kimi Code vía membresía sobre
+el mismo Caso C congelado. Una nueva corrida canónica de Open Platform puede
+hacerse más adelante si hace falta completar la comparación exacta. Este intento
+no adopta ni descarta Open Platform.
+
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
 resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde
