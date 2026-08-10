@@ -183,13 +183,20 @@ inline con el wrapper, y el cuerpo junto con los suprimidos con `gh pr view`.
 
 #### Reviewer independiente en dos rondas
 
-**Estado: PARCIAL. Funcionalidad: PROBADA LOCALMENTE. Calidad como reviewer: no
-validada.**
+**Estado: PARCIAL. Funcionalidad: PROBADA LOCALMENTE. Calidad como reviewer: NO
+VALIDADA.**
 
-La primera review sirve como calibración del harness, no como medición del
-modelo: se ejecutó con un protocolo que no ofrecía una salida legítima para la
-incertidumbre y, para varios hallazgos, sin contexto suficiente. La primera
-review bajo el protocolo nuevo cuenta como la primera evidencia cualitativa.
+La calibración anterior al protocolo nuevo sirve para evaluar el harness, no el
+modelo: no ofrecía una salida legítima para la incertidumbre y, para varios
+hallazgos, carecía de contexto suficiente.
+
+La primera corrida válida bajo el protocolo nuevo completó sus controles, la
+llamada y la publicación. Inició el [Reviewer Benchmark
+v1](laboratorio/benchmarks/reviewers/v1/README.md): [Caso C, Kimi Open Platform,
+Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-open-platform-run-1.md).
+La funcionalidad queda PROBADA LOCALMENTE; la calidad todavía NO VALIDADA. La
+decisión `REQUEST_CHANGES` estuvo afectada por un falso positivo material. Falta
+evaluar consistencia entre corridas y comparar con reviewers vía membresía.
 
 Durante reviews reales hay que medir por separado cuántas solicitudes requieren
 `OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
@@ -198,8 +205,8 @@ decidir si se habilita documentación externa, mediante una lista blanca de
 dominios y límites de tamaño.
 
 Si el protocolo se sostiene durante varias reviews reales, corresponde
-promoverlo a una decisión en `decisiones/`. Hoy no: todavía no corrió una vez y
-el proyecto no congela lo que no probó.
+promoverlo a una decisión en `decisiones/`. Hoy no: existe una sola corrida
+válida y el proyecto no congela lo que todavía no demostró estabilidad.
 
 ### Agente investigador de soluciones externas
 
