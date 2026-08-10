@@ -82,9 +82,26 @@ Tres campos que no deben mezclarse, porque nombran funciones distintas:
 
 Escribir "Claude / Kimi" no sirve: no distingue quién ejecutó de qué se evaluó.
 
-**Nada se infiere.** Un campo que no se puede observar se declara
-`NO_OBSERVABLE`. Vale especialmente para el modelo, el esfuerzo o modo, el tier y
-el alias efectivo, que no se deducen de la interfaz, del nombre comercial, de la
+**Nada se infiere, y nada se declara sin haber mirado.** Antes de marcar un campo
+como `NO_OBSERVABLE`, el ejecutor intenta obtenerlo por las fuentes razonablemente
+disponibles para esa tarea. Si después de ese intento sigue sin poder
+determinarse, se usa `NO_OBSERVABLE` y se dice en una línea dónde se buscó. No se
+exigen búsquedas desproporcionadas: alcanza con la fuente evidente.
+
+**Configurado no es efectivo.** Un valor encontrado en configuración persistida se
+registra como **configurado**, y no como el valor que gobernó la ejecución, salvo
+que exista evidencia directa de que la gobernó. Cuando hay un valor configurado
+observable pero no puede demostrarse que fue el efectivo, ese segundo dato es
+`NO_VERIFICADO`, que no es lo mismo que `NO_OBSERVABLE`: acá el dato existe y lo
+que falta es la prueba de que rigió.
+
+Se escribe, por ejemplo, "modelo configurado `opus`, efectivo en runtime
+`NO_VERIFICADO`". No hace falta partir cada campo en dos cuando uno solo lo
+expresa con claridad; lo que no se hace nunca es presentar la configuración como
+si fuera el runtime.
+
+Todo esto vale especialmente para el modelo, el esfuerzo o modo, el tier y el
+alias efectivo, que no se deducen de la interfaz, del nombre comercial, de la
 rama ni de cómo estaba configurado el entorno la última vez.
 
 ### Alcance temporal
