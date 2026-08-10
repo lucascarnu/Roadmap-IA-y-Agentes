@@ -1,3 +1,4 @@
+### Reglas — 2587b3cfd3db9831386b6a04fbfa3807444fd458
 # Reglas de Trabajo
 
 Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad innecesaria.
@@ -34,81 +35,6 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
 - El circuito automático llega hasta donde lo autoricen las garantías objetivas disponibles. Hoy termina con la pull request lista para integrar. Las condiciones bajo las cuales la integración misma podría automatizarse todavía no están definidas: la decisión sobre el modelo operativo las deja explícitamente abiertas.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
-
-## Destinatario y firma de ejecución
-
-Quién ejecuta una tarea es un dato que se produce al ejecutarla, no algo que se
-reconstruya después. Ni el autor de los commits ni el nombre de la rama lo
-registran: los agentes comparten identidad Git, y el prefijo de la rama solo dice
-con qué convención se abrió la tarea.
-
-Por eso toda tarea operativa lleva un control al principio y una firma al final.
-Son dos cosas distintas: el encabezado **evita** que la ejecute quien no debe; la
-firma **registra** quién la ejecutó realmente.
-
-**Alcance.** Aplica a los pedidos que ordenan a un agente modificar el
-repositorio, ejecutar pruebas, evaluar, auditar, crear commits, disparar acciones
-o cambiar infraestructura. No aplica a la conversación humana corriente: no
-convertir esto en burocracia.
-
-### Encabezado de destinatario
-
-Todo prompt dirigido a un ejecutor concreto empieza con `DESTINATARIO: <AGENTE>`
-y una regla **fail closed**: antes de ejecutar, el agente verifica que es el
-destinatario; si no lo es, no ejecuta nada y responde `DESTINATARIO_INCORRECTO`.
-
-Valores previstos: `CLAUDE`, `CODEX` y `CUALQUIER_EJECUTOR_AUTORIZADO`. No es un
-sistema de identidades: es una protección contra pegar el prompt en la ventana
-equivocada.
-
-`CUALQUIER_EJECUTOR_AUTORIZADO` se usa cuando la tarea no depende materialmente
-de quién la ejecute. En ese caso no se cancela por identidad, pero la firma final
-sigue siendo obligatoria. **No usar ese valor por comodidad** cuando el rol o la
-independencia del agente formen parte de lo que se está midiendo.
-
-### Firma de ejecución
-
-Toda tarea ejecutada termina con una sección `## FIRMA DE EJECUCIÓN` con estos
-campos mínimos: ejecutor real, entorno, modelo, esfuerzo o modo, sujeto evaluado,
-vía evaluada y fecha. Cuando exista una auditoría separada —y siempre que la
-tarea forme parte de un benchmark o de una evaluación— se agrega el auditor
-posterior.
-
-Tres campos que no deben mezclarse, porque nombran funciones distintas:
-
-- **ejecutor real** — quién realizó la tarea;
-- **sujeto evaluado** — qué modelo, reviewer o herramienta se estaba midiendo;
-- **vía evaluada** — cómo se accedió a ese sujeto.
-
-Escribir "Claude / Kimi" no sirve: no distingue quién ejecutó de qué se evaluó.
-
-**Nada se infiere, y nada se declara sin haber mirado.** Antes de marcar un campo
-como `NO_OBSERVABLE`, el ejecutor intenta obtenerlo por las fuentes razonablemente
-disponibles para esa tarea. Si después de ese intento sigue sin poder
-determinarse, se usa `NO_OBSERVABLE` y se dice en una línea dónde se buscó. No se
-exigen búsquedas desproporcionadas: alcanza con la fuente evidente.
-
-**Configurado no es efectivo.** Un valor encontrado en configuración persistida se
-registra como **configurado**, y no como el valor que gobernó la ejecución, salvo
-que exista evidencia directa de que la gobernó. Cuando hay un valor configurado
-observable pero no puede demostrarse que fue el efectivo, ese segundo dato es
-`NO_VERIFICADO`, que no es lo mismo que `NO_OBSERVABLE`: acá el dato existe y lo
-que falta es la prueba de que rigió.
-
-Se escribe, por ejemplo, "modelo configurado `opus`, efectivo en runtime
-`NO_VERIFICADO`". No hace falta partir cada campo en dos cuando uno solo lo
-expresa con claridad; lo que no se hace nunca es presentar la configuración como
-si fuera el runtime.
-
-Todo esto vale especialmente para el modelo, el esfuerzo o modo, el tier y el
-alias efectivo, que no se deducen de la interfaz, del nombre comercial, de la
-rama ni de cómo estaba configurado el entorno la última vez.
-
-### Alcance temporal
-
-Esta convención rige **hacia adelante**. No permite reconstruir ejecutores
-anteriores: los registros históricos marcados `NO_VERIFICADO` se quedan así, y
-una firma nueva no reinterpreta un commit viejo.
 
 ## Estados de evidencia
 

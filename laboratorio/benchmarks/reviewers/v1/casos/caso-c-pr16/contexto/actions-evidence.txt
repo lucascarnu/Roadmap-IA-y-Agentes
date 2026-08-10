@@ -1,0 +1,56 @@
+[LIMITACION_HISTORICA_NO_RECUPERABLE]
+
+Conclusión: REPRODUCCION_PARCIAL_CONFIRMADA_CON_LIMITACION_HISTORICA.
+
+El harness ejecutado desde
+`.github/workflows/kimi-review-test.yml@2587b3cfd3db9831386b6a04fbfa3807444fd458`
+consultó `actions.listWorkflowRunsForRepo` con `head_sha` igual al HEAD revisado y
+`per_page: 100`. Excluyó `context.runId`, ordenó las corridas por `created_at`
+descendente y tomó la primera. Así seleccionó la corrida automática 31392556384,
+no la calibración manual 31392565012.
+
+Después paginó `actions.listJobsForWorkflowRun`, tomó el primer job cuya
+`conclusion` fuera `failure` y el primer step fallido de ese job. Si había job
+fallido, descargó `GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`, convirtió
+la respuesta a UTF-8, separó por `/\r?\n/`, conservó las primeras 20 líneas que
+coincidieran con `/error|fail|exception|denied|timeout/i` y produjo exactamente:
+
+```text
+Workflow: <run.name o run.path>
+Run id: <run.id>
+Status: <run.status>
+Conclusion: <run.conclusion o "sin conclusión">
+Failed step: <nombre o "ninguno observado">
+Error lines (máximo 20):
+<líneas unidas con LF o "ninguna observada">
+```
+
+Ese texto se envolvió como `### <nombre del bloque>\n<texto>`, sin newline terminal
+agregado por la función.
+
+Datos históricos verificados del bloque servido:
+- nombre: Última corrida de Actions sobre 2587b3cfd3db9831386b6a04fbfa3807444fd458
+- tokens estimados: 90
+- caracteres finales: 246
+- bytes finales UTF-8: 251
+- recortado: no
+
+La envoltura ocupa 77 caracteres y 78 bytes; por lo tanto, el texto generado por
+`latestActionsEvidence` ocupó 169 caracteres y 173 bytes. Los logs de la
+calibración conservaron esas medidas, pero no el contenido.
+
+GitHub conserva hoy el estado final de 31392556384: workflow
+`Kimi K2.7 Code Review Test`, status `completed`, conclusion `failure`, job
+`review` fallido y step `Review PR with Kimi K2.7 Code` fallido. Aplicar el
+algoritmo a esos datos y a los logs actualmente descargables produce un bloque de
+1360 caracteres y 1362 bytes, por lo que no es el bloque histórico.
+
+La calibración registró el bloque a las 13:22:42.3565938Z. El step fallido figura
+completado a las 13:22:42Z, el job a las 13:22:43Z y el run fue actualizado a las
+13:22:44Z. Las API de runs, jobs, steps, check-runs y logs exponen su estado final,
+no la respuesta transitoria vista por el harness; tampoco existe un artefacto con
+el texto. Sin un candidato único no corresponde usar el tokenizador para elegir
+una aproximación.
+
+Este archivo registra la limitación y queda excluido de `input_files`. No debe
+entregarse a un reviewer como sustituto del bloque histórico.

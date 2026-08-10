@@ -181,6 +181,93 @@ inline con el wrapper, y el cuerpo junto con los suprimidos con `gh pr view`.
   corrección concreta y evitar cambios meramente cosméticos.
 - Evaluar proporcionalidad documental sin imponer máximos rígidos de líneas.
 
+#### Reviewer independiente en dos rondas
+
+**Estado: PARCIAL. Funcionalidad: PROBADA LOCALMENTE. Calidad como reviewer: NO
+VALIDADA.**
+
+La calibración anterior al protocolo nuevo sirve para evaluar el harness, no el
+modelo: no ofrecía una salida legítima para la incertidumbre y, para varios
+hallazgos, carecía de contexto suficiente.
+
+La primera corrida válida bajo el protocolo nuevo completó sus controles, la
+llamada y la publicación. Inició el [Reviewer Benchmark
+v1](laboratorio/benchmarks/reviewers/v1/README.md): [Caso C, Kimi Open Platform,
+Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-open-platform-run-1.md).
+La funcionalidad queda PROBADA LOCALMENTE; la calidad todavía NO VALIDADA. La
+decisión `REQUEST_CHANGES` estuvo afectada por un falso positivo material. Falta
+evaluar consistencia entre corridas y comparar con reviewers vía membresía.
+
+El [primer intento canónico con input congelado](laboratorio/benchmarks/reviewers/v1/resultados/kimi-open-platform-canonical-attempt-1.md)
+confirmó la integridad del paquete, pero terminó con `read ECONNRESET` antes de
+recibir respuesta; quedó registrado como fallo de transporte y no se repetirá de
+inmediato. Una nueva corrida canónica de Open Platform puede hacerse más adelante
+si hace falta completar la comparación exacta. Este intento no adopta ni descarta
+Open Platform.
+
+La comparación por membresía ya se ejecutó y se auditó: [Caso C, Kimi Code
+Moderato, Run 1](laboratorio/benchmarks/reviewers/v1/resultados/kimi-code-moderato-caso-c-run-1.md),
+seis hallazgos, decisión `COMMENT` también afectada por un falso positivo
+material. El mismo Caso C congelado ya se ejecutó con [Claude Code Opus, Run
+1](laboratorio/benchmarks/reviewers/v1/resultados/claude-code-opus-caso-c-run-1.md);
+su auditoría cualitativa sigue pendiente. El [primer intento canónico con
+Codex](laboratorio/benchmarks/reviewers/v1/resultados/codex-gpt-5-6-sol-caso-c-canonical-attempt-1.md)
+falló en el harness por codificación de stdin antes de iniciar la inferencia y no
+se repitió dentro de esa tarea. [Codex GPT-5.6 Sol, Run
+1](laboratorio/benchmarks/reviewers/v1/resultados/codex-gpt-5-6-sol-caso-c-run-1.md)
+se ejecutó después en una sesión nueva con reasoning `high`; su auditoría sigue
+pendiente. También siguen pendientes la auditoría de Claude y la comparación
+final. **La calidad global sigue NO VALIDADA.**
+
+La procedencia de esas corridas quedó corregida: el benchmark ahora separa sujeto
+evaluado, vía, ejecutor de la prueba y auditor posterior, y registra
+`NO_VERIFICADO` donde el ejecutor no puede establecerse con evidencia. Ni el autor
+de los commits ni el prefijo de la rama sirven para atribuirlo, porque todos los
+agentes commitean con la misma identidad Git.
+
+El hueco que eso dejaba —que nada producía el dato en el momento de ejecutar—
+quedó cerrado hacia adelante por la convención de destinatario y firma de
+`reglas.md`. Los registros históricos siguen `NO_VERIFICADO`.
+
+La arquitectura que consumirá esta comparación ya está decidida en
+[0010](decisiones/0010-revision-con-principal-y-segunda-opinion-ciega.md):
+un reviewer principal sobre el 100% de las pull requests, un shadow ciego
+activado por materialidad, muestreo determinista o riesgo, fusión determinista de
+las dos reviews y una única review consolidada. La [v1 KISS del
+pipeline](scripts/review-pipeline/README.md) ya implementa el contrato común, la
+ceguera comprobable por hashes, los tres triggers, la fusión/decisión
+deterministas, el diff desde `merge-base`, la política obtenida del harness
+confiable, `publish=none|consolidada` y fallos cerrados; su lógica
+determinista está probada localmente sin consumir reviews. **Falta validar la
+integración real** con una corrida manual `shadow_trigger=always` y
+`publish=none`, y falta completar la calibración que elige cuál de los reviewers
+ocupa `principal`: para eso hacen falta esa prueba, las auditorías pendientes y
+la comparación final. El benchmark sobre el Caso C congelado mide calidad; la
+calibración de `0010` corre sobre pull requests reales y es la que decide la
+asignación. La asignación inicial Claude/Codex del workflow es sólo configuración
+intercambiable de calibración, no una elección de ganador.
+
+La prueba integrada en Actions está bloqueada hasta configurar credenciales de
+CI para ambos reviewers. Al comprobar los nombres de secrets del repositorio el
+2026-08-10 sólo estaban `GEMINI_API_KEY` y `KIMI_API_KEY`; el workflow requiere
+`ANTHROPIC_API_KEY` y `OPENAI_API_KEY`. Esto no implica que falten sesiones por
+membresía en la máquina local. Además, GitHub no registra para despacho manual
+un workflow nuevo que todavía no existe en la rama por defecto: la consulta del
+workflow publicado en esta rama respondió 404. La primera corrida integrada
+requiere primero integrar el harness confiable en `main` y luego despacharlo
+manualmente sobre una PR adecuada; no corresponde agregar un trigger automático
+transitorio para eludir esa condición.
+
+Durante reviews reales hay que medir por separado cuántas solicitudes requieren
+`OFFICIAL_DOCUMENTATION`, cuántas habrían cambiado un veredicto y cuántas no se
+resuelven con el repositorio, GitHub ni Actions. Solo con esos datos corresponde
+decidir si se habilita documentación externa, mediante una lista blanca de
+dominios y límites de tamaño.
+
+Si el protocolo se sostiene durante varias reviews reales, corresponde
+promoverlo a una decisión en `decisiones/`. Hoy no: existe una sola corrida
+válida y el proyecto no congela lo que todavía no demostró estabilidad.
+
 ### Agente investigador de soluciones externas
 
 **Estado: POSPUESTO.** Rol todavía **no adoptado**: no figura en el Nivel A de

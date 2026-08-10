@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roadmap-ia.local/schemas/common-review-v1.json",
+  "title": "Review común v1",
+  "$defs": {
+    "verification_request": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "pregunta_cerrada": {"type": "string", "maxLength": 500},
+        "por_que_importa": {"type": "string", "maxLength": 800},
+        "fuente_requerida": {
+          "type": "string",
+          "enum": [
+            "REPOSITORY_FILE",
+            "GITHUB_STATE",
+            "ACTIONS_RUN",
+            "OFFICIAL_DOCUMENTATION",
+            "NONE_AVAILABLE"
+          ]
+        },
+        "objetivo_concreto": {"type": "string", "maxLength": 500}
+      },
+      "required": [
+        "pregunta_cerrada",
+        "por_que_importa",
+        "fuente_requerida",
+        "objetivo_concreto"
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "impacto": {"type": "string", "enum": ["M1", "M2", "M3", "O"]},
+        "estado_evidencia": {
+          "type": "string",
+          "enum": ["SETTLED", "NEEDS_EVIDENCE", "UNVERIFIABLE"]
+        },
+        "origen_evidencia": {
+          "type": "string",
+          "enum": ["DIFF", "REPOSITORY_FILE", "GITHUB_STATE", "ACTIONS_RUN", "NONE"]
+        },
+        "path": {"type": ["string", "null"]},
+        "line": {"type": ["integer", "null"], "minimum": 1},
+        "titulo": {"type": "string", "maxLength": 300},
+        "descripcion": {"type": "string", "maxLength": 1800},
+        "solicitud_verificacion": {"$ref": "#/$defs/verification_request"}
+      },
+      "required": [
+        "impacto",
+        "estado_evidencia",
+        "origen_evidencia",
+        "path",
+        "line",
+        "titulo",
+        "descripcion",
+        "solicitud_verificacion"
+      ]
+    },
+    "review_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision_preliminar": {
+          "type": "string",
+          "enum": ["APPROVE", "COMMENT", "REQUEST_CHANGES"]
+        },
+        "resumen": {"type": "string", "maxLength": 4000},
+        "hallazgos": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {"$ref": "#/$defs/finding"}
+        }
+      },
+      "required": ["decision_preliminar", "resumen", "hallazgos"]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reviewer": {"type": "string", "enum": ["claude", "codex"]},
+    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "decision_preliminar": {
+      "type": "string",
+      "enum": ["APPROVE", "COMMENT", "REQUEST_CHANGES"]
+    },
+    "resumen": {"type": "string", "maxLength": 4000},
+    "hallazgos": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "telemetria": {"type": "object"}
+  },
+  "required": [
+    "reviewer",
+    "head_sha",
+    "decision_preliminar",
+    "resumen",
+    "hallazgos",
+    "telemetria"
+  ]
+}

@@ -1,0 +1,186 @@
+name: Blind principal and shadow review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request to review
+        required: true
+        type: number
+      principal:
+        description: Principal reviewer (calibration assignment, not a winner)
+        required: true
+        default: claude
+        type: choice
+        options: [claude, codex]
+      shadow:
+        description: Blind shadow reviewer
+        required: true
+        default: codex
+        type: choice
+        options: [claude, codex]
+      shadow_trigger:
+        description: Shadow activation policy
+        required: true
+        default: always
+        type: choice
+        options: [always, "material|muestreo|riesgo"]
+      publish:
+        description: Publication policy (use none during calibration)
+        required: true
+        default: none
+        type: choice
+        options: [none, consolidada]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: blind-review-pipeline-${{ github.repository }}-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Validate requested configuration
+        env:
+          PRINCIPAL: ${{ inputs.principal }}
+          SHADOW: ${{ inputs.shadow }}
+        run: |
+          if [ "$PRINCIPAL" = "$SHADOW" ]; then
+            echo "FAIL_CLOSED: principal and shadow must be different reviewers" >&2
+            exit 1
+          fi
+
+      # The secret-bearing harness always comes from the repository default
+      # branch. A dispatch against any other ref fails before reviewer secrets.
+      - name: Check out trusted harness
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          ref: refs/heads/${{ github.event.repository.default_branch }}
+          path: harness
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate trusted harness identity
+        id: trusted
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          EXPECTED_REF="refs/heads/${DEFAULT_BRANCH}"
+          HARNESS_SHA="$(git -C harness rev-parse HEAD)"
+          REMOTE_DEFAULT_SHA="$(git -C harness rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")"
+          if [ "$DISPATCH_REF" != "$EXPECTED_REF" ] || [ "$WORKFLOW_SHA" != "$HARNESS_SHA" ] || [ "$HARNESS_SHA" != "$REMOTE_DEFAULT_SHA" ]; then
+            echo "FAIL_CLOSED: trusted harness identity could not be demonstrated" >&2
+            exit 1
+          fi
+          echo "sha=${HARNESS_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out frozen pull request head
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          ref: refs/pull/${{ inputs.pr_number }}/head
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned reviewer CLIs
+        working-directory: harness
+        run: |
+          npm install --prefix .review-tools --no-audit --no-fund @anthropic-ai/claude-code@2.1.226 @openai/codex@0.147.0
+          echo "${GITHUB_WORKSPACE}/harness/.review-tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Freeze pull request metadata and input package
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          mkdir -p harness/artifacts
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > harness/artifacts/pr.json
+          BASE_SHA="$(jq -r '.base.sha' harness/artifacts/pr.json)"
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "FAIL_CLOSED: invalid PR base SHA" >&2
+            exit 1
+          fi
+          git -C target cat-file -e "${BASE_SHA}^{commit}"
+          HEAD_SHA="$(git -C target rev-parse HEAD)"
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          node harness/scripts/review-pipeline/review-pipeline.mjs prepare \
+            --repo target \
+            --trusted-root harness \
+            --trusted-sha '${{ steps.trusted.outputs.sha }}' \
+            --pr-json harness/artifacts/pr.json \
+            --head-sha "$HEAD_SHA" \
+            --out harness/artifacts
+
+      - name: Run principal with Claude
+        if: inputs.principal == 'claude'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs run --reviewer claude --role principal --input harness/artifacts/input --out harness/artifacts/review-principal.json
+
+      - name: Run principal with Codex
+        if: inputs.principal == 'codex'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs run --reviewer codex --role principal --input harness/artifacts/input --out harness/artifacts/review-principal.json
+
+      - name: Decide whether shadow is required
+        id: shadow
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs decide-shadow --principal harness/artifacts/review-principal.json --input harness/artifacts/input --mode '${{ inputs.shadow_trigger }}' --out harness/artifacts/shadow-decision.json
+
+      - name: Run blind shadow with Claude
+        if: steps.shadow.outputs.run_shadow == 'true' && inputs.shadow == 'claude'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs run --reviewer claude --role shadow --input harness/artifacts/input --out harness/artifacts/review-shadow.json
+
+      - name: Run blind shadow with Codex
+        if: steps.shadow.outputs.run_shadow == 'true' && inputs.shadow == 'codex'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs run --reviewer codex --role shadow --input harness/artifacts/input --out harness/artifacts/review-shadow.json
+
+      - name: Fuse reviews and decide
+        env:
+          RUN_SHADOW: ${{ steps.shadow.outputs.run_shadow }}
+        run: |
+          SHADOW_ARGS=""
+          if [ "$RUN_SHADOW" = "true" ]; then
+            SHADOW_ARGS="--shadow harness/artifacts/review-shadow.json"
+          fi
+          node harness/scripts/review-pipeline/review-pipeline.mjs fuse \
+            --principal harness/artifacts/review-principal.json \
+            $SHADOW_ARGS \
+            --shadow-decision harness/artifacts/shadow-decision.json \
+            --input harness/artifacts/input \
+            --out harness/artifacts/fusion.json \
+            --telemetry harness/artifacts/telemetry.json
+
+      - name: Apply publication policy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node harness/scripts/review-pipeline/review-pipeline.mjs publish --mode '${{ inputs.publish }}' --fusion harness/artifacts/fusion.json --repository '${{ github.repository }}' --pr '${{ inputs.pr_number }}' --out harness/artifacts/publication.json
+
+      - name: Upload trace artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: blind-review-${{ inputs.pr_number }}-${{ github.run_id }}
+          path: |
+            harness/artifacts/input/input-manifest.json
+            harness/artifacts/review-principal.json
+            harness/artifacts/review-shadow.json
+            harness/artifacts/shadow-decision.json
+            harness/artifacts/fusion.json
+            harness/artifacts/telemetry.json
+            harness/artifacts/publication.json
+            harness/artifacts/failure-*.json
+          if-no-files-found: error
+          retention-days: 30
