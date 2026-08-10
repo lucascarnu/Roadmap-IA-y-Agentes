@@ -71,6 +71,11 @@ De ahí se sigue una separación de roles: quien revisa responde si algo está b
   seguir trabajando se convierte en decisión, regla, pendiente o estado
   documentado, según corresponda. Si no queda escrita, no fue aceptada: fue
   comentada.
+- Una corrección de harness o infraestructura no altera silenciosamente una
+  capacidad material del sujeto evaluado para lograr una corrida exitosa. Los
+  cambios de modelo, razonamiento, herramientas, fuentes, contexto esencial,
+  protocolo de evidencia o condiciones materiales de inferencia son cambios del
+  experimento y se escalan antes de aplicarse.
 
 ## Completitud de una entrega
 

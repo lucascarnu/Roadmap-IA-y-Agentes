@@ -31,7 +31,7 @@ jobs:
             const API_BASE = 'https://api.moonshot.ai/v1';
             const MAIN_REF = 'main';
             const CONTEXT_TOKENS = 262144;
-            const ROUND_1_MAX_OUTPUT = 8000;
+            const ROUND_1_MAX_OUTPUT = 24000;
             const ROUND_2_MAX_OUTPUT = 4000;
             const SCHEMA_RESERVE_TOKENS = 4096;
             const AUX_BLOCK_LIMIT = 4000;
@@ -113,6 +113,41 @@ jobs:
                   (prompt - cached) * INPUT_PRICE / 1_000_000 +
                   completionTokens * OUTPUT_PRICE / 1_000_000,
               };
+            }
+
+            function logCompletionTelemetry(label, completion) {
+              const usage = completion.usage || {};
+              const promptTokens = Number.isFinite(Number(usage.prompt_tokens))
+                ? Number(usage.prompt_tokens)
+                : null;
+              const completionTokens = Number.isFinite(Number(usage.completion_tokens))
+                ? Number(usage.completion_tokens)
+                : null;
+              const totalTokens = Number.isFinite(Number(usage.total_tokens))
+                ? Number(usage.total_tokens)
+                : null;
+              const reasoningValue = usage.completion_tokens_details?.reasoning_tokens ??
+                usage.reasoning_tokens;
+              const reasoningTokens = Number.isFinite(Number(reasoningValue))
+                ? Number(reasoningValue)
+                : null;
+              const content = completion.choices?.[0]?.message?.content;
+              const calculated = promptTokens !== null && completionTokens !== null
+                ? usageCost(completion).cost
+                : null;
+              core.info(`${label} finish reason: ${completion.choices?.[0]?.finish_reason || 'missing'}`);
+              core.info(`${label} usage: ${JSON.stringify({
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: totalTokens,
+                reasoning_tokens: reasoningTokens,
+              })}`);
+              core.info(`${label} content type: ${typeof content}; length: ${
+                typeof content === 'string' ? content.length : 0
+              }`);
+              core.info(`${label} calculated cost USD: ${
+                calculated === null ? 'unavailable' : calculated.toFixed(6)
+              }`);
             }
 
             async function getRepoText(path, ref) {
@@ -426,7 +461,7 @@ jobs:
                   'Para NEEDS_EVIDENCE completá los cuatro campos de solicitud_verificacion.',
                   'Para SETTLED el origen nunca es NONE; para otros estados siempre es NONE.',
                   'Proponé una decisión preliminar, que el workflow recalculará.',
-                  'El presupuesto total de completion es 8000 tokens e incluye tu deliberación interna.',
+                  'El presupuesto total de completion es 24000 tokens e incluye tu deliberación interna.',
                   'Limitá esa deliberación y reservá al menos 2000 tokens para emitir el JSON final completo.',
                 ].join('\n'),
               },
@@ -538,6 +573,13 @@ jobs:
             const round1MaximumCost = maximumCost(estimatedRound1Input, ROUND_1_MAX_OUTPUT);
             core.info(`Round 1 estimated input tokens: ${estimatedRound1Input}`);
             core.info(`Auxiliary estimated tokens: ${auxiliaryTokens}`);
+            core.info(`Auxiliary blocks: ${JSON.stringify(auxiliaryBlocks.map((block) => ({
+              name: block.name,
+              estimated_tokens: block.tokens,
+              truncated: block.truncated,
+              final_characters: block.text.length,
+              final_bytes: Buffer.byteLength(block.text, 'utf8'),
+            })))}`);
             core.info(`Round 1 maximum cost USD: ${round1MaximumCost.toFixed(6)}`);
             if (round1MaximumCost > REVIEW_COST_LIMIT) {
               core.setFailed(`COST_LIMIT_EXCEEDED: round 1 maximum USD ${round1MaximumCost.toFixed(6)}.`);
@@ -559,6 +601,7 @@ jobs:
                 response_format: round1Format,
               }),
             });
+            logCompletionTelemetry('Round 1', round1Completion);
             if (round1Completion.model !== MODEL) {
               core.setFailed(`Unexpected model in round 1: ${round1Completion.model || 'missing'}`);
               return;
@@ -568,12 +611,6 @@ jobs:
             try {
               round1 = JSON.parse(round1Content || '');
             } catch {
-              const preview = typeof round1Content === 'string'
-                ? round1Content.slice(0, 500)
-                : JSON.stringify(round1Content);
-              core.info(`Round 1 finish reason: ${round1Completion.choices?.[0]?.finish_reason || 'missing'}`);
-              core.info(`Round 1 content type: ${typeof round1Content}; length: ${round1Content?.length || 0}`);
-              core.info(`Round 1 content preview: ${preview}`);
               core.setFailed('Round 1 Structured Output was not valid JSON.');
               return;
             }
@@ -820,6 +857,8 @@ jobs:
                       response_format: round2Format,
                     }),
                   });
+                  logCompletionTelemetry('Round 2', round2Completion);
+                  round2Usage = usageCost(round2Completion);
                   if (round2Completion.model !== MODEL) {
                     core.setFailed(`Unexpected model in round 2: ${round2Completion.model || 'missing'}`);
                     return;
@@ -893,7 +932,6 @@ jobs:
                       finding.impacto_final = adjudication.impacto_final;
                     }
                   }
-                  round2Usage = usageCost(round2Completion);
                   round2Status = `ejecutada: ${round2.adjudicaciones.length} adjudicaciones`;
                 }
               }
