@@ -1,6 +1,13 @@
 name: 'Kimi K2.7 Code Review Test'
 
 on:
+  workflow_dispatch:
+    inputs:
+      calibration_run:
+        description: 'Autoriza una corrida manual de calibración hasta el hard cap vigente'
+        required: true
+        type: boolean
+        default: false
   pull_request:
     types: [synchronize]
 
@@ -13,9 +20,13 @@ jobs:
   review:
     if: >-
       github.repository == 'lucascarnu/Roadmap-IA-y-Agentes' &&
-      github.event.pull_request.number == 16 &&
-      github.event.pull_request.head.ref == 'codex/instalar-review-gemini' &&
-      github.event.pull_request.head.repo.full_name == 'lucascarnu/Roadmap-IA-y-Agentes'
+      ((github.event_name == 'pull_request' &&
+        github.event.pull_request.number == 16 &&
+        github.event.pull_request.head.ref == 'codex/instalar-review-gemini' &&
+        github.event.pull_request.head.repo.full_name == 'lucascarnu/Roadmap-IA-y-Agentes') ||
+       (github.event_name == 'workflow_dispatch' &&
+        inputs.calibration_run == true &&
+        github.ref == 'refs/heads/codex/instalar-review-gemini'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -52,9 +63,12 @@ jobs:
             core.setSecret(apiKey);
 
             const {owner, repo} = context.repo;
-            const pullNumber = context.payload.pull_request.number;
-            const eventHead = context.payload.pull_request.head.sha;
+            const calibrationRun = context.eventName === 'workflow_dispatch' &&
+              String(context.payload.inputs?.calibration_run) === 'true';
+            const pullNumber = context.payload.pull_request?.number || 16;
+            const eventHead = context.payload.pull_request?.head.sha || null;
             const startedAt = Date.now();
+            core.info(`CALIBRATION_RUN = ${calibrationRun}`);
 
             async function kimiRequest(path, options = {}) {
               const response = await fetch(`${API_BASE}${path}`, {
@@ -279,8 +293,14 @@ jobs:
 
             const initialPull = await github.rest.pulls.get({owner, repo, pull_number: pullNumber});
             const reviewedHead = initialPull.data.head.sha;
-            if (reviewedHead !== eventHead) {
+            if (eventHead && reviewedHead !== eventHead) {
               core.setFailed(`HEAD_MOVED before review: event=${eventHead} current=${reviewedHead}`);
+              return;
+            }
+            if (calibrationRun &&
+                (initialPull.data.head.ref !== 'codex/instalar-review-gemini' ||
+                  initialPull.data.head.repo.full_name !== 'lucascarnu/Roadmap-IA-y-Agentes')) {
+              core.setFailed('CALIBRATION_SCOPE_MISMATCH: PR #16 no longer matches the calibration branch/repository.');
               return;
             }
 
@@ -587,9 +607,12 @@ jobs:
             }
             // Automatic synchronize runs deliberately stop above USD 0.10; only a future
             // explicit manual trigger may authorize that cost band.
-            if (round1MaximumCost > AUTOMATIC_COST_LIMIT && context.eventName !== 'workflow_dispatch') {
+            if (round1MaximumCost > AUTOMATIC_COST_LIMIT && !calibrationRun) {
               core.setFailed(`COST_LIMIT_EXCEEDED: automatic maximum USD ${round1MaximumCost.toFixed(6)}.`);
               return;
+            }
+            if (calibrationRun) {
+              core.info(`CALIBRATION_RUN = true; automatic USD ${AUTOMATIC_COST_LIMIT.toFixed(2)} gate bypassed; hard cap USD ${REVIEW_COST_LIMIT.toFixed(2)} remains active.`);
             }
 
             const round1Completion = await kimiRequest('/chat/completions', {
@@ -845,7 +868,7 @@ jobs:
                 round2MaximumCost = maximumCost(estimatedRound2Input, ROUND_2_MAX_OUTPUT);
                 const cumulativeMaximum = round1Usage.cost + round2MaximumCost;
                 if (cumulativeMaximum > REVIEW_COST_LIMIT ||
-                    (cumulativeMaximum > AUTOMATIC_COST_LIMIT && context.eventName !== 'workflow_dispatch')) {
+                    (cumulativeMaximum > AUTOMATIC_COST_LIMIT && !calibrationRun)) {
                   round2Status = `no ejecutada: preguntas no verificadas por presupuesto (máximo acumulado USD ${cumulativeMaximum.toFixed(6)})`;
                 } else {
                   round2Completion = await kimiRequest('/chat/completions', {
@@ -1049,6 +1072,7 @@ jobs:
               '',
               '## Contexto y gobernanza',
               `Política leída de: **${policySource}**.`,
+              `CALIBRATION_RUN: **${calibrationRun}**.`,
               policyIndependent ? '' : '**La política proviene de esta PR; esta review no es independiente de ella.**',
               `Contexto auxiliar estimado: ${auxiliaryTokens}/${AUX_TOTAL_LIMIT} tokens.`,
               `Bloques: ${auxiliaryBlocks.map((block) => `${block.name} (${block.tokens} tokens${block.truncated ? ', RECORTADO' : ''})`).join('; ')}`,
