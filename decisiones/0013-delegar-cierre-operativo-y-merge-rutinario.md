@@ -1,6 +1,6 @@
 # 0013 — Delegar cierre operativo y merge rutinario
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-08-11
 
 ## Contexto
@@ -21,7 +21,7 @@ Una PR puede integrarse sin intervención del Director cuando, para el HEAD exac
 
 1. el alcance corresponde a una tarea ya autorizada;
 2. las verificaciones exigidas para esa clase de cambio terminaron satisfactoriamente;
-3. la revisión independiente requerida por proporcionalidad se ejecutó realmente y no dejó hallazgos materiales abiertos, o el cambio era de una clase en la que `0009` permite omitirla;
+3. la revisión independiente exigida por las reglas vigentes se ejecutó realmente y no dejó hallazgos materiales abiertos; solo puede omitirse cuando `0009` lo permite para esa clase de cambio y ninguna regla vigente la exige igualmente;
 4. QA, cuando sea obligatorio para esa clase de cambio, no dejó validación material pendiente;
 5. no existe una discrepancia material entre la evidencia revisada y el HEAD actual;
 6. la integración es técnicamente posible y no exige saltarse una protección o garantía objetiva.
@@ -33,7 +33,7 @@ Si esas condiciones se cumplen, pedir al Director que elija entre "mergear" o "n
 La delegación anterior no reduce la autoridad del Director. Se escala antes de continuar cuando aparece cualquiera de estos casos:
 
 - cambio de producto, alcance o intención;
-- costo relevante o uso PAYG que requiera su aprobación;
+- costo relevante o uso PAYG, que según `0011` siempre requiere su aprobación;
 - privacidad o seguridad aceptada;
 - acción irreversible o con impacto externo relevante;
 - alternativas materiales genuinamente razonables que la evidencia no resuelve;
@@ -46,7 +46,7 @@ El Director conserva el veto y puede ordenar una excepción o cambio de criterio
 
 Esta decisión concreta el principio de `0009` de que el merge manual no es parte del modelo y define el criterio objetivo que allí había quedado abierto.
 
-La frase de `reglas.md` que describe el estado actual como "el circuito automático termina con la pull request lista para integrar" debe entenderse como una limitación de implementación, no como una autorización humana obligatoria. Cuando el ejecutor o la herramienta disponible pueda satisfacer y ejecutar el gate anterior, puede integrar sin pedir una confirmación adicional.
+`reglas.md` remite a esta decisión para las condiciones de integración rutinaria. Que un ejecutor o la herramienta disponible no pueda ejecutar el cierre es una limitación de implementación, no una autorización humana obligatoria. Cuando pueda satisfacer y ejecutar el gate anterior, puede integrar sin pedir una confirmación adicional.
 
 La automatización técnica completa del gate puede implementarse gradualmente. Mientras no exista, un agente con acceso suficiente puede aplicar el mismo criterio de forma trazable y ejecutar la integración.
 

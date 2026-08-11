@@ -32,7 +32,7 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Usar comandos simples, uno por operación. Evitar lógica de shell cuando el exit code y la salida directa ya alcanzan.
 - Al publicar una rama, nombrarla explícitamente en el comando en vez de depender de cuál esté activa.
 - Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
-- El circuito automático llega hasta donde lo autoricen las garantías objetivas disponibles. Hoy termina con la pull request lista para integrar. Las condiciones bajo las cuales la integración misma podría automatizarse todavía no están definidas: la decisión sobre el modelo operativo las deja explícitamente abiertas.
+- Las condiciones de integración rutinaria están definidas en [0013](decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md). Cuando la herramienta no pueda ejecutar ese cierre, el circuito termina con la pull request lista para integrar como una limitación de implementación, no como una exigencia de aprobación humana.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
 
 ## Destinatario y firma de ejecución
