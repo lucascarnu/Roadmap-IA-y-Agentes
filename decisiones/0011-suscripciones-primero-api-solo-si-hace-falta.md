@@ -17,12 +17,16 @@ El pipeline de revisión integrado en `main` fue diseñado inicialmente para Git
 
 Esto aplica a reviews, generación o corrección de código, análisis de arquitectura y otras tareas ejecutables mediante Claude Code, Codex u otras herramientas ya cubiertas por una suscripción activa.
 
-Las APIs PAYG se usan solo cuando se cumpla al menos una de estas condiciones:
+Las APIs PAYG se usan solo de manera excepcional y cuando se cumplan **todas**
+estas condiciones:
 
-1. no existe una vía razonable por suscripción para la tarea necesaria;
-2. la automatización remota aporta un beneficio material que justifica el costo variable;
-3. se necesita una prueba puntual de integración o una medición que no pueda hacerse de otra manera;
-4. el Director aprueba explícitamente asumir ese costo después de conocer una estimación.
+1. existe una justificación material para apartarse de la vía por suscripción,
+   porque esta no es razonable para la tarea, la automatización remota aporta un
+   beneficio material o se necesita una prueba o medición que no puede hacerse
+   de otra manera;
+2. existe una estimación razonable del costo que se incurriría;
+3. Lucas, como Director / Product Owner, aprueba explícitamente ese uso de PAYG
+   después de conocer la justificación y la estimación.
 
 **Tener una API disponible no es razón suficiente para usarla.**
 
@@ -59,7 +63,9 @@ Antes de introducir una API PAYG en un flujo recurrente se debe dejar explícito
 
 Si estos datos no están disponibles, la decisión queda pendiente y no se debe asumir API por defecto.
 
-Una prueba puntual con API puede aprobarse sin convertir esa vía en arquitectura permanente.
+Una prueba puntual con API puede ser aprobada explícitamente por Lucas, después
+de conocer su justificación y costo estimado, sin convertir esa vía en
+arquitectura permanente.
 
 ## Relación con 0010
 

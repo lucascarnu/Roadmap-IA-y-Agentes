@@ -5,10 +5,11 @@
 
 ## Contexto y problema
 
-El pipeline de reviewers definido en `0010` ya automatiza el tramo interno
-`principal → shadow → fusión determinista → resultado`, pero el circuito completo
-de desarrollo asistido todavía depende de que el director transporte contexto y
-resultados entre agentes.
+El pipeline de reviewers definido en `0010` ya está implementado para cubrir el
+tramo interno `principal → shadow → fusión determinista → resultado`, con su
+lógica determinista **PROBADA LOCALMENTE** y su integración real todavía sin
+validar. El circuito completo de desarrollo asistido aún depende de que el
+director transporte contexto y resultados entre agentes.
 
 El flujo real que falta automatizar es más amplio:
 
