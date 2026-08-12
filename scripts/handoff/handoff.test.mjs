@@ -15,6 +15,7 @@ const ROOT = resolve(HERE, "..", "..");
 const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
+const RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result.schema.json"), "utf8"));
 const BASE_CONFIG = {
   repository: "example/repo",
   default_head_ref: "main",
@@ -162,6 +163,40 @@ function spawnFailure(code, command) {
   };
 }
 
+function assertResultFailed(result, currentContract) {
+  assert.throws(
+    () => validateResult(result, currentContract, BASE_CONFIG),
+    (error) => error.name === "HandoffError" && error.label === "handoff:failed",
+  );
+}
+
+function assertStructuredOutputSubset(schema) {
+  const allowed = new Set([
+    "type", "enum", "properties", "items", "required", "additionalProperties",
+    "description", "title", "$schema",
+  ]);
+  const visit = (node, path, typeRequired = false) => {
+    assert(node && typeof node === "object" && !Array.isArray(node), `${path} no es un nodo de schema`);
+    if (typeRequired) assert(Object.hasOwn(node, "type"), `${path} no declara type`);
+    assert.equal(Object.hasOwn(node, "const"), false, `${path} contiene const`);
+    for (const keyword of Object.keys(node)) assert(allowed.has(keyword), `${path} usa keyword no permitida: ${keyword}`);
+    const types = Array.isArray(node.type) ? node.type : [node.type];
+    if (types.includes("object")) {
+      assert.equal(node.additionalProperties, false, `${path} no cierra additionalProperties`);
+      assert.deepEqual(
+        [...node.required].sort(),
+        Object.keys(node.properties).sort(),
+        `${path} no requiere exactamente todas sus propiedades`,
+      );
+    }
+    if (node.properties) {
+      for (const [name, child] of Object.entries(node.properties)) visit(child, `${path}.properties.${name}`, true);
+    }
+    if (node.items) visit(node.items, `${path}.items`, true);
+  };
+  visit(schema, "$", true);
+}
+
 test("runProcess no reintenta si el primer intento funciona en win32", () => {
   const calls = [];
   const result = runProcess("codex", ["--version"], {
@@ -275,6 +310,56 @@ test("contrato y resultado válidos respetan los schemas conceptuales", () => {
   const current = validateContract(contract(), BASE_CONFIG);
   assert.equal(validateResult(validResult(current), current, BASE_CONFIG).estado, "COMPLETADO");
   assert.deepEqual(parseContractBody(issueBody(current)), current);
+});
+
+test("schema de salida usa sólo el subconjunto estructurado admitido", () => {
+  assertStructuredOutputSubset(RESULT_SCHEMA);
+});
+
+test("veredicto de 2001 caracteres termina handoff:failed", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  assertResultFailed({ ...validResult(current), veredicto: "v".repeat(2001) }, current);
+});
+
+test("resumen de 6001 caracteres termina handoff:failed", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  assertResultFailed({ ...validResult(current), resumen: "r".repeat(6001) }, current);
+});
+
+test("accion_recomendada de 3001 caracteres termina handoff:failed", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  assertResultFailed({ ...validResult(current), accion_recomendada: "a".repeat(3001) }, current);
+});
+
+test("detalle de evidencia de 2001 caracteres termina handoff:failed", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const result = validResult(current);
+  result.evidencia[0].detalle = "d".repeat(2001);
+  assertResultFailed(result, current);
+});
+
+test("archivos_leidos con 31 elementos termina handoff:failed", () => {
+  const paths = Array.from({ length: 31 }, (_, index) => `contexto/${index}.md`);
+  const current = { ...validateContract(contract(), BASE_CONFIG), contexto_autorizado: paths };
+  assertResultFailed({ ...validResult(current), archivos_leidos: paths }, current);
+});
+
+test("archivos_leidos duplicados termina handoff:failed", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const duplicate = current.contexto_autorizado[0];
+  assertResultFailed({ ...validResult(current), archivos_leidos: [duplicate, duplicate] }, current);
+});
+
+test("salida en todos los límites exactos es válida", () => {
+  const paths = Array.from({ length: 30 }, (_, index) => `contexto/${index}.md`);
+  const current = { ...validateContract(contract(), BASE_CONFIG), contexto_autorizado: paths };
+  const result = validResult(current);
+  result.veredicto = "v".repeat(2000);
+  result.resumen = "r".repeat(6000);
+  result.accion_recomendada = "a".repeat(3000);
+  result.evidencia = paths.map((path) => ({ archivo: path, detalle: "d".repeat(2000) }));
+  result.archivos_leidos = paths;
+  assert.equal(validateResult(result, current, BASE_CONFIG), result);
 });
 
 test("schema y validador exigen el mismo canon gobernante", () => {
