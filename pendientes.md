@@ -100,9 +100,10 @@ conviene repetir la prueba si el volumen de documentación crece mucho o si camb
 de forma material cómo está organizada.
 
 Los tres asuntos originales de la Compuerta PRE-MVP están RESUELTOS. La
-compuerta vuelve a quedar cerrada por el asunto "Clases de cambio y
-verificaciones exigidas", registrado más abajo, hasta que se defina lo que exige
-antes de la primera pull request de código del MVP.
+compuerta sigue cerrada por dos asuntos registrados más abajo, ambos `ABIERTO`
+con `Bloqueo: fase`: "Handoff automático real Claude↔Codex" y "Clases de cambio y
+verificaciones exigidas". Mientras cualquiera de los dos siga abierto no comienza
+la primera pull request de código del MVP.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -113,6 +114,25 @@ Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 acciones futuras que se derivan de ellas, junto con el estado y los resultados
 observados **mínimos para entender por qué siguen abiertas** o por qué dejaron de
 estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
+
+### Handoff automático real Claude↔Codex
+
+**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
+del MVP hay que demostrar un handoff automático real del circuito Claude↔Codex,
+con dos relevos encadenados sobre trabajo real y sin que el director transporte
+prompt, contexto, HEAD, resultado, instrucciones ni destinatario siguiente.
+
+**Evidencia del bloqueo.** Es una condición explícita del Director. Hoy no está
+demostrada: la prueba de sustitución de contingencia declara expresamente que su
+evidencia no prueba el handoff automático, y las pruebas del puente de la PR #20
+son locales y simuladas. Las pruebas de componentes no sustituyen a una corrida
+real de punta a punta.
+
+**Cómo se cierra.** Con una corrida real que satisfaga los criterios de
+aceptación de
+[0012](decisiones/0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md)
+y quede auditada. Este asunto bloquea únicamente el comienzo de las pull requests
+de código del MVP; no bloquea el trabajo sobre el propio puente.
 
 ### Solicitud y lectura de revisiones
 
