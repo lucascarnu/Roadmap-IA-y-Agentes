@@ -100,10 +100,12 @@ conviene repetir la prueba si el volumen de documentación crece mucho o si camb
 de forma material cómo está organizada.
 
 Los tres asuntos originales de la Compuerta PRE-MVP están RESUELTOS. La
-compuerta sigue cerrada por dos asuntos registrados más abajo, ambos `ABIERTO`
-con `Bloqueo: fase`: "Handoff automático real Claude↔Codex" y "Clases de cambio y
-verificaciones exigidas". Mientras cualquiera de los dos siga abierto no comienza
-la primera pull request de código del MVP.
+compuerta PRE-MVP sigue cerrada: "Clases de cambio y verificaciones exigidas"
+permanece `ABIERTO` con `Bloqueo: fase`. Además, "Handoffs — deriva de órdenes
+operacionales" está identificado externamente como
+`BLOQUEANTE_DE_CIERRE_PRE_MVP — PENDIENTE_DE_EVALUAR`, todavía sin consolidar ni
+evaluar canónicamente. Esta actualización no decide su forma canónica ni afirma
+que el asunto registrado acá sea el único bloqueo restante.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -117,22 +119,28 @@ estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
 
 ### Handoff automático real Claude↔Codex
 
-**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
-del MVP hay que demostrar un handoff automático real del circuito Claude↔Codex,
-con dos relevos encadenados sobre trabajo real y sin que el director transporte
-prompt, contexto, HEAD, resultado, instrucciones ni destinatario siguiente.
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** El 2026-08-12 se ejecutó y
+el Arquitecto / Lead auditó una prueba limpia de dos relevos sobre el HEAD
+congelado `6c52a8ce435836b7d0f4151e15c8a586972cfa1d`.
 
-**Evidencia del bloqueo.** Es una condición explícita del Director. Hoy no está
-demostrada: la prueba de sustitución de contingencia declara expresamente que su
-evidencia no prueba el handoff automático, y las pruebas del puente de la PR #20
-son locales y simuladas. Las pruebas de componentes no sustituyen a una corrida
-real de punta a punta.
+El Issue #27, destinado a Codex, terminó `handoff:done` y publicó un resultado
+estructurado. El puente creó automáticamente el Issue #28 para Claude, sobre el
+mismo HEAD, y transportó `resultado_previo` con su marker, `result_sha256` y el
+siguiente destinatario. El Issue #28 también terminó `handoff:done`: Claude
+reconstruyó y confirmó la auditoría, devolvió `siguiente_destinatario = null` y no
+se creó otro hijo.
 
-**Cómo se cierra.** Con una corrida real que satisfaga los criterios de
-aceptación de
-[0012](decisiones/0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md)
-y quede auditada. Este asunto bloquea únicamente el comienzo de las pull requests
-de código del MVP; no bloquea el trabajo sobre el propio puente.
+La intervención del Director se limitó a ejecutar `poll`: no transportó prompt,
+contexto, HEAD, resultado, instrucciones ni destinatario siguiente. Los artefactos
+verifican sesión de suscripción ChatGPT para Codex y suscripción Anthropic
+first-party para Claude, sin PAYG.
+
+La recuperación segura ante caída está probada por la batería y por el
+comportamiento fail-closed observado en fallos anteriores del harness. La corrida
+exitosa no sufrió una caída real a mitad de ejecución. Los modelos y esfuerzos
+efectivos permanecen `NO_VERIFICADO` donde no existe medición directa; las
+declaraciones de los agentes no se toman como medición. Los Issues #22 y #25 se
+conservan como evidencia histórica y no se reutilizaron.
 
 ### Solicitud y lectura de revisiones
 
