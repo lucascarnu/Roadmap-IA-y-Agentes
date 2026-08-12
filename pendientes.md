@@ -60,16 +60,20 @@ el mismo resultado y evidencia suficiente para confiar en el circuito.
 
 ### Prueba de sustitución del ocupante de contingencia
 
-**Estado: ABIERTO.** La contingencia está documentada en `equipo.md`; la
-sustitución no se probó.
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** Ejecutada el 2026-08-11 por
+Kimi, con el modelo `k3-256k` y esfuerzo `high`, en modo de solo lectura sobre el
+HEAD remoto `06a597e`, sin handoff histórico del Director.
 
-Ejercicio mínimo, sobre una tarea pequeña y real: entregarle al ocupante de
-contingencia únicamente el repositorio y el historial de ramas y pull requests, y
-comprobar que reconstruye por su cuenta **el estado actual, el próximo paso y qué
-no debe hacer todavía**, sin que el director le reconstruya la historia a mano.
+A partir del repositorio, las ramas y las pull requests, reconstruyó correctamente
+el estado actual, el siguiente paso y qué no debía hacerse todavía. También
+detectó que `main` local y `origin/main` local estaban atrasados y que el working
+tree estaba sobre una rama anterior, y resolvió correctamente el HEAD canónico
+contra el remoto y GitHub sin ayuda del Director.
 
-Si lo logra, la contingencia queda PROBADA LOCALMENTE. Si falla, se documentan
-únicamente los huecos concretos que impidieron la reconstrucción.
+Claude / Arquitecto-Lead auditó la reconstrucción sin encontrar errores
+materiales ni huecos documentales nuevos. El resultado se limita a este ocupante,
+esta corrida y el repositorio en ese estado; conviene repetir la prueba si la
+documentación cambia materialmente de volumen u organización.
 
 ### Prueba de reconstrucción del consultor externo
 
@@ -92,6 +96,10 @@ Alcance de lo que se afirma: vale para este consultor, en esta lectura y con el
 repositorio en este estado. No es una propiedad permanente del repositorio, y
 conviene repetir la prueba si el volumen de documentación crece mucho o si cambia
 de forma material cómo está organizada.
+
+Los tres asuntos de la Compuerta PRE-MVP están RESUELTOS. La compuerta queda
+abierta y puede comenzar la transición hacia las primeras pull requests de código
+del MVP conforme a `reglas.md`.
 
 ## Automatización del workflow de desarrollo asistido
 
