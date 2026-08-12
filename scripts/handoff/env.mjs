@@ -14,6 +14,23 @@ export function buildChildEnv(source = process.env, extra = {}) {
   return env;
 }
 
+// Conserva argumentos simples tal como fueron configurados (incluidas comillas
+// internas) y agrupa sólo los que cmd.exe podría separar o interpretar.
+export function quoteCmdArgument(value) {
+  const text = String(value);
+  if (!text) return '""';
+  if (!/[\s&|<>^()%!]/.test(text)) return text;
+  const escaped = text
+    .replace(/(\\*)"/g, '$1$1\\"')
+    .replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
+}
+
+export function buildWindowsCmdInvocation(command, args, comspec = process.env.COMSPEC ?? "cmd.exe") {
+  const commandLine = [`${command}.cmd`, ...args].map(quoteCmdArgument).join(" ");
+  return { command: comspec, args: ["/d", "/s", "/c", commandLine], commandLine };
+}
+
 export function runProcess(command, args, options = {}) {
   const spawn = options.spawn ?? spawnSync;
   const platform = options.platform ?? process.platform;
@@ -30,8 +47,12 @@ export function runProcess(command, args, options = {}) {
   let result = spawn(command, args, spawnOptions);
   const hasExplicitExtension = /\.[^\\/]+$/.test(command);
   if (platform === "win32" && result.error?.code === "ENOENT" && !hasExplicitExtension) {
-    executedCommand = `${command}.cmd`;
-    result = spawn(executedCommand, args, spawnOptions);
+    const retry = buildWindowsCmdInvocation(command, args);
+    executedCommand = retry.command;
+    result = spawn(executedCommand, retry.args, {
+      ...spawnOptions,
+      windowsVerbatimArguments: true,
+    });
   }
   if (result.error) {
     const error = new Error(`${executedCommand}: ${result.error.message}`);

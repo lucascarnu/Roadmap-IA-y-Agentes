@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   CrashSimulation, GOVERNING_CONTEXT, acquireLock, parseContractBody, poll, sha256, validateContract, validateResult,
 } from "./handoff.mjs";
-import { observeAuthentication, runProcess } from "./env.mjs";
+import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
@@ -162,7 +162,20 @@ function spawnFailure(code, command) {
   };
 }
 
-test("runProcess reintenta una vez con .cmd ante ENOENT en win32", () => {
+test("runProcess no reintenta si el primer intento funciona en win32", () => {
+  const calls = [];
+  const result = runProcess("codex", ["--version"], {
+    platform: "win32",
+    spawn: (command, args, options) => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: "codex-cli 0.147.0", stderr: "" };
+    },
+  });
+  assert.equal(result.stdout, "codex-cli 0.147.0");
+  assert.deepEqual(calls.map(({ command }) => command), ["codex"]);
+});
+
+test("runProcess reintenta una vez mediante cmd.exe ante ENOENT en win32", () => {
   const calls = [];
   const result = runProcess("codex", ["login", "status"], {
     platform: "win32",
@@ -174,7 +187,21 @@ test("runProcess reintenta una vez con .cmd ante ENOENT en win32", () => {
     },
   });
   assert.equal(result.stdout, "Logged in using ChatGPT");
-  assert.deepEqual(calls.map(({ command }) => command), ["codex", "codex.cmd"]);
+  assert.deepEqual(calls.map(({ command }) => command), ["codex", process.env.COMSPEC ?? "cmd.exe"]);
+  assert.deepEqual(calls[1].args, ["/d", "/s", "/c", "codex.cmd login status"]);
+  assert.equal(calls[1].options.shell, undefined);
+  assert.equal(calls[1].options.windowsVerbatimArguments, true);
+});
+
+test("invocación Windows fija la línea exacta para configuración de reasoning", () => {
+  const invocation = buildWindowsCmdInvocation("codex", [
+    "exec", "--config", 'model_reasoning_effort="high"',
+  ], "C:\\Windows\\System32\\cmd.exe");
+  assert.equal(invocation.command, "C:\\Windows\\System32\\cmd.exe");
+  assert.deepEqual(invocation.args, [
+    "/d", "/s", "/c", 'codex.cmd exec --config model_reasoning_effort="high"',
+  ]);
+  assert.equal(invocation.commandLine, 'codex.cmd exec --config model_reasoning_effort="high"');
 });
 
 test("runProcess no aplica fallback .cmd fuera de win32", () => {
@@ -197,13 +224,13 @@ test("runProcess no reescribe un comando que ya tiene extensión", () => {
   assert.deepEqual(calls, ["codex.cmd"]);
 });
 
-test("runProcess propaga ENOENT si también falla el launcher .cmd", () => {
+test("runProcess propaga ENOENT si también falla cmd.exe", () => {
   const calls = [];
   assert.throws(() => runProcess("codex", [], {
     platform: "win32",
     spawn: (command) => { calls.push(command); return spawnFailure("ENOENT", command); },
-  }), (error) => error.code === "ENOENT" && error.message.startsWith("codex.cmd:"));
-  assert.deepEqual(calls, ["codex", "codex.cmd"]);
+  }), (error) => error.code === "ENOENT" && error.message.startsWith(`${process.env.COMSPEC ?? "cmd.exe"}:`));
+  assert.deepEqual(calls, ["codex", process.env.COMSPEC ?? "cmd.exe"]);
 });
 
 test("runProcess no reintenta ante un error distinto de ENOENT", () => {
@@ -234,12 +261,14 @@ test("runProcess conserva args, input, env, cwd y timeout en el segundo intento"
     timeout: 1234,
   });
   assert.equal(calls.length, 2);
-  assert.strictEqual(calls[1].args, args);
-  assert.strictEqual(calls[1].options, calls[0].options);
+  assert.deepEqual(calls[1].args, ["/d", "/s", "/c", "codex.cmd login status"]);
   assert.strictEqual(calls[1].options.input, input);
   assert.strictEqual(calls[1].options.env, env);
   assert.equal(calls[1].options.cwd, "directorio-controlado");
   assert.equal(calls[1].options.timeout, 1234);
+  assert.equal(calls[1].options.maxBuffer, 64 * 1024 * 1024);
+  assert.equal(calls[1].options.windowsHide, true);
+  assert.equal(calls[1].options.windowsVerbatimArguments, true);
 });
 
 test("contrato y resultado válidos respetan los schemas conceptuales", () => {
@@ -521,7 +550,7 @@ test("fallo de ambos launchers durante observación termina blocked-via sin infe
   try {
     const result = await poll(fx.options);
     assert.equal(result.processed[0].status, "blocked-via");
-    assert.deepEqual(commands, ["codex", "codex.cmd"]);
+    assert.deepEqual(commands, ["codex", process.env.COMSPEC ?? "cmd.exe"]);
     assert.equal(invocations, 0);
     assert.equal(backend.issues[0].comments.length, 0);
     assert(backend.issues[0].labels.has("handoff:blocked-via"));
