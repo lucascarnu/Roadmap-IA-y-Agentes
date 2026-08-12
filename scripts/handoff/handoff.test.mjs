@@ -167,6 +167,38 @@ test("schema y validador exigen el mismo canon gobernante", () => {
   assert.equal(recipientRule.else.properties.contexto_autorizado.contains.const, GOVERNING_CONTEXT.claude);
 });
 
+test("head_ref rechaza recorrido relativo, extremos y componentes vacíos", () => {
+  const schemaPattern = new RegExp(CONTRACT_SCHEMA.properties.head_ref.pattern);
+  const invalidRefs = ["../main", "refs/../../x", "main/..", "/main", "main/", "refs//main"];
+  for (const headRef of invalidRefs) {
+    assert.equal(schemaPattern.test(headRef), false, `schema aceptó ${headRef}`);
+    assert.throws(() => validateContract(contract({ head_ref: headRef }), BASE_CONFIG), /head_ref inválido/);
+  }
+  const validRef = "feature/handoff.fix-1";
+  assert.equal(schemaPattern.test(validRef), true);
+  assert.equal(validateContract(contract({ head_ref: validRef }), BASE_CONFIG).head_ref, validRef);
+});
+
+test("head_ref inválido bloquea antes de inferencia", async () => {
+  let invocations = 0;
+  const backend = new FakeBackend([{
+    number: 1,
+    title: "bad-ref",
+    body: issueBody(contract({ head_ref: "refs/../../x" })),
+    createdAt: "2026-08-11T00:00:00Z",
+  }]);
+  const fx = fixture(backend, {
+    invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].status, "blocked");
+    assert.match(result.processed[0].error, /head_ref inválido/);
+    assert.equal(invocations, 0);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+  } finally { clean(fx); }
+});
+
 test("contexto específico adicional sigue permitido junto al canon gobernante", () => {
   const additional = "decisiones/0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md";
   const current = validateContract(contract({

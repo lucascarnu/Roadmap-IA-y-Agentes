@@ -17,6 +17,7 @@ const RESULT_SCHEMA = join(HERE, "handoff-result.schema.json");
 const PROMPT_TEMPLATE = join(HERE, "prompt-template.md");
 const RUNTIME = join(HERE, ".handoff");
 const ARTIFACTS = join(HERE, "artifacts");
+const HEAD_REF_PATTERN = /^(?!\.{1,2}(?:\/|$))(?!.*\/\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
 export const GOVERNING_CONTEXT = Object.freeze({
   common: Object.freeze([
@@ -103,7 +104,7 @@ export function validateContract(contract, config) {
   if (typeof contract.tarea !== "string" || !contract.tarea.trim() || contract.tarea.length > 8000) fail("tarea inválida", "handoff:blocked");
   if (!["claude", "codex"].includes(contract.destinatario) || !config.agents[contract.destinatario]) fail("destinatario inválido", "handoff:blocked");
   if (!/^[0-9a-f]{40}$/.test(contract.head_sha ?? "")) fail("head_sha inválido", "handoff:blocked");
-  if (contract.head_ref !== undefined && !/^[A-Za-z0-9._/-]+$/.test(contract.head_ref)) fail("head_ref inválido", "handoff:blocked");
+  if (contract.head_ref !== undefined && !HEAD_REF_PATTERN.test(contract.head_ref)) fail("head_ref inválido", "handoff:blocked");
   if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.length < 1 || contract.contexto_autorizado.length > 30) fail("contexto_autorizado inválido", "handoff:blocked");
   if (new Set(contract.contexto_autorizado).size !== contract.contexto_autorizado.length || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) fail("contexto_autorizado inseguro", "handoff:blocked");
   const missingGoverningContext = requiredGoverningContext(contract.destinatario)
