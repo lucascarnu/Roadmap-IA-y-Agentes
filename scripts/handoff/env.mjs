@@ -15,7 +15,9 @@ export function buildChildEnv(source = process.env, extra = {}) {
 }
 
 export function runProcess(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const spawn = options.spawn ?? spawnSync;
+  const platform = options.platform ?? process.platform;
+  const spawnOptions = {
     cwd: options.cwd,
     env: options.env ?? buildChildEnv(),
     input: options.input,
@@ -23,9 +25,16 @@ export function runProcess(command, args, options = {}) {
     maxBuffer: 64 * 1024 * 1024,
     timeout: options.timeout ?? 20 * 60 * 1000,
     windowsHide: true,
-  });
+  };
+  let executedCommand = command;
+  let result = spawn(command, args, spawnOptions);
+  const hasExplicitExtension = /\.[^\\/]+$/.test(command);
+  if (platform === "win32" && result.error?.code === "ENOENT" && !hasExplicitExtension) {
+    executedCommand = `${command}.cmd`;
+    result = spawn(executedCommand, args, spawnOptions);
+  }
   if (result.error) {
-    const error = new Error(`${command}: ${result.error.message}`);
+    const error = new Error(`${executedCommand}: ${result.error.message}`);
     error.code = result.error.code;
     error.stdout = result.stdout ?? "";
     error.stderr = result.stderr ?? "";
@@ -33,7 +42,7 @@ export function runProcess(command, args, options = {}) {
   }
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || "sin salida").trim();
-    const error = new Error(`${command} terminó con ${result.status}: ${detail}`);
+    const error = new Error(`${executedCommand} terminó con ${result.status}: ${detail}`);
     error.status = result.status;
     error.stdout = result.stdout ?? "";
     error.stderr = result.stderr ?? "";

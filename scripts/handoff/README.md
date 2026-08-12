@@ -137,6 +137,10 @@ La vía se observa antes y después de inferencia mediante el propio cliente:
   una suscripción.
 - Codex: `codex login status` debe informar una sesión ChatGPT.
 
+En Windows, si el nombre configurado no tiene extensión y el sistema no lo
+encuentra, el runner hace un único segundo intento con el shim npm `.cmd`, sin
+usar shell. En otras plataformas no aplica ese fallback.
+
 Una vía distinta, indeterminable o un cliente que no pueda exponerla termina en
 `handoff:blocked-via`; no publica resultado válido. La mera presencia o ausencia
 de una API key nunca decide la vía.
