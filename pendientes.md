@@ -99,9 +99,10 @@ repositorio en este estado. No es una propiedad permanente del repositorio, y
 conviene repetir la prueba si el volumen de documentación crece mucho o si cambia
 de forma material cómo está organizada.
 
-Los tres asuntos de la Compuerta PRE-MVP están RESUELTOS. La condición material
-PRE-MVP quedó satisfecha, la compuerta está abierta y puede comenzar la transición
-hacia las primeras pull requests de código del MVP conforme a `reglas.md`.
+Los tres asuntos originales de la Compuerta PRE-MVP están RESUELTOS. La
+compuerta vuelve a quedar cerrada por el asunto "Clases de cambio y
+verificaciones exigidas", registrado más abajo, hasta que se defina lo que exige
+antes de la primera pull request de código del MVP.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -428,9 +429,22 @@ Todavía no se cumple.
 
 ## Para medir durante las primeras PR del MVP
 
-**Estado: ABIERTO.** No bloquean el arranque, pero necesitan evidencia real antes
-de decidirse. Se registran acá para que la evaluación no dependa de que alguien
-se acuerde.
+Los asuntos de esta sección necesitan evidencia real durante las primeras pull
+requests. No bloquean el arranque salvo cuando declaran expresamente otro alcance
+de bloqueo.
+
+### Clases de cambio y verificaciones exigidas
+
+**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
+del MVP se debe definir qué clases de cambio reconoce el gate de `0013`, qué
+verificaciones exige cada una y, en particular, cuáles exige una pull request de
+código del MVP.
+
+**Evidencia del bloqueo.** `0013` condiciona la integración a "esa clase de
+cambio", a "las verificaciones exigidas" y a QA cuando sea obligatorio para esa
+clase, pero el canon todavía no define esas clases ni sus verificaciones. Este
+asunto bloquea únicamente el comienzo de las pull requests de código del MVP; no
+define todavía la clasificación ni las verificaciones.
 
 - **Aviso de intervención en la PC.** Si el próximo paso necesita navegador,
   login interactivo, aplicación de escritorio, `localhost` o aprobación visual,
