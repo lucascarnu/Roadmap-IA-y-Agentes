@@ -33,6 +33,8 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Al publicar una rama, nombrarla explícitamente en el comando en vez de depender de cuál esté activa.
 - Los textos multilínea, como el cuerpo de una pull request, se pasan por archivo y no en línea dentro del comando.
 - Las condiciones de integración rutinaria están definidas en [0013](decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md). Cuando la herramienta no pueda ejecutar ese cierre, el circuito termina con la pull request lista para integrar como una limitación de implementación, no como una exigencia de aprobación humana.
+- Antes de cerrar una unidad de trabajo, comprobar en `pendientes.md` si existe un asunto `ABIERTO` que declare expresamente bloquear esa unidad, una fase o el MVP. Mientras siga abierto, no avanza aquello que el propio asunto declara bloquear; los demás pendientes no funcionan como gates. Una desviación o incidente material registra en ese mismo pendiente su estado, el alcance del bloqueo y evidencia suficiente para identificarlo. La clasificación técnica de materialidad corresponde al Arquitecto / Lead según [0009](decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md).
+- Antes de cerrar cada pull request, comprobar si sigue vigente la [obligación temporal de revisión independiente](pendientes.md#revisión-independiente-obligatoria-mientras-tanto). Su estado y alcance viven únicamente en `pendientes.md` y pueden exigir revisión aunque la proporcionalidad general de `0009` permitiera omitirla.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
 
 ## Destinatario y firma de ejecución

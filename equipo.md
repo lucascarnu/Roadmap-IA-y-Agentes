@@ -64,8 +64,9 @@ Condiciones:
 - si ocupa Arquitecto / Lead o Ejecutor en una tarea, **no puede ser reviewer
   independiente de esa misma tarea**, por la independencia que fija `0009`.
 
-Es una previsión documentada, no una asignación: no tiene integración técnica y
-la sustitución todavía no se probó. La prueba está registrada en `pendientes.md`.
+Es una previsión documentada, no una asignación: no tiene integración técnica.
+La capacidad de sustitución y reconstrucción está **PROBADA LOCALMENTE**; el
+detalle de la prueba vive en [pendientes.md](pendientes.md#prueba-de-sustitución-del-ocupante-de-contingencia).
 
 ## Candidatos sin asignación
 
