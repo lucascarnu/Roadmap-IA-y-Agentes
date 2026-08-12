@@ -12,20 +12,21 @@ Cada hallazgo declara tres ejes independientes y objetivos:
   observación. Describe qué ocurre si el hallazgo es cierto, sin reducir el
   impacto por incertidumbre: un posible escape de una credencial es M1 aunque
   todavía no esté confirmado.
-- **Estado de evidencia:** `SETTLED` cuando la pregunta quedó cerrada con el
-  material disponible; `NEEDS_EVIDENCE` cuando depende de un hecho concreto que
-  puede nombrarse pero no está disponible; `UNVERIFIABLE` cuando nada disponible
-  puede resolverla.
+- **Estado de evidencia:** `SETTLED` cuando el material disponible permite
+  sostener como hecho el problema publicado; `NEEDS_EVIDENCE` cuando depende de
+  un hecho concreto que puede nombrarse pero no está disponible;
+  `UNVERIFIABLE` cuando nada disponible puede resolverla.
 - **Origen de evidencia:** `DIFF`, `REPOSITORY_FILE`, `GITHUB_STATE`,
   `ACTIONS_RUN` o `NONE`. Debe ser distinto de `NONE` solamente para `SETTLED` y
   debe ser `NONE` para cualquier otro estado.
 
-`SETTLED` no significa que el hallazgo sea verdadero: significa que la pregunta
-quedó cerrada. La evidencia puede confirmarlo o refutarlo; ambos resultados son
-cierre.
+Los hallazgos publicados representan problemas que la evidencia sostiene. Una
+hipótesis investigada y refutada no se publica como hallazgo `SETTLED`, aunque
+puede registrarse en el resumen si aporta información útil.
 
 Ante incertidumbre, la pregunta es: **¿qué hecho concreto resolvería esto?** Si
-ese hecho está en el material, corresponde `SETTLED`. Si puede nombrarse pero no
+ese hecho está en el material y sostiene el problema, corresponde `SETTLED`; si
+lo refuta, la hipótesis no se publica como hallazgo. Si puede nombrarse pero no
 está, corresponde `NEEDS_EVIDENCE` y una solicitud de verificación. Si nada
 disponible puede resolverlo, corresponde `UNVERIFIABLE` y se declara qué habría
 hecho falta. Inventar una respuesta y callar la incertidumbre están prohibidos.

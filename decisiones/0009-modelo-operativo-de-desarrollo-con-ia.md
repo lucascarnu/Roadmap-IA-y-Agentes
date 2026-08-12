@@ -283,7 +283,5 @@ reemplazabilidad, que esta decisión extiende.
 
 - Hasta qué tamaño y riesgo sigue siendo razonable que Arquitecto / Lead y
   Ejecutor sean el mismo agente, y qué señal indicaría que conviene separarlos.
-- Qué criterios objetivos por clase de riesgo habilitarían la integración
-  automática.
 - Cómo se registra la evidencia de rendimiento que sostiene o cambia una
   asignación.

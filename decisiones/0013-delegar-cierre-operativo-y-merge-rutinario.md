@@ -21,7 +21,7 @@ Una PR puede integrarse sin intervención del Director cuando, para el HEAD exac
 
 1. el alcance corresponde a una tarea ya autorizada;
 2. las verificaciones exigidas para esa clase de cambio terminaron satisfactoriamente;
-3. la revisión independiente exigida por las reglas vigentes se ejecutó realmente y no dejó hallazgos materiales abiertos; solo puede omitirse cuando `0009` lo permite para esa clase de cambio y ninguna regla vigente la exige igualmente;
+3. la revisión independiente exigida por las reglas vigentes se ejecutó realmente y no dejó hallazgos bloqueantes según `0010`; solo puede omitirse cuando `0009` lo permite para esa clase de cambio y ninguna regla vigente la exige igualmente;
 4. QA, cuando sea obligatorio para esa clase de cambio, no dejó validación material pendiente;
 5. no existe una discrepancia material entre la evidencia revisada y el HEAD actual;
 6. la integración es técnicamente posible y no exige saltarse una protección o garantía objetiva.

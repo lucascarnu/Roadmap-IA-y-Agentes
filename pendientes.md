@@ -60,16 +60,22 @@ el mismo resultado y evidencia suficiente para confiar en el circuito.
 
 ### Prueba de sustitución del ocupante de contingencia
 
-**Estado: ABIERTO.** La contingencia está documentada en `equipo.md`; la
-sustitución no se probó.
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** Ejecutada el 2026-08-11 por
+Kimi, con el modelo `k3-256k` y esfuerzo `high`, en modo de solo lectura sobre el
+HEAD remoto `06a597eb97bb2b5a48592820172f9313ab44b9ba`, sin handoff histórico
+del Director.
 
-Ejercicio mínimo, sobre una tarea pequeña y real: entregarle al ocupante de
-contingencia únicamente el repositorio y el historial de ramas y pull requests, y
-comprobar que reconstruye por su cuenta **el estado actual, el próximo paso y qué
-no debe hacer todavía**, sin que el director le reconstruya la historia a mano.
+A partir del repositorio, las ramas y las pull requests, reconstruyó correctamente
+el estado actual, el siguiente paso y qué no debía hacerse todavía. También
+detectó que `main` local y `origin/main` local estaban atrasados y que el working
+tree estaba sobre una rama anterior, y resolvió correctamente el HEAD canónico
+contra el remoto y GitHub sin ayuda del Director.
 
-Si lo logra, la contingencia queda PROBADA LOCALMENTE. Si falla, se documentan
-únicamente los huecos concretos que impidieron la reconstrucción.
+Claude / Arquitecto-Lead auditó la reconstrucción sin encontrar errores
+materiales ni huecos documentales nuevos. El resultado se limita a este ocupante,
+esta corrida y el repositorio en ese estado; conviene repetir la prueba si la
+documentación cambia materialmente de volumen u organización. Esta evidencia no
+prueba el experimento Claude↔Codex de la PR #20 ni el handoff automático.
 
 ### Prueba de reconstrucción del consultor externo
 
@@ -93,6 +99,12 @@ repositorio en este estado. No es una propiedad permanente del repositorio, y
 conviene repetir la prueba si el volumen de documentación crece mucho o si cambia
 de forma material cómo está organizada.
 
+Los tres asuntos originales de la Compuerta PRE-MVP están RESUELTOS. La
+compuerta sigue cerrada por dos asuntos registrados más abajo, ambos `ABIERTO`
+con `Bloqueo: fase`: "Handoff automático real Claude↔Codex" y "Clases de cambio y
+verificaciones exigidas". Mientras cualquiera de los dos siga abierto no comienza
+la primera pull request de código del MVP.
+
 ## Automatización del workflow de desarrollo asistido
 
 Las decisiones del workflow y las mediciones de las pruebas son canónicas en
@@ -102,6 +114,25 @@ Las decisiones del workflow y las mediciones de las pruebas son canónicas en
 acciones futuras que se derivan de ellas, junto con el estado y los resultados
 observados **mínimos para entender por qué siguen abiertas** o por qué dejaron de
 estarlo. Lo que no cabe acá es la argumentación: esa vive en las decisiones.
+
+### Handoff automático real Claude↔Codex
+
+**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
+del MVP hay que demostrar un handoff automático real del circuito Claude↔Codex,
+con dos relevos encadenados sobre trabajo real y sin que el director transporte
+prompt, contexto, HEAD, resultado, instrucciones ni destinatario siguiente.
+
+**Evidencia del bloqueo.** Es una condición explícita del Director. Hoy no está
+demostrada: la prueba de sustitución de contingencia declara expresamente que su
+evidencia no prueba el handoff automático, y las pruebas del puente de la PR #20
+son locales y simuladas. Las pruebas de componentes no sustituyen a una corrida
+real de punta a punta.
+
+**Cómo se cierra.** Con una corrida real que satisfaga los criterios de
+aceptación de
+[0012](decisiones/0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md)
+y quede auditada. Este asunto bloquea únicamente el comienzo de las pull requests
+de código del MVP; no bloquea el trabajo sobre el propio puente.
 
 ### Solicitud y lectura de revisiones
 
@@ -404,15 +435,13 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
   `reglas.md`; la evidencia es específica de Claude Code: bajo `dontAsk` un
   cuerpo pasado en línea se troceó por salto de línea y la llamada fue denegada,
   mientras que `--body-file` funcionó.
-- **Resolver hilos de review y mergear quedan fuera de la superficie
-  autorizada.** El cierre de la PR #10 lo confirmó: resolver un hilo exige la API
-  GraphQL, con `gh api` denegado, y `gh pr merge` está en el `deny` de la política
-  compartida. Los dos pasos finales del circuito los hace hoy el director en la
-  interfaz de GitHub. `0008` ya registra el primero como costo conocido, y `0009`
-  aclara que el segundo es el estado de una política candidata, no una regla del
-  modelo.
-- Definir **criterios objetivos que habiliten la integración automática** por
-  clase de riesgo, según deja abierto `0009`.
+- **Resolver hilos de review y ejecutar el merge quedan fuera de la superficie
+  autorizada de Claude.** El cierre de la PR #10 lo confirmó: resolver un hilo
+  exige la API GraphQL, con `gh api` denegado, y `gh pr merge` está en el `deny`
+  de la política compartida. Hoy esos pasos requieren otra herramienta o la
+  interfaz de GitHub. `0008` ya registra el primero como costo conocido; `0013`
+  define el gate de integración y deja claro que la limitación de una herramienta
+  no crea una aprobación humana obligatoria.
 
 **Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
 usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
@@ -420,9 +449,22 @@ Todavía no se cumple.
 
 ## Para medir durante las primeras PR del MVP
 
-**Estado: ABIERTO.** No bloquean el arranque, pero necesitan evidencia real antes
-de decidirse. Se registran acá para que la evaluación no dependa de que alguien
-se acuerde.
+Los asuntos de esta sección necesitan evidencia real durante las primeras pull
+requests. No bloquean el arranque salvo cuando declaran expresamente otro alcance
+de bloqueo.
+
+### Clases de cambio y verificaciones exigidas
+
+**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
+del MVP se debe definir qué clases de cambio reconoce el gate de `0013`, qué
+verificaciones exige cada una y, en particular, cuáles exige una pull request de
+código del MVP.
+
+**Evidencia del bloqueo.** `0013` condiciona la integración a "esa clase de
+cambio", a "las verificaciones exigidas" y a QA cuando sea obligatorio para esa
+clase, pero el canon todavía no define esas clases ni sus verificaciones. Este
+asunto bloquea únicamente el comienzo de las pull requests de código del MVP; no
+define todavía la clasificación ni las verificaciones.
 
 - **Aviso de intervención en la PC.** Si el próximo paso necesita navegador,
   login interactivo, aplicación de escritorio, `localhost` o aprobación visual,
