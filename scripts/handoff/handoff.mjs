@@ -18,6 +18,18 @@ const PROMPT_TEMPLATE = join(HERE, "prompt-template.md");
 const RUNTIME = join(HERE, ".handoff");
 const ARTIFACTS = join(HERE, "artifacts");
 
+export const GOVERNING_CONTEXT = Object.freeze({
+  common: Object.freeze([
+    "reglas.md",
+    "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md",
+    "equipo.md",
+    "decisiones/README.md",
+    "pendientes.md",
+  ]),
+  claude: "CLAUDE.md",
+  codex: "AGENTS.md",
+});
+
 export const LABELS = [
   "handoff:ready", "handoff:running", "handoff:done", "handoff:failed",
   "handoff:stale", "handoff:blocked", "handoff:blocked-via",
@@ -77,6 +89,10 @@ function onlyKeys(value, keys, label, terminalLabel = "handoff:blocked") {
   if (extras.length) fail(`${label}: campos incompatibles: ${extras.join(", ")}`, terminalLabel);
 }
 
+function requiredGoverningContext(recipient) {
+  return [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT[recipient]];
+}
+
 export function validateContract(contract, config) {
   if (!contract || typeof contract !== "object" || Array.isArray(contract)) fail("Contrato no es objeto", "handoff:blocked");
   onlyKeys(contract, [
@@ -90,6 +106,11 @@ export function validateContract(contract, config) {
   if (contract.head_ref !== undefined && !/^[A-Za-z0-9._/-]+$/.test(contract.head_ref)) fail("head_ref inválido", "handoff:blocked");
   if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.length < 1 || contract.contexto_autorizado.length > 30) fail("contexto_autorizado inválido", "handoff:blocked");
   if (new Set(contract.contexto_autorizado).size !== contract.contexto_autorizado.length || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) fail("contexto_autorizado inseguro", "handoff:blocked");
+  const missingGoverningContext = requiredGoverningContext(contract.destinatario)
+    .filter((path) => !contract.contexto_autorizado.includes(path));
+  if (missingGoverningContext.length) {
+    fail(`contexto_autorizado omite canon gobernante: ${missingGoverningContext.join(", ")}`, "handoff:blocked");
+  }
   if (contract.resultado_previo !== null) {
     const previous = contract.resultado_previo;
     if (!previous || typeof previous !== "object" || Array.isArray(previous)) fail("resultado_previo inválido", "handoff:blocked");
@@ -433,13 +454,14 @@ function resultComment(marker, result) {
 }
 
 function childContract(parentContract, result, pointer) {
+  const governingContext = requiredGoverningContext(result.siguiente_destinatario);
   return {
     handoff_version: "1",
     tarea: `Auditar como Arquitecto / Lead el resultado estructurado del handoff previo para: ${parentContract.tarea}`,
     destinatario: result.siguiente_destinatario,
     head_sha: parentContract.head_sha,
     head_ref: parentContract.head_ref,
-    contexto_autorizado: parentContract.contexto_autorizado,
+    contexto_autorizado: [...new Set([...parentContract.contexto_autorizado, ...governingContext])],
     resultado_previo: pointer,
     origen: {
       tipo: "puente", ejecutor: "handoff.mjs", rol: "orquestador",

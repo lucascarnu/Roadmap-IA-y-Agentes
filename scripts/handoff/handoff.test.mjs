@@ -6,13 +6,14 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CrashSimulation, acquireLock, parseContractBody, poll, sha256, validateContract, validateResult,
+  CrashSimulation, GOVERNING_CONTEXT, acquireLock, parseContractBody, poll, sha256, validateContract, validateResult,
 } from "./handoff.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
 const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
+const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const BASE_CONFIG = {
   repository: "example/repo",
   default_head_ref: "main",
@@ -33,8 +34,8 @@ function contract(overrides = {}) {
     head_sha: HEAD,
     head_ref: "main",
     contexto_autorizado: [
-      "pendientes.md",
-      "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md",
+      ...GOVERNING_CONTEXT.common,
+      GOVERNING_CONTEXT.codex,
       "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md",
     ],
     resultado_previo: null,
@@ -157,6 +158,48 @@ test("contrato y resultado válidos respetan los schemas conceptuales", () => {
   assert.deepEqual(parseContractBody(issueBody(current)), current);
 });
 
+test("schema y validador exigen el mismo canon gobernante", () => {
+  const commonFromSchema = CONTRACT_SCHEMA.allOf[0].properties.contexto_autorizado.allOf
+    .map((requirement) => requirement.contains.const);
+  const recipientRule = CONTRACT_SCHEMA.allOf[1];
+  assert.deepEqual(commonFromSchema, GOVERNING_CONTEXT.common);
+  assert.equal(recipientRule.then.properties.contexto_autorizado.contains.const, GOVERNING_CONTEXT.codex);
+  assert.equal(recipientRule.else.properties.contexto_autorizado.contains.const, GOVERNING_CONTEXT.claude);
+});
+
+test("contexto específico adicional sigue permitido junto al canon gobernante", () => {
+  const additional = "decisiones/0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md";
+  const current = validateContract(contract({
+    contexto_autorizado: [...contract().contexto_autorizado, additional],
+  }), BASE_CONFIG);
+  assert(current.contexto_autorizado.includes(additional));
+});
+
+test("falta de canon gobernante bloquea antes de inferencia", async () => {
+  for (const recipient of ["codex", "claude"]) {
+    const required = [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT[recipient]];
+    const fullContext = [...required, "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md"];
+    for (const missing of required) {
+      let invocations = 0;
+      const invalid = contract({
+        destinatario: recipient,
+        contexto_autorizado: fullContext.filter((path) => path !== missing),
+      });
+      const backend = new FakeBackend([{ number: 1, title: "bad", body: issueBody(invalid), createdAt: "2026-08-11T00:00:00Z" }]);
+      const fx = fixture(backend, {
+        invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+      });
+      try {
+        const result = await poll(fx.options);
+        assert.equal(result.processed[0].status, "blocked", `${recipient}: ${missing}`);
+        assert.match(result.processed[0].error, /omite canon gobernante/, `${recipient}: ${missing}`);
+        assert.equal(invocations, 0, `${recipient}: ${missing}`);
+        assert(backend.issues[0].labels.has("handoff:blocked"), `${recipient}: ${missing}`);
+      } finally { clean(fx); }
+    }
+  }
+});
+
 test("camino feliz drena #A y el #B creado automáticamente en la misma corrida", async () => {
   const backend = new FakeBackend([{ number: 1, title: "A", body: issueBody(contract()), createdAt: "2026-08-11T00:00:00Z" }]);
   const fx = fixture(backend);
@@ -171,6 +214,7 @@ test("camino feliz drena #A y el #B creado automáticamente en la misma corrida"
     assert.equal(child.destinatario, "claude");
     assert.equal(child.profundidad_cadena, 2);
     assert.equal(child.resultado_previo.issue, 1);
+    assert(child.contexto_autorizado.includes(GOVERNING_CONTEXT.claude));
   } finally { clean(fx); }
 });
 

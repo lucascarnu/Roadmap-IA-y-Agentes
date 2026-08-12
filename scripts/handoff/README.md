@@ -62,9 +62,12 @@ nombre. Ejemplo para la tarea acordada:
   "head_sha": "SHA_COMPLETO_DE_MAIN",
   "head_ref": "main",
   "contexto_autorizado": [
-    "pendientes.md",
+    "AGENTS.md",
     "reglas.md",
     "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md",
+    "equipo.md",
+    "decisiones/README.md",
+    "pendientes.md",
     "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md"
   ],
   "resultado_previo": null,
@@ -85,6 +88,13 @@ nombre. Ejemplo para la tarea acordada:
 `head_ref` amplía el mínimo de `0012` porque un SHA aislado permite demostrar que
 el commit existe, pero no detectar que la referencia remota se movió durante la
 corrida. Si se omite, usa `main`.
+
+`contexto_autorizado` debe incluir el punto de entrada del destinatario
+(`AGENTS.md` para Codex o `CLAUDE.md` para Claude), `reglas.md`, `0009`,
+`equipo.md`, `decisiones/README.md` y `pendientes.md`. El schema y el bridge
+exigen ese canon antes de inferencia; las decisiones y archivos específicos de la
+tarea se agregan a ese mínimo. Al crear un segundo relevo, el bridge conserva el
+contexto y agrega de forma determinista el adaptador del nuevo destinatario.
 
 `origen` registra la firma de apertura producida por el Arquitecto. En el primer
 Issue debe declarar Claude/Arquitecto y modelo/esfuerzo concretos; en el segundo
@@ -155,9 +165,10 @@ secretos de sesión.
 node --test scripts/handoff/handoff.test.mjs
 ```
 
-La batería no usa modelos ni GitHub. Cubre contrato/salida, una cadena feliz de
-dos relevos, recuperación y reintento único, doble proceso, HEAD movido, contrato
-inválido, salida inválida, profundidad excedida y vía no demostrable.
+La batería no usa modelos ni GitHub. Cubre contrato/salida, canon gobernante
+obligatorio antes de inferencia, contexto específico adicional, una cadena feliz
+de dos relevos, recuperación y reintento único, doble proceso, HEAD movido,
+contrato inválido, salida inválida, profundidad excedida y vía no demostrable.
 
 Pasar estos tests demuestra la lógica local. No demuestra el experimento real:
 para `HANDOFF_AUTOMATICO_PROBADO_LOCALMENTE` siguen siendo obligatorios el Issue

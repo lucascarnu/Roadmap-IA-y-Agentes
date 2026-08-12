@@ -15,6 +15,34 @@
     "modo",
     "profundidad_cadena"
   ],
+  "allOf": [
+    {
+      "properties": {
+        "contexto_autorizado": {
+          "allOf": [
+            { "contains": { "const": "reglas.md" } },
+            { "contains": { "const": "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md" } },
+            { "contains": { "const": "equipo.md" } },
+            { "contains": { "const": "decisiones/README.md" } },
+            { "contains": { "const": "pendientes.md" } }
+          ]
+        }
+      }
+    },
+    {
+      "if": { "properties": { "destinatario": { "const": "codex" } } },
+      "then": {
+        "properties": {
+          "contexto_autorizado": { "contains": { "const": "AGENTS.md" } }
+        }
+      },
+      "else": {
+        "properties": {
+          "contexto_autorizado": { "contains": { "const": "CLAUDE.md" } }
+        }
+      }
+    }
+  ],
   "properties": {
     "handoff_version": { "const": "1" },
     "tarea": { "type": "string", "minLength": 1, "maxLength": 8000 },
