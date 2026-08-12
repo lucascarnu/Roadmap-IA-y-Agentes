@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Handoff result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "handoff_version",
+    "estado",
+    "veredicto",
+    "resumen",
+    "evidencia",
+    "archivos_leidos",
+    "accion_recomendada",
+    "siguiente_destinatario",
+    "firma"
+  ],
+  "properties": {
+    "handoff_version": { "const": "1" },
+    "estado": { "enum": ["COMPLETADO", "BLOQUEADO"] },
+    "veredicto": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "resumen": { "type": "string", "minLength": 1, "maxLength": 6000 },
+    "evidencia": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["archivo", "detalle"],
+        "properties": {
+          "archivo": { "type": "string", "minLength": 1 },
+          "detalle": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "archivos_leidos": {
+      "type": "array",
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "accion_recomendada": { "type": "string", "minLength": 1, "maxLength": 3000 },
+    "siguiente_destinatario": { "enum": ["claude", "codex", null] },
+    "firma": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ejecutor", "modelo", "esfuerzo", "head_sha"],
+      "properties": {
+        "ejecutor": { "enum": ["claude", "codex"] },
+        "modelo": { "type": "string", "minLength": 1 },
+        "esfuerzo": { "type": "string", "minLength": 1 },
+        "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    }
+  }
+}

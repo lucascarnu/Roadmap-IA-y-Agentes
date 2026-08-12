@@ -3,3 +3,7 @@
 
 # GitHub App credentials
 gha-creds-*.json
+
+# Local handoff runtime state and evidence
+scripts/handoff/artifacts/
+scripts/handoff/.handoff/
