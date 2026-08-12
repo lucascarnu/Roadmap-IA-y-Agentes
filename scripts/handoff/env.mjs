@@ -14,8 +14,27 @@ export function buildChildEnv(source = process.env, extra = {}) {
   return env;
 }
 
+// Conserva argumentos simples tal como fueron configurados (incluidas comillas
+// internas) y agrupa sólo los que cmd.exe podría separar o interpretar.
+export function quoteCmdArgument(value) {
+  const text = String(value);
+  if (!text) return '""';
+  if (!/[\s&|<>^()%!]/.test(text)) return text;
+  const escaped = text
+    .replace(/(\\*)"/g, '$1$1\\"')
+    .replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
+}
+
+export function buildWindowsCmdInvocation(command, args, comspec = process.env.COMSPEC ?? "cmd.exe") {
+  const commandLine = [`${command}.cmd`, ...args].map(quoteCmdArgument).join(" ");
+  return { command: comspec, args: ["/d", "/s", "/c", commandLine], commandLine };
+}
+
 export function runProcess(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const spawn = options.spawn ?? spawnSync;
+  const platform = options.platform ?? process.platform;
+  const spawnOptions = {
     cwd: options.cwd,
     env: options.env ?? buildChildEnv(),
     input: options.input,
@@ -23,9 +42,20 @@ export function runProcess(command, args, options = {}) {
     maxBuffer: 64 * 1024 * 1024,
     timeout: options.timeout ?? 20 * 60 * 1000,
     windowsHide: true,
-  });
+  };
+  let executedCommand = command;
+  let result = spawn(command, args, spawnOptions);
+  const hasExplicitExtension = /\.[^\\/]+$/.test(command);
+  if (platform === "win32" && result.error?.code === "ENOENT" && !hasExplicitExtension) {
+    const retry = buildWindowsCmdInvocation(command, args);
+    executedCommand = retry.command;
+    result = spawn(executedCommand, retry.args, {
+      ...spawnOptions,
+      windowsVerbatimArguments: true,
+    });
+  }
   if (result.error) {
-    const error = new Error(`${command}: ${result.error.message}`);
+    const error = new Error(`${executedCommand}: ${result.error.message}`);
     error.code = result.error.code;
     error.stdout = result.stdout ?? "";
     error.stderr = result.stderr ?? "";
@@ -33,7 +63,7 @@ export function runProcess(command, args, options = {}) {
   }
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || "sin salida").trim();
-    const error = new Error(`${command} terminó con ${result.status}: ${detail}`);
+    const error = new Error(`${executedCommand} terminó con ${result.status}: ${detail}`);
     error.status = result.status;
     error.stdout = result.stdout ?? "";
     error.stderr = result.stderr ?? "";
