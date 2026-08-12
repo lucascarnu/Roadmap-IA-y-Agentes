@@ -1,0 +1,21 @@
+{
+  "repository": "lucascarnu/Roadmap-IA-y-Agentes",
+  "default_head_ref": "main",
+  "max_unidades_por_corrida": 3,
+  "max_relevos": 2,
+  "timeout_ms": 1200000,
+  "agents": {
+    "claude": {
+      "executable": "claude",
+      "model": "opus",
+      "effort": "high",
+      "authorized_via": "anthropic_first_party_subscription"
+    },
+    "codex": {
+      "executable": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "authorized_via": "chatgpt_subscription_session"
+    }
+  }
+}
