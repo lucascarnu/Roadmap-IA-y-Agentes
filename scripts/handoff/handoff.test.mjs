@@ -173,7 +173,7 @@ function assertResultFailed(result, currentContract) {
 function assertStructuredOutputSubset(schema) {
   const allowed = new Set([
     "type", "enum", "properties", "items", "required", "additionalProperties",
-    "description", "title", "$schema",
+    "description", "title",
   ]);
   const visit = (node, path, typeRequired = false) => {
     assert(node && typeof node === "object" && !Array.isArray(node), `${path} no es un nodo de schema`);
@@ -313,6 +313,7 @@ test("contrato y resultado válidos respetan los schemas conceptuales", () => {
 });
 
 test("schema de salida usa sólo el subconjunto estructurado admitido", () => {
+  assert.equal(Object.hasOwn(RESULT_SCHEMA, "$schema"), false, "Claude rechaza la declaración de dialecto $schema");
   assertStructuredOutputSubset(RESULT_SCHEMA);
 });
 
