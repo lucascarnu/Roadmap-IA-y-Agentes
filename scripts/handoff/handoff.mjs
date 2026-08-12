@@ -18,6 +18,14 @@ const PROMPT_TEMPLATE = join(HERE, "prompt-template.md");
 const RUNTIME = join(HERE, ".handoff");
 const ARTIFACTS = join(HERE, "artifacts");
 const HEAD_REF_PATTERN = /^(?!\.{1,2}(?:\/|$))(?!.*\/\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+const RESULT_LIMITS = Object.freeze({
+  veredicto: 2000,
+  resumen: 6000,
+  accion_recomendada: 3000,
+  evidencia_detalle: 2000,
+  evidencia_items: 30,
+  archivos_leidos: 30,
+});
 
 export const GOVERNING_CONTEXT = Object.freeze({
   common: Object.freeze([
@@ -147,18 +155,22 @@ export function validateResult(result, contract, config) {
   ], "resultado", "handoff:failed");
   if (result.handoff_version !== "1" || !["COMPLETADO", "BLOQUEADO"].includes(result.estado)) fail("Estado de salida inválido");
   for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (typeof result[key] !== "string" || !result[key].trim()) fail(`${key} inválido`);
-  if (!Array.isArray(result.evidencia) || result.evidencia.length > 30) fail("evidencia inválida");
+  for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (result[key].length > RESULT_LIMITS[key]) fail(`${key} excede longitud máxima`);
+  if (!Array.isArray(result.evidencia) || result.evidencia.length > RESULT_LIMITS.evidencia_items) fail("evidencia inválida");
   for (const item of result.evidencia) {
     if (!item || typeof item !== "object" || Array.isArray(item)) fail("ítem de evidencia inválido");
     onlyKeys(item, ["archivo", "detalle"], "evidencia", "handoff:failed");
     if (typeof item.archivo !== "string" || !item.archivo || typeof item.detalle !== "string" || !item.detalle) fail("evidencia incompleta");
+    if (item.detalle.length > RESULT_LIMITS.evidencia_detalle) fail("detalle de evidencia excede longitud máxima");
   }
+  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.length > RESULT_LIMITS.archivos_leidos || new Set(result.archivos_leidos).size !== result.archivos_leidos.length) fail("archivos_leidos inválido");
   if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) fail("archivos_leidos fuera del contexto autorizado");
   if (!["claude", "codex", null].includes(result.siguiente_destinatario)) fail("siguiente_destinatario inválido");
   if (result.siguiente_destinatario && !config.agents[result.siguiente_destinatario]) fail("siguiente_destinatario no configurado");
   const signature = result.firma;
   if (!signature || typeof signature !== "object" || Array.isArray(signature)) fail("firma inválida");
   onlyKeys(signature, ["ejecutor", "modelo", "esfuerzo", "head_sha"], "firma", "handoff:failed");
+  // La igualdad con contract.head_sha hereda su validación previa de 40 hex.
   if (signature.ejecutor !== contract.destinatario || signature.head_sha !== contract.head_sha) fail("firma no corresponde al contrato");
   if (typeof signature.modelo !== "string" || !signature.modelo || typeof signature.esfuerzo !== "string" || !signature.esfuerzo) fail("modelo/esfuerzo de firma inválidos");
   if (contract.profundidad_cadena >= config.max_relevos && result.siguiente_destinatario !== null) fail("La salida intenta exceder max_relevos", "handoff:blocked");

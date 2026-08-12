@@ -15,40 +15,37 @@
     "firma"
   ],
   "properties": {
-    "handoff_version": { "const": "1" },
-    "estado": { "enum": ["COMPLETADO", "BLOQUEADO"] },
-    "veredicto": { "type": "string", "minLength": 1, "maxLength": 2000 },
-    "resumen": { "type": "string", "minLength": 1, "maxLength": 6000 },
+    "handoff_version": { "type": "string", "enum": ["1"] },
+    "estado": { "type": "string", "enum": ["COMPLETADO", "BLOQUEADO"] },
+    "veredicto": { "type": "string" },
+    "resumen": { "type": "string" },
     "evidencia": {
       "type": "array",
-      "maxItems": 30,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["archivo", "detalle"],
         "properties": {
-          "archivo": { "type": "string", "minLength": 1 },
-          "detalle": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          "archivo": { "type": "string" },
+          "detalle": { "type": "string" }
         }
       }
     },
     "archivos_leidos": {
       "type": "array",
-      "maxItems": 30,
-      "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1 }
+      "items": { "type": "string" }
     },
-    "accion_recomendada": { "type": "string", "minLength": 1, "maxLength": 3000 },
-    "siguiente_destinatario": { "enum": ["claude", "codex", null] },
+    "accion_recomendada": { "type": "string" },
+    "siguiente_destinatario": { "type": ["string", "null"], "enum": ["claude", "codex", null] },
     "firma": {
       "type": "object",
       "additionalProperties": false,
       "required": ["ejecutor", "modelo", "esfuerzo", "head_sha"],
       "properties": {
-        "ejecutor": { "enum": ["claude", "codex"] },
-        "modelo": { "type": "string", "minLength": 1 },
-        "esfuerzo": { "type": "string", "minLength": 1 },
-        "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        "ejecutor": { "type": "string", "enum": ["claude", "codex"] },
+        "modelo": { "type": "string" },
+        "esfuerzo": { "type": "string" },
+        "head_sha": { "type": "string" }
       }
     }
   }
