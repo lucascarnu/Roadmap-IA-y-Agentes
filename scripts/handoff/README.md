@@ -139,6 +139,14 @@ Si GitHub falla después de la inferencia, la recuperación reutiliza el JSON
 persistido y busca el marcador antes de comentar. No vuelve a consumir inferencia
 ni duplica un resultado.
 
+El prompt congelado incluye el contenido literal de
+`handoff-result.schema.json`, reglas explícitas para sus claves y enums, y un
+ejemplo mínimo válido adaptado al destinatario y al HEAD del contrato. Todos los
+agentes reciben el mismo contrato por prompt; los flags de salida estructurada de
+Claude y Codex siguen actuando como una garantía adicional. La salida solicitada
+es JSON crudo, aunque el transporte de Kimi tolera como red de compatibilidad un
+único bloque completo etiquetado `json`.
+
 Cuando el resultado indica `siguiente_destinatario`, el puente crea el segundo
 Issue con un puntero verificable al comentario anterior y continúa procesándolo
 en la misma corrida. En profundidad 2 se exige `siguiente_destinatario=null`.
@@ -176,13 +184,18 @@ de skills por uno vacío. Kimi Code CLI 0.34.0 no ofrece un flag equivalente a
 `--no-session-persistence`: conserva su traza diagnóstica local por diseño, pero
 el bridge nunca la reutiliza como contexto de otra corrida.
 
-Una sonda controlada de 0.34.0 confirmó que `tools: []` produce un snapshot de
-cero herramientas, `toolSelect=false` y sólo eventos `meta`/`assistant` en
-`stream-json`. Si apareciera un evento de herramienta, el parser lo rechaza antes
-de aceptar el resultado. La misma sonda ejecutó `--agent-file` y `--skills-dir`
-sin `KIMI_CODE_EXPERIMENTAL_FLAG`: el flag no es necesario en esta versión y no
-se establece, para no habilitar globalmente otros experimentos ni diferenciar el
-preflight de la inferencia por esa condición.
+**DOCUMENTADO:** la [documentación oficial de agentes de Kimi
+Code](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/agents)
+indica actualmente que `--agent-file` bajo `kimi -p` requiere el motor v2
+habilitado mediante `KIMI_CODE_EXPERIMENTAL_FLAG=1`.
+
+**PROBADO LOCALMENTE:** una sonda controlada de CLI 0.34.0 confirmó que
+`tools: []` produce un snapshot de cero herramientas, `toolSelect=false` y sólo
+eventos `meta`/`assistant` en `stream-json`. Si apareciera un evento de
+herramienta, el parser lo rechaza antes de aceptar el resultado. La misma versión
+ejecutó `--agent-file` y `--skills-dir` sin `KIMI_CODE_EXPERIMENTAL_FLAG` en las
+sondas y corridas reales registradas. El bridge conserva esa configuración para
+0.34.0 y no habilita globalmente el conjunto de funciones experimentales.
 
 ### Sonda local de Kimi (2026-08-13)
 

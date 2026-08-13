@@ -156,7 +156,8 @@ export function validateResult(result, contract, config) {
     "handoff_version", "estado", "veredicto", "resumen", "evidencia", "archivos_leidos",
     "accion_recomendada", "siguiente_destinatario", "firma",
   ], "resultado", "handoff:failed");
-  if (result.handoff_version !== "1" || !["COMPLETADO", "BLOQUEADO"].includes(result.estado)) fail("Estado de salida inválido");
+  if (result.handoff_version !== "1") fail("handoff_version de salida inválido");
+  if (!["COMPLETADO", "BLOQUEADO"].includes(result.estado)) fail("estado de salida inválido");
   for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (typeof result[key] !== "string" || !result[key].trim()) fail(`${key} inválido`);
   for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (result[key].length > RESULT_LIMITS[key]) fail(`${key} excede longitud máxima`);
   if (!Array.isArray(result.evidencia) || result.evidencia.length > RESULT_LIMITS.evidencia_items) fail("evidencia inválida");
@@ -294,7 +295,27 @@ function gitDiff(repo, baseSha, headSha, run = runProcess) {
   ], { env: buildChildEnv(), timeout: 60_000 }).stdout;
 }
 
-function buildPrompt(template, contract, previousResult, contexts, frozenDiff = null) {
+function canonicalResultExample(contract) {
+  const examplePath = contract.contexto_autorizado[0];
+  return {
+    handoff_version: "1",
+    estado: "COMPLETADO",
+    veredicto: "Resultado breve.",
+    resumen: "Resumen breve.",
+    evidencia: [{ archivo: examplePath, detalle: "Evidencia breve." }],
+    archivos_leidos: [examplePath],
+    accion_recomendada: "Siguiente acción breve.",
+    siguiente_destinatario: null,
+    firma: {
+      ejecutor: contract.destinatario,
+      modelo: "NO_OBSERVABLE",
+      esfuerzo: "NO_OBSERVABLE",
+      head_sha: contract.head_sha,
+    },
+  };
+}
+
+function buildPrompt(template, contract, previousResult, contexts, resultSchema, frozenDiff = null) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   const renderedDiff = frozenDiff === null ? "" : [
     "\n\n## Diff congelado base → HEAD",
@@ -312,6 +333,8 @@ function buildPrompt(template, contract, previousResult, contexts, frozenDiff = 
     .replace("{{CONTRATO}}", JSON.stringify(contract, null, 2))
     .replace("{{RESULTADO_PREVIO}}", previousResult ? JSON.stringify(previousResult, null, 2) : "null")
     .replace("{{CONTEXTO}}", renderedContexts)
+    .replace("{{SCHEMA_SALIDA}}", resultSchema.trim())
+    .replace("{{EJEMPLO_SALIDA}}", JSON.stringify(canonicalResultExample(contract), null, 2))
     .replace("{{DIFF_CONGELADO}}", renderedDiff);
 }
 
@@ -331,7 +354,8 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
   mkdirSync(inputDir, { recursive: true });
   writeJson(join(inputDir, "contract.json"), contract);
   writeJson(join(inputDir, "handoff.schema.json"), readJson(CONTRACT_SCHEMA));
-  writeJson(join(inputDir, "handoff-result.schema.json"), readJson(RESULT_SCHEMA));
+  const resultSchema = readFileSync(RESULT_SCHEMA, "utf8");
+  writeJson(join(inputDir, "handoff-result.schema.json"), JSON.parse(resultSchema));
   const contexts = contract.contexto_autorizado.map((path) => {
     const content = gitShow(repo, contract.head_sha, path, run);
     const target = join(inputDir, "context", ...path.replaceAll("\\", "/").split("/"));
@@ -342,7 +366,7 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
   if (frozenDiff !== null) writeText(join(inputDir, "diff.patch"), frozenDiff);
   if (previousResult) writeJson(join(inputDir, "previous-result.json"), previousResult);
   const prompt = buildPrompt(
-    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, frozenDiff,
+    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, resultSchema, frozenDiff,
   );
   writeText(join(inputDir, "prompt.md"), prompt);
   const manifest = createManifest(inputDir, contract.head_sha);

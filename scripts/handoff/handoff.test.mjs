@@ -17,7 +17,8 @@ const ROOT = resolve(HERE, "..", "..");
 const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
-const RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result.schema.json"), "utf8"));
+const RESULT_SCHEMA_RAW = readFileSync(join(HERE, "handoff-result.schema.json"), "utf8");
+const RESULT_SCHEMA = JSON.parse(RESULT_SCHEMA_RAW);
 const PROMPT_TEMPLATE = readFileSync(join(HERE, "prompt-template.md"), "utf8");
 const BASE_CONFIG = {
   repository: "example/repo",
@@ -217,6 +218,54 @@ function assertStructuredOutputSubset(schema) {
   visit(schema, "$", true);
 }
 
+function extractPromptJsonBlock(prompt, heading) {
+  const normalized = prompt.replaceAll("\r\n", "\n");
+  const marker = `## ${heading}\n\n\`\`\`json\n`;
+  const start = normalized.indexOf(marker);
+  assert.notEqual(start, -1, `Falta la sección ${heading}`);
+  const contentStart = start + marker.length;
+  const end = normalized.indexOf("\n```", contentStart);
+  assert.notEqual(end, -1, `Falta el cierre JSON de ${heading}`);
+  return normalized.slice(contentStart, end);
+}
+
+function extractPromptSection(prompt, heading, nextHeading) {
+  const normalized = prompt.replaceAll("\r\n", "\n");
+  const marker = `## ${heading}\n\n`;
+  const start = normalized.indexOf(marker);
+  assert.notEqual(start, -1, `Falta la sección ${heading}`);
+  const contentStart = start + marker.length;
+  const end = normalized.indexOf(`\n## ${nextHeading}`, contentStart);
+  assert.notEqual(end, -1, `Falta el final de la sección ${heading}`);
+  return normalized.slice(contentStart, end);
+}
+
+function renderedPrompt(currentContract) {
+  const root = mkdtempSync(join(tmpdir(), "handoff-prompt-test-"));
+  const run = (_command, args) => {
+    if (args.includes("show")) return { status: 0, stdout: `contenido de ${args.at(-1)}\n`, stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const prepared = prepareInput({ repo: ROOT, contract: currentContract, runDir: root, previousResult: null, run });
+  return { ...prepared, clean: () => rmSync(root, { recursive: true, force: true }) };
+}
+
+function schemaTokens(schema) {
+  const keys = new Set();
+  const enumValues = new Set();
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.properties) for (const key of Object.keys(node.properties)) keys.add(key);
+    if (node.enum) for (const value of node.enum) enumValues.add(JSON.stringify(value));
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else visit(value);
+    }
+  };
+  visit(schema);
+  return { keys, enumValues };
+}
+
 test("runProcess no reintenta si el primer intento funciona en win32", () => {
   const calls = [];
   const result = runProcess("codex", ["--version"], {
@@ -335,6 +384,82 @@ test("contrato y resultado válidos respetan los schemas conceptuales", () => {
 test("schema de salida usa sólo el subconjunto estructurado admitido", () => {
   assert.equal(Object.hasOwn(RESULT_SCHEMA, "$schema"), false, "Claude rechaza la declaración de dialecto $schema");
   assertStructuredOutputSubset(RESULT_SCHEMA);
+});
+
+test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const prepared = renderedPrompt(current);
+  try {
+    assert.equal(
+      extractPromptJsonBlock(prepared.prompt, "Schema del contrato de salida"),
+      RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"),
+    );
+    const { keys, enumValues } = schemaTokens(RESULT_SCHEMA);
+    for (const key of keys) assert(prepared.prompt.includes(`"${key}"`), `El prompt omite la clave ${key}`);
+    for (const value of enumValues) assert(prepared.prompt.includes(value), `El prompt omite el enum ${value}`);
+    const rules = extractPromptSection(prepared.prompt, "Reglas de salida", "Ejemplo canónico mínimo");
+    for (const key of keys) assert(rules.includes(key), `Las reglas omiten la clave ${key}`);
+    for (const value of enumValues) assert(rules.includes(value), `Las reglas omiten el enum ${value}`);
+  } finally { prepared.clean(); }
+});
+
+test("ejemplo canónico renderizado cumple validateResult", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const prepared = renderedPrompt(current);
+  try {
+    const example = JSON.parse(extractPromptJsonBlock(prepared.prompt, "Ejemplo canónico mínimo"));
+    assert.equal(validateResult(example, current, BASE_CONFIG), example);
+  } finally { prepared.clean(); }
+});
+
+test("regresión de Issue 35 falla por handoff_version antes de normalizar campos", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const secondAttempt = {
+    estado: "APROBADO",
+    veredicto: "Aprobado.",
+    resumen: "Revisión terminada.",
+    evidencia: [{ archivo: "reviewer-policy.md", resultado: "Sin hallazgos." }],
+    archivos_leidos: ["reviewer-policy.md"],
+    accion_recomendada: "Integrar.",
+    siguiente_destinatario: null,
+    firma: {
+      ejecutor: "kimi", modelo: "K3-256k", esfuerzo: "high", head_sha: current.head_sha,
+      entorno: "CLI", via: "membresía", fecha: "2026-08-13", sujeto: "PR",
+      reviewer: "Kimi", runtime: "0.34.0", resultado: "APROBADO",
+    },
+  };
+  assert.throws(
+    () => validateResult(secondAttempt, current, BASE_CONFIG),
+    (error) => error.label === "handoff:failed" && /handoff_version/.test(error.message),
+  );
+});
+
+test("handoff_version y estado inválidos producen mensajes separados", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const missingVersion = validResult(current);
+  delete missingVersion.handoff_version;
+  assert.throws(() => validateResult(missingVersion, current, BASE_CONFIG), /handoff_version de salida inválido/);
+  assert.throws(
+    () => validateResult({ ...validResult(current), estado: "APROBADO" }, current, BASE_CONFIG),
+    /estado de salida inválido/,
+  );
+});
+
+test("claves extra fallan por separado en resultado, evidencia y firma", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  assert.throws(
+    () => validateResult({ ...validResult(current), extra: true }, current, BASE_CONFIG),
+    /resultado: campos incompatibles: extra/,
+  );
+  const extraEvidence = validResult(current);
+  extraEvidence.evidencia[0].extra = true;
+  assert.throws(() => validateResult(extraEvidence, current, BASE_CONFIG), /evidencia: campos incompatibles: extra/);
+  const extraSignature = validResult(current);
+  extraSignature.firma.extra = true;
+  assert.throws(() => validateResult(extraSignature, current, BASE_CONFIG), /firma: campos incompatibles: extra/);
 });
 
 test("veredicto de 2001 caracteres termina handoff:failed", () => {
@@ -543,6 +668,28 @@ test("invokeAgent rechaza prosa alrededor de un bloque JSON fenced de Kimi", () 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("invokeAgent rechaza un bloque fenced de Kimi sin etiqueta json", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-unlabelled-fence-test-"));
+  const expected = validResult(current, null);
+  try {
+    assert.throws(() => invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      run: () => ({
+        status: 0,
+        stderr: "",
+        stdout: JSON.stringify({ role: "assistant", content: `\`\`\`\n${JSON.stringify(expected)}\n\`\`\`` }),
+      }),
+    }), /Kimi no emitió JSON válido/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("invokeAgent rechaza eventos de herramienta emitidos por Kimi", () => {
   const current = validateContract(contract({
     destinatario: "kimi",
@@ -596,16 +743,11 @@ test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva e
       "handoff.schema.json",
       "prompt.md",
     ]);
-    const renderedContexts = current.contexto_autorizado.map((path) =>
-      `### ${path}\n\ncontenido congelado de ${current.head_sha}:${path}\n`
-    ).join("\n\n");
-    const legacyPrompt = PROMPT_TEMPLATE
-      .replace("{{DIFF_CONGELADO}}", "")
-      .replace("{{DESTINATARIO_MAYUSCULAS}}", current.destinatario.toUpperCase())
-      .replace("{{CONTRATO}}", JSON.stringify(current, null, 2))
-      .replace("{{RESULTADO_PREVIO}}", "null")
-      .replace("{{CONTEXTO}}", renderedContexts);
-    assert.equal(noBase.prompt, legacyPrompt, "sin base_sha el prompt debe conservar los bytes previos");
+    assert.equal(noBase.prompt.includes("## Diff congelado base → HEAD"), false);
+    assert.equal(
+      extractPromptJsonBlock(noBase.prompt, "Schema del contrato de salida"),
+      RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"),
+    );
 
     calls.length = 0;
     const withBaseContract = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
