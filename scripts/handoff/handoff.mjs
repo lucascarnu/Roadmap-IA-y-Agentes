@@ -38,6 +38,7 @@ export const GOVERNING_CONTEXT = Object.freeze({
   ]),
   claude: "CLAUDE.md",
   codex: "AGENTS.md",
+  kimi: "reviewer-policy.md",
 });
 
 export const LABELS = [
@@ -106,13 +107,14 @@ function requiredGoverningContext(recipient) {
 export function validateContract(contract, config) {
   if (!contract || typeof contract !== "object" || Array.isArray(contract)) fail("Contrato no es objeto", "handoff:blocked");
   onlyKeys(contract, [
-    "handoff_version", "tarea", "destinatario", "head_sha", "head_ref",
+    "handoff_version", "tarea", "destinatario", "head_sha", "base_sha", "head_ref",
     "contexto_autorizado", "resultado_previo", "origen", "salida_requerida", "modo", "profundidad_cadena",
   ], "contrato");
   if (contract.handoff_version !== "1") fail("handoff_version incompatible", "handoff:blocked");
   if (typeof contract.tarea !== "string" || !contract.tarea.trim() || contract.tarea.length > 8000) fail("tarea inválida", "handoff:blocked");
-  if (!["claude", "codex"].includes(contract.destinatario) || !config.agents[contract.destinatario]) fail("destinatario inválido", "handoff:blocked");
+  if (!["claude", "codex", "kimi"].includes(contract.destinatario) || !config.agents[contract.destinatario]) fail("destinatario inválido", "handoff:blocked");
   if (!/^[0-9a-f]{40}$/.test(contract.head_sha ?? "")) fail("head_sha inválido", "handoff:blocked");
+  if (contract.base_sha !== undefined && !/^[0-9a-f]{40}$/.test(contract.base_sha)) fail("base_sha inválido", "handoff:blocked");
   if (contract.head_ref !== undefined && !HEAD_REF_PATTERN.test(contract.head_ref)) fail("head_ref inválido", "handoff:blocked");
   if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.length < 1 || contract.contexto_autorizado.length > 30) fail("contexto_autorizado inválido", "handoff:blocked");
   if (new Set(contract.contexto_autorizado).size !== contract.contexto_autorizado.length || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) fail("contexto_autorizado inseguro", "handoff:blocked");
@@ -166,7 +168,7 @@ export function validateResult(result, contract, config) {
   }
   if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.length > RESULT_LIMITS.archivos_leidos || new Set(result.archivos_leidos).size !== result.archivos_leidos.length) fail("archivos_leidos inválido");
   if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) fail("archivos_leidos fuera del contexto autorizado");
-  if (!["claude", "codex", null].includes(result.siguiente_destinatario)) fail("siguiente_destinatario inválido");
+  if (!["claude", "codex", "kimi", null].includes(result.siguiente_destinatario)) fail("siguiente_destinatario inválido");
   if (result.siguiente_destinatario && !config.agents[result.siguiente_destinatario]) fail("siguiente_destinatario no configurado");
   const signature = result.firma;
   if (!signature || typeof signature !== "object" || Array.isArray(signature)) fail("firma inválida");
@@ -285,6 +287,13 @@ function gitCommitExists(repo, sha, run = runProcess) {
   return true;
 }
 
+function gitDiff(repo, baseSha, headSha, run = runProcess) {
+  return run("git", [
+    "-c", `safe.directory=${repo}`, "-C", repo, "diff", "--binary", "--full-index",
+    "--no-color", baseSha, headSha, "--",
+  ], { env: buildChildEnv(), timeout: 60_000 }).stdout;
+}
+
 function buildPrompt(template, contract, previousResult, contexts) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   return template
@@ -303,8 +312,9 @@ function extractCommentResult(body, marker, expectedHash) {
   return JSON.parse(raw);
 }
 
-function prepareInput({ repo, contract, runDir, previousResult, run = runProcess }) {
+export function prepareInput({ repo, contract, runDir, previousResult, run = runProcess }) {
   gitCommitExists(repo, contract.head_sha, run);
+  if (contract.base_sha) gitCommitExists(repo, contract.base_sha, run);
   const inputDir = join(runDir, "input");
   mkdirSync(inputDir, { recursive: true });
   writeJson(join(inputDir, "contract.json"), contract);
@@ -316,6 +326,9 @@ function prepareInput({ repo, contract, runDir, previousResult, run = runProcess
     writeText(target, content);
     return { path, content };
   });
+  if (contract.base_sha) {
+    writeText(join(inputDir, "diff.patch"), gitDiff(repo, contract.base_sha, contract.head_sha, run));
+  }
   if (previousResult) writeJson(join(inputDir, "previous-result.json"), previousResult);
   const prompt = buildPrompt(readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts);
   writeText(join(inputDir, "prompt.md"), prompt);
@@ -342,6 +355,23 @@ function parseCodex(stdout, finalPath) {
   return { result: readJson(finalPath), telemetry: { usage: completed?.usage ?? null } };
 }
 
+function parseKimi(stdout) {
+  const events = stdout.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  const forbidden = events.find((event) => !["meta", "assistant"].includes(event.role));
+  if (forbidden) fail(`Kimi emitió un evento no permitido: ${forbidden.role ?? "sin rol"}`);
+  const message = [...events].reverse().find((event) => event.role === "assistant" && typeof event.content === "string");
+  if (!message) fail("Kimi no emitió contenido de Assistant");
+  let result;
+  try {
+    result = JSON.parse(message.content);
+  } catch (error) {
+    fail(`Kimi no emitió JSON válido: ${error.message}`);
+  }
+  const version = events.find((event) => event.role === "meta" && event.type === "system.version")?.version ?? null;
+  const usage = [...events].reverse().find((event) => event.usage)?.usage ?? null;
+  return { result, telemetry: { version, usage } };
+}
+
 export function invokeAgent({ contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv() }) {
   const started = Date.now();
   let parsed;
@@ -356,7 +386,7 @@ export function invokeAgent({ contract, adapter, prompt, runDir, run = runProces
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
     raw = response.stdout;
     parsed = parseClaude(raw);
-  } else {
+  } else if (contract.destinatario === "codex") {
     const finalPath = join(runDir, "final.json");
     const response = run(adapter.executable, [
       "exec", "--strict-config", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
@@ -368,6 +398,24 @@ export function invokeAgent({ contract, adapter, prompt, runDir, run = runProces
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
     raw = response.stdout;
     parsed = parseCodex(raw, finalPath);
+  } else {
+    const emptySkills = join(runDir, "empty-kimi-skills");
+    const agentFile = join(runDir, "kimi-reviewer.md");
+    mkdirSync(emptySkills, { recursive: true });
+    writeText(agentFile, `---\nname: handoff-reviewer\ndescription: Reviewer aislado del paquete congelado\ntools: []\n---\n\n${prompt}`);
+    const kimiEnv = buildChildEnv(env, {
+      KIMI_CODE_EXPERIMENTAL_FLAG: "1",
+      KIMI_CODE_NO_AUTO_UPDATE: "1",
+      KIMI_DISABLE_TELEMETRY: "1",
+      KIMI_MODEL_THINKING_EFFORT: adapter.effort,
+    });
+    const response = run(adapter.executable, [
+      "--model", adapter.alias, "--agent-file", agentFile, "--skills-dir", emptySkills,
+      "--output-format", "stream-json", "--prompt",
+      "Ejecutá la revisión congelada de tu system prompt y devolvé exclusivamente el objeto JSON requerido.",
+    ], { cwd: runDir, env: kimiEnv, timeout: adapter.timeout_ms });
+    raw = response.stdout;
+    parsed = parseKimi(raw);
   }
   writeText(join(runDir, "raw-output.jsonl"), raw);
   return { ...parsed, duration_ms: Date.now() - started };
@@ -469,11 +517,15 @@ function resultComment(marker, result) {
 
 function childContract(parentContract, result, pointer) {
   const governingContext = requiredGoverningContext(result.siguiente_destinatario);
+  const childTask = result.siguiente_destinatario === "kimi"
+    ? `Revisar como Reviewer independiente el resultado estructurado del handoff previo para: ${parentContract.tarea}`
+    : `Auditar como Arquitecto / Lead el resultado estructurado del handoff previo para: ${parentContract.tarea}`;
   return {
     handoff_version: "1",
-    tarea: `Auditar como Arquitecto / Lead el resultado estructurado del handoff previo para: ${parentContract.tarea}`,
+    tarea: childTask,
     destinatario: result.siguiente_destinatario,
     head_sha: parentContract.head_sha,
+    ...(parentContract.base_sha ? { base_sha: parentContract.base_sha } : {}),
     head_ref: parentContract.head_ref,
     contexto_autorizado: [...new Set([...parentContract.contexto_autorizado, ...governingContext])],
     resultado_previo: pointer,

@@ -35,13 +35,13 @@
       "items": { "type": "string" }
     },
     "accion_recomendada": { "type": "string" },
-    "siguiente_destinatario": { "type": ["string", "null"], "enum": ["claude", "codex", null] },
+    "siguiente_destinatario": { "type": ["string", "null"], "enum": ["claude", "codex", "kimi", null] },
     "firma": {
       "type": "object",
       "additionalProperties": false,
       "required": ["ejecutor", "modelo", "esfuerzo", "head_sha"],
       "properties": {
-        "ejecutor": { "type": "string", "enum": ["claude", "codex"] },
+        "ejecutor": { "type": "string", "enum": ["claude", "codex", "kimi"] },
         "modelo": { "type": "string" },
         "esfuerzo": { "type": "string" },
         "head_sha": { "type": "string" }

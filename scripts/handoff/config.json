@@ -16,6 +16,13 @@
       "model": "gpt-5.6-sol",
       "effort": "high",
       "authorized_via": "chatgpt_subscription_session"
+    },
+    "kimi": {
+      "executable": "kimi",
+      "model": "k3-256k",
+      "alias": "kimi-code/k3-256k",
+      "effort": "high",
+      "authorized_via": "kimi_membership_oauth"
     }
   }
 }
