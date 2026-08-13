@@ -400,6 +400,8 @@ test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums"
     const rules = extractPromptSection(prepared.prompt, "Reglas de salida", "Ejemplo canónico mínimo");
     for (const key of keys) assert(rules.includes(key), `Las reglas omiten la clave ${key}`);
     for (const value of enumValues) assert(rules.includes(value), `Las reglas omiten el enum ${value}`);
+    assert.match(rules, /telemetría del puente[\s\S]*fuente autoritativa/);
+    assert.match(rules, /NO_OBSERVABLE/);
   } finally { prepared.clean(); }
 });
 

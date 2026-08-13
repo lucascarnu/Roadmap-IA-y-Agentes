@@ -145,7 +145,9 @@ ejemplo mínimo válido adaptado al destinatario y al HEAD del contrato. Todos l
 agentes reciben el mismo contrato por prompt; los flags de salida estructurada de
 Claude y Codex siguen actuando como una garantía adicional. La salida solicitada
 es JSON crudo, aunque el transporte de Kimi tolera como red de compatibilidad un
-único bloque completo etiquetado `json`.
+único bloque completo etiquetado `json`. Si el agente no puede observar su modelo
+o esfuerzo efectivo usa `NO_OBSERVABLE`; la telemetría del puente, cuando existe,
+es la fuente autoritativa y la firma del agente no la reemplaza.
 
 Cuando el resultado indica `siguiente_destinatario`, el puente crea el segundo
 Issue con un puntero verificable al comentario anterior y continúa procesándolo
