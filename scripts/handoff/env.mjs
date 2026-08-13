@@ -110,5 +110,36 @@ export function observeAuthentication(agent, adapter, options = {}) {
       valid: chatgpt && adapter.authorized_via === "chatgpt_subscription_session",
     };
   }
+  if (agent === "kimi") {
+    const result = run(adapter.executable, ["provider", "list", "--json"], { env, timeout: 30_000 });
+    const status = parseJsonObject(result.stdout);
+    const provider = status.providers?.["managed:kimi-code"];
+    const model = status.models?.[adapter.alias];
+    const managedOauth = provider?.type === "kimi"
+      && provider.baseUrl === "https://api.kimi.com/coding/v1"
+      && provider.oauth?.storage === "file"
+      && provider.oauth?.key === "oauth/kimi-code";
+    const configuredModel = model?.provider === "managed:kimi-code"
+      && model.model === adapter.model
+      && model.capabilities?.includes("always_thinking")
+      && model.supportEfforts?.includes(adapter.effort);
+    const valid = managedOauth && configuredModel;
+    return {
+      authorized_via: adapter.authorized_via,
+      observed_via: valid ? "kimi_membership_oauth" : "unverified",
+      evidence: {
+        provider: provider ? "managed:kimi-code" : null,
+        provider_type: provider?.type ?? null,
+        base_url: provider?.baseUrl ?? null,
+        oauth_storage: provider?.oauth?.storage ?? null,
+        oauth_key: provider?.oauth?.key ?? null,
+        model_alias: model ? adapter.alias : null,
+        runtime_model: model?.model ?? null,
+        supports_effort: model?.supportEfforts?.includes(adapter.effort) === true,
+        always_thinking: model?.capabilities?.includes("always_thinking") === true,
+      },
+      valid: valid && adapter.authorized_via === "kimi_membership_oauth",
+    };
+  }
   throw new Error(`Agente no soportado: ${agent}`);
 }

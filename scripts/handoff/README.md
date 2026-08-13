@@ -12,7 +12,7 @@ no introduce APIs PAYG y no participa del pipeline interno de reviewers de `0010
 
 - Node.js 20 o posterior.
 - `git` y `gh` autenticado para `lucascarnu/Roadmap-IA-y-Agentes`.
-- Claude Code y Codex autenticados por las suscripciones autorizadas.
+- Claude Code, Codex y Kimi Code autenticados por las suscripciones autorizadas.
 - El Issue inicial creado directamente por el Arquitecto / Lead.
 
 No hay dependencias npm. El comando operativo es:
@@ -100,12 +100,19 @@ nombre. Ejemplo para la tarea acordada:
 el commit existe, pero no detectar que la referencia remota se movió durante la
 corrida. Si se omite, usa `main`.
 
+Para una unidad de review, `base_sha` puede declarar el commit base con 40
+hexadecimales. El bridge calcula `diff.patch` entre esa base y `head_sha`, lo
+incluye en el paquete congelado y lo cubre con el manifiesto y el fingerprint.
+Si se omite, el paquete conserva el comportamiento anterior.
+
 `contexto_autorizado` debe incluir el punto de entrada del destinatario
 (`AGENTS.md` para Codex o `CLAUDE.md` para Claude), `reglas.md`, `0009`,
 `equipo.md`, `decisiones/README.md` y `pendientes.md`. El schema y el bridge
 exigen ese canon antes de inferencia; las decisiones y archivos específicos de la
 tarea se agregan a ese mínimo. Al crear un segundo relevo, el bridge conserva el
 contexto y agrega de forma determinista el adaptador del nuevo destinatario.
+Cuando el destinatario es Kimi como reviewer, su adaptador obligatorio es
+`reviewer-policy.md`.
 
 `origen` registra la firma de apertura producida por el Arquitecto. En el primer
 Issue debe declarar Claude/Arquitecto y modelo/esfuerzo concretos; en el segundo
@@ -147,6 +154,9 @@ La vía se observa antes y después de inferencia mediante el propio cliente:
 - Claude: `claude auth status --json` debe informar `claude.ai`, `firstParty` y
   una suscripción.
 - Codex: `codex login status` debe informar una sesión ChatGPT.
+- Kimi: `kimi provider list --json` debe exponer `managed:kimi-code`, su referencia
+  OAuth y el alias configurado; cualquier endpoint directo o una vía no
+  demostrable queda bloqueada.
 
 En Windows, si el nombre configurado no tiene extensión y el sistema no lo
 encuentra, el runner hace un único segundo intento mediante
@@ -157,6 +167,40 @@ aplica ese fallback.
 Una vía distinta, indeterminable o un cliente que no pueda exponerla termina en
 `handoff:blocked-via`; no publica resultado válido. La mera presencia o ausencia
 de una API key nunca decide la vía.
+
+Kimi se inicia siempre con `--model kimi-code/k3-256k`, esfuerzo `high` fijado
+por el switch oficial de runtime y un agent file sin herramientas. El prompt
+congelado vive en ese agent file para evitar límites de longitud del argv; la
+invocación usa una sesión nueva, no reanuda sesiones y reemplaza los directorios
+de skills por uno vacío. Kimi Code CLI 0.34.0 no ofrece un flag equivalente a
+`--no-session-persistence`: conserva su traza diagnóstica local por diseño, pero
+el bridge nunca la reutiliza como contexto de otra corrida.
+
+Una sonda controlada de 0.34.0 confirmó que `tools: []` produce un snapshot de
+cero herramientas, `toolSelect=false` y sólo eventos `meta`/`assistant` en
+`stream-json`. Si apareciera un evento de herramienta, el parser lo rechaza antes
+de aceptar el resultado. La misma sonda ejecutó `--agent-file` y `--skills-dir`
+sin `KIMI_CODE_EXPERIMENTAL_FLAG`: el flag no es necesario en esta versión y no
+se establece, para no habilitar globalmente otros experimentos ni diferenciar el
+preflight de la inferencia por esa condición.
+
+### Sonda local de Kimi (2026-08-13)
+
+La implementación se decidió después de una inferencia mínima real desde este
+repositorio, sin variables `KIMI_*` ambientales ni Open Platform:
+
+- CLI `0.34.0`; modo no interactivo `kimi --model <alias> --prompt <texto>
+  --output-format stream-json`;
+- `provider list --json` informó el proveedor gestionado `managed:kimi-code`,
+  OAuth en almacenamiento local y el endpoint de membresía;
+- exit code `0` y respuesta real de Assistant; los fallos pre-inferencia
+  observados usan exit code `1`;
+- el request trace de la sonda registró modelo `k3-256k`, alias
+  `kimi-code/k3-256k`, `thinkingEffort=high` y `toolSelect=false`;
+- no existen flags `--output-schema` ni `--json-schema`; el bridge pide JSON y
+  aplica después el mismo `validateResult` fail-closed;
+- cuota y reset no son observables por esa interfaz sin forzar agotamiento, por
+  lo que no se intentó agotarla.
 
 ## Recuperación y exclusión
 
@@ -187,6 +231,7 @@ obligatorio antes de inferencia, contexto específico adicional, una cadena feli
 de dos relevos, recuperación y reintento único, doble proceso, HEAD movido,
 contrato inválido, salida inválida, profundidad excedida y vía no demostrable.
 
-Pasar estos tests demuestra la lógica local. No demuestra el experimento real:
-para `HANDOFF_AUTOMATICO_PROBADO_LOCALMENTE` siguen siendo obligatorios el Issue
-inicial auténtico del Arquitecto y una corrida real completa de ambos CLIs.
+Pasar estos tests demuestra la lógica local. No demuestra una nueva cadena real:
+para validar operativamente una combinación de destinatarios siguen siendo
+obligatorios el Issue inicial auténtico del Arquitecto y una corrida completa de
+los CLIs involucrados.

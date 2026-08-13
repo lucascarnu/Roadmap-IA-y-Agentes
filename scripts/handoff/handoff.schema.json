@@ -35,10 +35,21 @@
         "properties": {
           "contexto_autorizado": { "contains": { "const": "AGENTS.md" } }
         }
-      },
-      "else": {
+      }
+    },
+    {
+      "if": { "properties": { "destinatario": { "const": "claude" } } },
+      "then": {
         "properties": {
           "contexto_autorizado": { "contains": { "const": "CLAUDE.md" } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "destinatario": { "const": "kimi" } } },
+      "then": {
+        "properties": {
+          "contexto_autorizado": { "contains": { "const": "reviewer-policy.md" } }
         }
       }
     }
@@ -46,8 +57,9 @@
   "properties": {
     "handoff_version": { "const": "1" },
     "tarea": { "type": "string", "minLength": 1, "maxLength": 8000 },
-    "destinatario": { "enum": ["claude", "codex"] },
+    "destinatario": { "enum": ["claude", "codex", "kimi"] },
     "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "base_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "head_ref": {
       "type": "string",
       "pattern": "^(?!\\.{1,2}(?:/|$))(?!.*[/]\\.{1,2}(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"

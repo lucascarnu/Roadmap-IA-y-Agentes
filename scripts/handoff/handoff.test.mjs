@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CrashSimulation, GOVERNING_CONTEXT, acquireLock, parseContractBody, poll, sha256, validateContract, validateResult,
+  CrashSimulation, GOVERNING_CONTEXT, acquireLock, invokeAgent, parseContractBody, poll, prepareInput, sha256,
+  validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
@@ -17,6 +18,7 @@ const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: 
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result.schema.json"), "utf8"));
+const PROMPT_TEMPLATE = readFileSync(join(HERE, "prompt-template.md"), "utf8");
 const BASE_CONFIG = {
   repository: "example/repo",
   default_head_ref: "main",
@@ -26,6 +28,10 @@ const BASE_CONFIG = {
   agents: {
     claude: { executable: "claude", model: "opus", effort: "high", authorized_via: "anthropic_first_party_subscription" },
     codex: { executable: "codex", model: "gpt-5.6-sol", effort: "high", authorized_via: "chatgpt_subscription_session" },
+    kimi: {
+      executable: "kimi", model: "k3-256k", alias: "kimi-code/k3-256k",
+      effort: "high", authorized_via: "kimi_membership_oauth",
+    },
   },
 };
 
@@ -380,10 +386,233 @@ test("salida en todos los límites exactos es válida", () => {
 test("schema y validador exigen el mismo canon gobernante", () => {
   const commonFromSchema = CONTRACT_SCHEMA.allOf[0].properties.contexto_autorizado.allOf
     .map((requirement) => requirement.contains.const);
-  const recipientRule = CONTRACT_SCHEMA.allOf[1];
   assert.deepEqual(commonFromSchema, GOVERNING_CONTEXT.common);
-  assert.equal(recipientRule.then.properties.contexto_autorizado.contains.const, GOVERNING_CONTEXT.codex);
-  assert.equal(recipientRule.else.properties.contexto_autorizado.contains.const, GOVERNING_CONTEXT.claude);
+  const recipientRules = Object.fromEntries(CONTRACT_SCHEMA.allOf.slice(1).map((rule) => [
+    rule.if.properties.destinatario.const,
+    rule.then.properties.contexto_autorizado.contains.const,
+  ]));
+  assert.deepEqual(recipientRules, {
+    codex: GOVERNING_CONTEXT.codex,
+    claude: GOVERNING_CONTEXT.claude,
+    kimi: GOVERNING_CONTEXT.kimi,
+  });
+});
+
+test("contrato Kimi exige reviewer-policy.md y admite el resto del canon", () => {
+  const kimiContext = [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi];
+  const current = validateContract(contract({ destinatario: "kimi", contexto_autorizado: kimiContext }), BASE_CONFIG);
+  assert.equal(current.destinatario, "kimi");
+  assert.throws(
+    () => validateContract(contract({ destinatario: "kimi", contexto_autorizado: GOVERNING_CONTEXT.common }), BASE_CONFIG),
+    /omite canon gobernante: reviewer-policy\.md/,
+  );
+});
+
+test("resultado firmado por Kimi no puede corresponder a otro destinatario", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const result = validResult(current);
+  result.firma.ejecutor = "kimi";
+  assertResultFailed(result, current);
+});
+
+test("observeAuthentication demuestra Kimi managed OAuth y rechaza una vía directa", () => {
+  const adapter = BASE_CONFIG.agents.kimi;
+  const managed = {
+    providers: {
+      "managed:kimi-code": {
+        type: "kimi", baseUrl: "https://api.kimi.com/coding/v1",
+        apiKey: "", oauth: { storage: "file", key: "oauth/kimi-code" },
+      },
+    },
+    models: {
+      [adapter.alias]: {
+        provider: "managed:kimi-code", model: adapter.model,
+        capabilities: ["thinking", "always_thinking"], supportEfforts: ["low", "high", "max"],
+      },
+    },
+  };
+  const observed = observeAuthentication("kimi", adapter, {
+    run: () => ({ stdout: JSON.stringify(managed), stderr: "", status: 0 }),
+    env: {},
+  });
+  assert.equal(observed.observed_via, "kimi_membership_oauth");
+  assert.equal(observed.valid, true);
+
+  const direct = structuredClone(managed);
+  direct.providers["managed:kimi-code"] = {
+    type: "kimi", baseUrl: "https://api.moonshot.ai/v1", apiKey: "masked",
+  };
+  assert.equal(observeAuthentication("kimi", adapter, {
+    run: () => ({ stdout: JSON.stringify(direct), stderr: "", status: 0 }), env: {},
+  }).valid, false);
+});
+
+test("invokeAgent usa Kimi aislado, fija K3-256k high y no reenvía PAYG", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-test-"));
+  const expected = validResult(current, null);
+  const calls = [];
+  try {
+    const invocation = invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      env: { PATH: "ruta-controlada", KIMI_API_KEY: "no-debe-pasar" },
+      run: (command, args, options) => {
+        calls.push({ command, args, options });
+        return {
+          status: 0,
+          stderr: "",
+          stdout: [
+            JSON.stringify({ role: "meta", type: "system.version", version: "0.34.0" }),
+            JSON.stringify({ role: "assistant", content: JSON.stringify(expected) }),
+          ].join("\n"),
+        };
+      },
+    });
+    assert.deepEqual(invocation.result, expected);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, "kimi");
+    assert(calls[0].args.includes("kimi-code/k3-256k"));
+    assert.equal(calls[0].args.includes("--session"), false);
+    assert.equal(calls[0].args.includes("--continue"), false);
+    assert.equal(calls[0].options.env.KIMI_MODEL_THINKING_EFFORT, "high");
+    assert.equal(calls[0].options.env.KIMI_CODE_EXPERIMENTAL_FLAG, undefined);
+    assert.equal(calls[0].options.env.KIMI_API_KEY, undefined);
+    assert.equal(calls[0].options.env.KIMI_BASE_URL, undefined);
+    assert.equal(calls[0].options.env.KIMI_CODE_BASE_URL, undefined);
+    const agentPath = calls[0].args[calls[0].args.indexOf("--agent-file") + 1];
+    const agent = readFileSync(agentPath, "utf8");
+    assert.match(agent, /tools: \[\]/);
+    assert.match(agent, /PAQUETE CONGELADO/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("invokeAgent rechaza eventos de herramienta emitidos por Kimi", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-tool-test-"));
+  try {
+    assert.throws(() => invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      run: () => ({
+        status: 0, stderr: "",
+        stdout: [
+          JSON.stringify({ role: "meta", type: "system.version", version: "0.34.0" }),
+          JSON.stringify({ role: "assistant", tool_calls: [{ name: "Shell" }] }),
+          JSON.stringify({ role: "tool", name: "Shell", content: "no permitido" }),
+        ].join("\n"),
+      }),
+    }), /Kimi emitió un evento no permitido: tool/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva el paquete previo", () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-base-sha-test-"));
+  const calls = [];
+  const run = (_command, args) => {
+    calls.push(args);
+    if (args.includes("show")) return { status: 0, stdout: `contenido congelado de ${args.at(-1)}\n`, stderr: "" };
+    if (args.includes("diff")) return { status: 0, stdout: "diff --git a/a.txt b/a.txt\n+línea\n", stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const noBaseDir = join(root, "sin-base");
+  const withBaseDir = join(root, "con-base");
+  try {
+    const current = validateContract(contract(), BASE_CONFIG);
+    const noBase = prepareInput({ repo: ROOT, contract: current, runDir: noBaseDir, previousResult: null, run });
+    assert.equal(existsSync(join(noBase.inputDir, "diff.patch")), false);
+    assert.equal(calls.some((args) => args.includes("diff")), false);
+    assert.deepEqual(noBase.manifest.files.map((entry) => entry.path), [
+      "context/AGENTS.md",
+      "context/decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md",
+      "context/decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md",
+      "context/decisiones/README.md",
+      "context/equipo.md",
+      "context/pendientes.md",
+      "context/reglas.md",
+      "contract.json",
+      "handoff-result.schema.json",
+      "handoff.schema.json",
+      "prompt.md",
+    ]);
+    const renderedContexts = current.contexto_autorizado.map((path) =>
+      `### ${path}\n\ncontenido congelado de ${current.head_sha}:${path}\n`
+    ).join("\n\n");
+    const legacyPrompt = PROMPT_TEMPLATE
+      .replace("{{DIFF_CONGELADO}}", "")
+      .replace("{{DESTINATARIO_MAYUSCULAS}}", current.destinatario.toUpperCase())
+      .replace("{{CONTRATO}}", JSON.stringify(current, null, 2))
+      .replace("{{RESULTADO_PREVIO}}", "null")
+      .replace("{{CONTEXTO}}", renderedContexts);
+    assert.equal(noBase.prompt, legacyPrompt, "sin base_sha el prompt debe conservar los bytes previos");
+
+    calls.length = 0;
+    const withBaseContract = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+    const withBase = prepareInput({ repo: ROOT, contract: withBaseContract, runDir: withBaseDir, previousResult: null, run });
+    const diff = readFileSync(join(withBase.inputDir, "diff.patch"), "utf8");
+    const diffEntry = withBase.manifest.files.find((entry) => entry.path === "diff.patch");
+    assert.equal(diff, "diff --git a/a.txt b/a.txt\n+línea\n");
+    assert(withBase.prompt.includes(diff), "el prompt no contiene el diff congelado");
+    assert.match(withBase.prompt, /## Diff congelado base → HEAD/);
+    assert.match(withBase.prompt, /No lo incluyas en\n`archivos_leidos`/);
+    assert.equal(diffEntry.sha256, sha256(Buffer.from(diff)));
+    assert.notEqual(withBase.manifest.input_fingerprint, noBase.manifest.input_fingerprint);
+    assert.equal(calls.filter((args) => args.includes("diff")).length, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("diff.patch no es un path válido de archivos_leidos", () => {
+  const current = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const result = validResult(current);
+  result.archivos_leidos = [...result.archivos_leidos, "diff.patch"];
+  assertResultFailed(result, current);
+});
+
+test("base_sha inválido termina blocked antes de inferencia", async () => {
+  let invocations = 0;
+  const backend = new FakeBackend([{
+    number: 1, title: "bad-base", body: issueBody(contract({ base_sha: "main" })),
+    createdAt: "2026-08-11T00:00:00Z",
+  }]);
+  const fx = fixture(backend, { invoke: () => { invocations += 1; throw new Error("No debe inferir"); } });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].status, "blocked");
+    assert.match(result.processed[0].error, /base_sha inválido/);
+    assert.equal(invocations, 0);
+  } finally { clean(fx); }
+});
+
+test("vía Kimi no demostrable termina blocked-via sin invocar el modelo", async () => {
+  let invocations = 0;
+  const kimiContract = contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  });
+  const backend = new FakeBackend([{
+    number: 1, title: "Kimi", body: issueBody(kimiContract), createdAt: "2026-08-11T00:00:00Z",
+  }]);
+  const fx = fixture(backend, {
+    authObserver: () => ({
+      authorized_via: "kimi_membership_oauth", observed_via: "unverified", evidence: {}, valid: false,
+    }),
+    invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].status, "blocked-via");
+    assert.equal(invocations, 0);
+  } finally { clean(fx); }
 });
 
 test("head_ref rechaza recorrido relativo, extremos y componentes vacíos", () => {
@@ -427,7 +656,7 @@ test("contexto específico adicional sigue permitido junto al canon gobernante",
 });
 
 test("falta de canon gobernante bloquea antes de inferencia", async () => {
-  for (const recipient of ["codex", "claude"]) {
+  for (const recipient of ["codex", "claude", "kimi"]) {
     const required = [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT[recipient]];
     const fullContext = [...required, "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md"];
     for (const missing of required) {
@@ -466,6 +695,24 @@ test("camino feliz drena #A y el #B creado automáticamente en la misma corrida"
     assert.equal(child.profundidad_cadena, 2);
     assert.equal(child.resultado_previo.issue, 1);
     assert(child.contexto_autorizado.includes(GOVERNING_CONTEXT.claude));
+  } finally { clean(fx); }
+});
+
+test("un relevo dirigido a Kimi conserva el rol reviewer y agrega su adaptador", async () => {
+  const backend = new FakeBackend([{ number: 1, title: "A", body: issueBody(contract()), createdAt: "2026-08-11T00:00:00Z" }]);
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => ({
+      result: validResult(current, current.profundidad_cadena === 1 ? "kimi" : null),
+      telemetry: {}, duration_ms: 1,
+    }),
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.deepEqual(result.processed.map((item) => item.status), ["done", "done"]);
+    const child = validateContract(parseContractBody(backend.issues[1].body), BASE_CONFIG);
+    assert.equal(child.destinatario, "kimi");
+    assert.match(child.tarea, /Reviewer independiente/);
+    assert(child.contexto_autorizado.includes(GOVERNING_CONTEXT.kimi));
   } finally { clean(fx); }
 });
 
