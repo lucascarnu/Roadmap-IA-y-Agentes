@@ -99,13 +99,14 @@ repositorio en este estado. No es una propiedad permanente del repositorio, y
 conviene repetir la prueba si el volumen de documentación crece mucho o si cambia
 de forma material cómo está organizada.
 
-Los tres asuntos originales de la Compuerta PRE-MVP están RESUELTOS. La
-compuerta PRE-MVP sigue cerrada: "Clases de cambio y verificaciones exigidas"
-permanece `ABIERTO` con `Bloqueo: fase`. Además, "Handoffs — deriva de órdenes
-operacionales" está identificado externamente como
-`BLOQUEANTE_DE_CIERRE_PRE_MVP — PENDIENTE_DE_EVALUAR`, todavía sin consolidar ni
-evaluar canónicamente. Esta actualización no decide su forma canónica ni afirma
-que el asunto registrado acá sea el único bloqueo restante.
+Los asuntos registrados en esta bandeja que declaraban bloquear el comienzo de
+las pull requests de código del MVP están RESUELTOS con `0014`. Esto no declara
+abierta la compuerta PRE-MVP ni cerrado PRE-MVP entero: siguen fuera de esta
+unidad la evaluación de "Handoffs — deriva de órdenes operacionales" y el
+requisito personal del Director de una prueba de continuidad y reanudación antes
+del MVP. Según la regla de gates de `reglas.md`, la mención externa de la deriva
+no opera como gate mientras no esté registrada acá como asunto con estado y
+alcance. Esta actualización no la consolida, evalúa ni resuelve.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -463,16 +464,11 @@ de bloqueo.
 
 ### Clases de cambio y verificaciones exigidas
 
-**Estado: ABIERTO. Bloqueo: fase.** Antes de la primera pull request de código
-del MVP se debe definir qué clases de cambio reconoce el gate de `0013`, qué
-verificaciones exige cada una y, en particular, cuáles exige una pull request de
-código del MVP.
-
-**Evidencia del bloqueo.** `0013` condiciona la integración a "esa clase de
-cambio", a "las verificaciones exigidas" y a QA cuando sea obligatorio para esa
-clase, pero el canon todavía no define esas clases ni sus verificaciones. Este
-asunto bloquea únicamente el comienzo de las pull requests de código del MVP; no
-define todavía la clasificación ni las verificaciones.
+**Estado: RESUELTO.** [0014](decisiones/0014-clases-de-cambio-y-verificaciones-exigidas.md)
+define las clases que reconoce el gate de `0013`, su piso de verificaciones, los
+casos de QA obligatorio y la regla específica para las pull requests de código
+del MVP. Las viñetas siguientes permanecen como mediciones durante las primeras
+pull requests; no son gates salvo que declaren expresamente ese alcance.
 
 - **Aviso de intervención en la PC.** Si el próximo paso necesita navegador,
   login interactivo, aplicación de escritorio, `localhost` o aprobación visual,
