@@ -294,13 +294,25 @@ function gitDiff(repo, baseSha, headSha, run = runProcess) {
   ], { env: buildChildEnv(), timeout: 60_000 }).stdout;
 }
 
-function buildPrompt(template, contract, previousResult, contexts) {
+function buildPrompt(template, contract, previousResult, contexts, frozenDiff = null) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
+  const renderedDiff = frozenDiff === null ? "" : [
+    "\n\n## Diff congelado base → HEAD",
+    "",
+    "El siguiente diff forma parte de la unidad congelada. No lo incluyas en",
+    "`archivos_leidos`: ese campo sigue admitiendo únicamente paths de",
+    "`contexto_autorizado`.",
+    "",
+    "```diff",
+    frozenDiff,
+    "```",
+  ].join("\n");
   return template
     .replace("{{DESTINATARIO_MAYUSCULAS}}", contract.destinatario.toUpperCase())
     .replace("{{CONTRATO}}", JSON.stringify(contract, null, 2))
     .replace("{{RESULTADO_PREVIO}}", previousResult ? JSON.stringify(previousResult, null, 2) : "null")
-    .replace("{{CONTEXTO}}", renderedContexts);
+    .replace("{{CONTEXTO}}", renderedContexts)
+    .replace("{{DIFF_CONGELADO}}", renderedDiff);
 }
 
 function extractCommentResult(body, marker, expectedHash) {
@@ -326,11 +338,12 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
     writeText(target, content);
     return { path, content };
   });
-  if (contract.base_sha) {
-    writeText(join(inputDir, "diff.patch"), gitDiff(repo, contract.base_sha, contract.head_sha, run));
-  }
+  const frozenDiff = contract.base_sha ? gitDiff(repo, contract.base_sha, contract.head_sha, run) : null;
+  if (frozenDiff !== null) writeText(join(inputDir, "diff.patch"), frozenDiff);
   if (previousResult) writeJson(join(inputDir, "previous-result.json"), previousResult);
-  const prompt = buildPrompt(readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts);
+  const prompt = buildPrompt(
+    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, frozenDiff,
+  );
   writeText(join(inputDir, "prompt.md"), prompt);
   const manifest = createManifest(inputDir, contract.head_sha);
   verifyManifest(inputDir, manifest);
@@ -404,7 +417,6 @@ export function invokeAgent({ contract, adapter, prompt, runDir, run = runProces
     mkdirSync(emptySkills, { recursive: true });
     writeText(agentFile, `---\nname: handoff-reviewer\ndescription: Reviewer aislado del paquete congelado\ntools: []\n---\n\n${prompt}`);
     const kimiEnv = buildChildEnv(env, {
-      KIMI_CODE_EXPERIMENTAL_FLAG: "1",
       KIMI_CODE_NO_AUTO_UPDATE: "1",
       KIMI_DISABLE_TELEMETRY: "1",
       KIMI_MODEL_THINKING_EFFORT: adapter.effort,

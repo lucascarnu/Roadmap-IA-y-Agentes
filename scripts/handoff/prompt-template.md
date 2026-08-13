@@ -26,4 +26,4 @@ razonamiento interno ni texto fuera del JSON.
 - `archivos_leidos` sólo puede contener paths del contexto autorizado.
 - Máximos: `evidencia` 30 ítems; `archivos_leidos` 30 ítems sin duplicados; `veredicto` 2000, `resumen` 6000, `accion_recomendada` 3000 y cada `evidencia[].detalle` 2000 caracteres.
 - Si la evidencia no alcanza, usar `estado=BLOQUEADO` y explicarlo sin inventar.
-- En profundidad máxima, `siguiente_destinatario` debe ser `null`.
+- En profundidad máxima, `siguiente_destinatario` debe ser `null`.{{DIFF_CONGELADO}}

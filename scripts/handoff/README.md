@@ -176,6 +176,14 @@ de skills por uno vacío. Kimi Code CLI 0.34.0 no ofrece un flag equivalente a
 `--no-session-persistence`: conserva su traza diagnóstica local por diseño, pero
 el bridge nunca la reutiliza como contexto de otra corrida.
 
+Una sonda controlada de 0.34.0 confirmó que `tools: []` produce un snapshot de
+cero herramientas, `toolSelect=false` y sólo eventos `meta`/`assistant` en
+`stream-json`. Si apareciera un evento de herramienta, el parser lo rechaza antes
+de aceptar el resultado. La misma sonda ejecutó `--agent-file` y `--skills-dir`
+sin `KIMI_CODE_EXPERIMENTAL_FLAG`: el flag no es necesario en esta versión y no
+se establece, para no habilitar globalmente otros experimentos ni diferenciar el
+preflight de la inferencia por esa condición.
+
 ### Sonda local de Kimi (2026-08-13)
 
 La implementación se decidió después de una inferencia mínima real desde este

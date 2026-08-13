@@ -18,6 +18,7 @@ const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: 
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result.schema.json"), "utf8"));
+const PROMPT_TEMPLATE = readFileSync(join(HERE, "prompt-template.md"), "utf8");
 const BASE_CONFIG = {
   repository: "example/repo",
   default_head_ref: "main",
@@ -480,6 +481,7 @@ test("invokeAgent usa Kimi aislado, fija K3-256k high y no reenvía PAYG", () =>
     assert.equal(calls[0].args.includes("--session"), false);
     assert.equal(calls[0].args.includes("--continue"), false);
     assert.equal(calls[0].options.env.KIMI_MODEL_THINKING_EFFORT, "high");
+    assert.equal(calls[0].options.env.KIMI_CODE_EXPERIMENTAL_FLAG, undefined);
     assert.equal(calls[0].options.env.KIMI_API_KEY, undefined);
     assert.equal(calls[0].options.env.KIMI_BASE_URL, undefined);
     assert.equal(calls[0].options.env.KIMI_CODE_BASE_URL, undefined);
@@ -487,6 +489,30 @@ test("invokeAgent usa Kimi aislado, fija K3-256k high y no reenvía PAYG", () =>
     const agent = readFileSync(agentPath, "utf8");
     assert.match(agent, /tools: \[\]/);
     assert.match(agent, /PAQUETE CONGELADO/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("invokeAgent rechaza eventos de herramienta emitidos por Kimi", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-tool-test-"));
+  try {
+    assert.throws(() => invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      run: () => ({
+        status: 0, stderr: "",
+        stdout: [
+          JSON.stringify({ role: "meta", type: "system.version", version: "0.34.0" }),
+          JSON.stringify({ role: "assistant", tool_calls: [{ name: "Shell" }] }),
+          JSON.stringify({ role: "tool", name: "Shell", content: "no permitido" }),
+        ].join("\n"),
+      }),
+    }), /Kimi emitió un evento no permitido: tool/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -519,6 +545,16 @@ test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva e
       "handoff.schema.json",
       "prompt.md",
     ]);
+    const renderedContexts = current.contexto_autorizado.map((path) =>
+      `### ${path}\n\ncontenido congelado de ${current.head_sha}:${path}\n`
+    ).join("\n\n");
+    const legacyPrompt = PROMPT_TEMPLATE
+      .replace("{{DIFF_CONGELADO}}", "")
+      .replace("{{DESTINATARIO_MAYUSCULAS}}", current.destinatario.toUpperCase())
+      .replace("{{CONTRATO}}", JSON.stringify(current, null, 2))
+      .replace("{{RESULTADO_PREVIO}}", "null")
+      .replace("{{CONTEXTO}}", renderedContexts);
+    assert.equal(noBase.prompt, legacyPrompt, "sin base_sha el prompt debe conservar los bytes previos");
 
     calls.length = 0;
     const withBaseContract = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
@@ -526,10 +562,20 @@ test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva e
     const diff = readFileSync(join(withBase.inputDir, "diff.patch"), "utf8");
     const diffEntry = withBase.manifest.files.find((entry) => entry.path === "diff.patch");
     assert.equal(diff, "diff --git a/a.txt b/a.txt\n+línea\n");
+    assert(withBase.prompt.includes(diff), "el prompt no contiene el diff congelado");
+    assert.match(withBase.prompt, /## Diff congelado base → HEAD/);
+    assert.match(withBase.prompt, /No lo incluyas en\n`archivos_leidos`/);
     assert.equal(diffEntry.sha256, sha256(Buffer.from(diff)));
     assert.notEqual(withBase.manifest.input_fingerprint, noBase.manifest.input_fingerprint);
     assert.equal(calls.filter((args) => args.includes("diff")).length, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("diff.patch no es un path válido de archivos_leidos", () => {
+  const current = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const result = validResult(current);
+  result.archivos_leidos = [...result.archivos_leidos, "diff.patch"];
+  assertResultFailed(result, current);
 });
 
 test("base_sha inválido termina blocked antes de inferencia", async () => {
