@@ -8,6 +8,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildChildEnv, observeAuthentication, runProcess } from "./env.mjs";
+import { createNotifier } from "./notify.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
@@ -623,6 +624,52 @@ async function processIssue(context, issue) {
   }
 }
 
+function compactReason(value, limit = 240) {
+  const reason = String(value ?? "sin motivo informado").replace(/\s+/g, " ").trim();
+  return reason.length <= limit ? reason : `${reason.slice(0, limit - 1)}…`;
+}
+
+async function notifySafely(notify, payload) {
+  try {
+    await notify(payload);
+  } catch (error) {
+    console.warn(`ntfy: ${payload.event} falló sin afectar poll: ${error.message}`);
+  }
+}
+
+async function notifyPollResult({ backend, processed, notify }) {
+  const ready = await backend.listByLabel("handoff:ready");
+  for (const issue of ready) {
+    await notifySafely(notify, {
+      event: "ready_pending",
+      title: "Handoff pendiente",
+      message: `Issue #${issue.number} quedó en handoff:ready. Volvé a ejecutar poll.`,
+      priority: 4,
+      tags: ["hourglass_flowing_sand"],
+    });
+  }
+
+  for (const result of processed.filter((item) => ["failed", "blocked", "blocked-via", "stale"].includes(item.status))) {
+    await notifySafely(notify, {
+      event: "terminal_error",
+      title: "Handoff requiere atención",
+      message: `Issue #${result.issue} terminó en handoff:${result.status}: ${compactReason(result.error)}`,
+      priority: 4,
+      tags: ["warning"],
+    });
+  }
+
+  for (const result of processed.filter((item) => item.status === "done" && item.child_issue === null)) {
+    await notifySafely(notify, {
+      event: "chain_complete",
+      title: "Cadena de handoff completada",
+      message: `Issue #${result.issue} completó la cadena sin siguiente destinatario.`,
+      priority: 3,
+      tags: ["white_check_mark"],
+    });
+  }
+}
+
 export async function poll(options = {}) {
   const config = options.config ?? readJson(options.configPath ?? DEFAULT_CONFIG);
   const repo = resolve(options.repo ?? ROOT);
@@ -631,6 +678,7 @@ export async function poll(options = {}) {
   const backend = options.backend ?? new GithubBackend(config.repository);
   const invoke = options.invoke ?? invokeAgent;
   const authObserver = options.authObserver ?? ((agent, adapter) => observeAuthentication(agent, adapter));
+  const notify = options.notify ?? createNotifier();
   const transitions = join(artifactsDir, "transitions.log");
   mkdirSync(runtimeDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
@@ -651,7 +699,13 @@ export async function poll(options = {}) {
       processed.push(result);
       if (result.status === "locked") break;
     }
-    return { status: "complete", processed };
+    const outcome = { status: "complete", processed };
+    try {
+      await notifyPollResult({ backend, processed, notify });
+    } catch (error) {
+      console.warn(`ntfy: fallo inesperado no bloqueante: ${error.message}`);
+    }
+    return outcome;
   } finally {
     if (!options.preserveGlobalLock) releaseLock(globalLock);
   }

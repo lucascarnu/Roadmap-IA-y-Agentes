@@ -24,6 +24,17 @@ node scripts/handoff/handoff.mjs poll
 `poll` recupera huérfanos seguros, toma la unidad `handoff:ready` más antigua y
 continúa hasta vaciar la cola o alcanzar `max_unidades_por_corrida`.
 
+Al terminar cada pasada, el orquestador puede enviar notificaciones push por
+ntfy cuando queda una unidad `handoff:ready`, una unidad termina en un estado de
+fallo o se completa una cadena sin siguiente destinatario. El topic se configura
+fuera del repositorio mediante `ROADMAP_NTFY_TOPIC` o la propiedad `topic` de
+`scripts/handoff/notify.local.json`, que está ignorado por Git. La base puede
+sobrescribirse con `ROADMAP_NTFY_BASE_URL`; por defecto usa `https://ntfy.sh`.
+Estas variables las lee el orquestador y no se agregan al entorno permitido de
+los procesos hijos.
+Si no hay topic, ntfy queda desactivado. Un timeout, error de red o respuesta no
+exitosa se registra pero no cambia el resultado ni el código de salida de `poll`.
+
 ## Bootstrap de labels
 
 Las labels se crean o normalizan de forma idempotente con:

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -9,6 +9,7 @@ import {
   CrashSimulation, GOVERNING_CONTEXT, acquireLock, parseContractBody, poll, sha256, validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
+import { createNotifier } from "./notify.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
@@ -145,6 +146,7 @@ function fixture(backend, overrides = {}) {
       ensureLabels: false,
       authObserver: (agent, adapter) => ({ authorized_via: adapter.authorized_via, observed_via: adapter.authorized_via, evidence: { fixture: true }, valid: true }),
       invoke: ({ contract: current }) => ({ result: validResult(current), telemetry: { fixture: true }, duration_ms: 1 }),
+      notify: async () => ({ sent: false, reason: "fixture" }),
       ...overrides,
     },
   };
@@ -161,6 +163,18 @@ function spawnFailure(code, command) {
     stdout: "",
     stderr: "",
   };
+}
+
+function ntfyFixture(fetchImpl, logger = { info() {}, warn() {} }) {
+  return createNotifier({
+    env: {
+      ROADMAP_NTFY_TOPIC: "topic-ficticio-pruebas",
+      ROADMAP_NTFY_BASE_URL: "https://notify.invalid",
+    },
+    fetchImpl,
+    logger,
+    timeoutMs: 100,
+  });
 }
 
 function assertResultFailed(result, currentContract) {
@@ -641,4 +655,128 @@ test("fallo de ambos launchers durante observación termina blocked-via sin infe
     assert.equal(backend.issues[0].comments.length, 0);
     assert(backend.issues[0].labels.has("handoff:blocked-via"));
   } finally { clean(fx); }
+});
+
+test("ntfy sin topic no emite, no falla y registra una sola vez", async () => {
+  let fetches = 0;
+  const logs = [];
+  const root = mkdtempSync(join(tmpdir(), "ntfy-test-"));
+  const notify = createNotifier({
+    env: {},
+    localConfigPath: join(root, "ausente.json"),
+    fetchImpl: async () => { fetches += 1; return { ok: true, status: 200 }; },
+    logger: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
+  });
+  try {
+    const event = { event: "chain_complete", title: "T", message: "M", priority: 3, tags: [] };
+    assert.deepEqual(await notify(event), { sent: false, reason: "not_configured" });
+    assert.deepEqual(await notify(event), { sent: false, reason: "not_configured" });
+    assert.equal(fetches, 0);
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /sin topic configurado/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("ntfy usa el archivo local, la base por defecto y admite prioridad 5", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ntfy-test-"));
+  const localConfigPath = join(root, "notify.local.json");
+  writeFileSync(localConfigPath, `${JSON.stringify({ topic: "topic-ficticio-archivo" })}\n`, "utf8");
+  const calls = [];
+  const notify = createNotifier({
+    env: {},
+    localConfigPath,
+    fetchImpl: async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200 }; },
+    logger: { info() {}, warn() {} },
+  });
+  try {
+    assert.deepEqual(await notify({
+      event: "director_required", title: "Atención", message: "Intervención requerida",
+      priority: 5, tags: ["rotating_light"],
+    }), { sent: true });
+    assert.equal(calls[0].url, "https://ntfy.sh/topic-ficticio-archivo");
+    assert.equal(calls[0].options.headers.Priority, "5");
+    assert.equal(calls[0].options.headers.Tags, "rotating_light");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("poll notifica una unidad ready pendiente con prioridad 4", async () => {
+  const calls = [];
+  const backend = new FakeBackend([{ number: 1, title: "A", body: issueBody(contract()), createdAt: "2026-08-11T00:00:00Z" }]);
+  const fx = fixture(backend, {
+    config: { ...BASE_CONFIG, max_unidades_por_corrida: 1 },
+    notify: ntfyFixture(async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200 }; }),
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.deepEqual(result.processed.map((item) => item.status), ["done"], JSON.stringify(result, null, 2));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://notify.invalid/topic-ficticio-pruebas");
+    assert.equal(calls[0].options.headers.Priority, "4");
+    assert.equal(calls[0].options.headers.Title, "Handoff pendiente");
+    assert.equal(calls[0].options.body, "Issue #2 quedó en handoff:ready. Volvé a ejecutar poll.");
+  } finally { clean(fx); }
+});
+
+test("poll notifica un terminal no done con prioridad 4 y motivo", async () => {
+  const calls = [];
+  const invalid = contract();
+  delete invalid.head_sha;
+  const backend = new FakeBackend([{ number: 7, title: "bad", body: issueBody(invalid), createdAt: "2026-08-11T00:00:00Z" }]);
+  const fx = fixture(backend, {
+    notify: ntfyFixture(async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200 }; }),
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].status, "blocked");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://notify.invalid/topic-ficticio-pruebas");
+    assert.equal(calls[0].options.headers.Priority, "4");
+    assert.equal(calls[0].options.headers.Title, "Handoff requiere atención");
+    assert.match(calls[0].options.body, /^Issue #7 terminó en handoff:blocked: head_sha inválido$/);
+  } finally { clean(fx); }
+});
+
+test("poll notifica el fin de cadena con prioridad 3", async () => {
+  const calls = [];
+  const backend = new FakeBackend([{ number: 9, title: "A", body: issueBody(contract()), createdAt: "2026-08-11T00:00:00Z" }]);
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => ({ result: validResult(current, null), telemetry: {}, duration_ms: 1 }),
+    notify: ntfyFixture(async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200 }; }),
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].status, "done", JSON.stringify(result, null, 2));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://notify.invalid/topic-ficticio-pruebas");
+    assert.equal(calls[0].options.headers.Priority, "3");
+    assert.equal(calls[0].options.headers.Title, "Cadena de handoff completada");
+    assert.equal(calls[0].options.body, "Issue #9 completó la cadena sin siguiente destinatario.");
+  } finally { clean(fx); }
+});
+
+test("fallos de ntfy no alteran el resultado de poll", async () => {
+  const run = async (notify) => {
+    const invalid = contract();
+    delete invalid.head_sha;
+    const backend = new FakeBackend([{ number: 11, title: "bad", body: issueBody(invalid), createdAt: "2026-08-11T00:00:00Z" }]);
+    const fx = fixture(backend, { notify });
+    try { return await poll(fx.options); } finally { clean(fx); }
+  };
+  const baseline = await run(async () => ({ sent: true }));
+
+  const thrownLogs = [];
+  const thrown = await run(ntfyFixture(
+    async () => { throw new Error("red caída"); },
+    { info() {}, warn: (message) => thrownLogs.push(message) },
+  ));
+  assert.deepEqual(thrown, baseline);
+  assert.match(thrownLogs.join("\n"), /red caída/);
+
+  const httpLogs = [];
+  const http500 = await run(ntfyFixture(
+    async () => ({ ok: false, status: 500 }),
+    { info() {}, warn: (message) => httpLogs.push(message) },
+  ));
+  assert.deepEqual(http500, baseline);
+  assert.match(httpLogs.join("\n"), /HTTP 500/);
 });
