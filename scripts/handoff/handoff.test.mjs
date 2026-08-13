@@ -492,6 +492,57 @@ test("invokeAgent usa Kimi aislado, fija K3-256k high y no reenvía PAYG", () =>
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("invokeAgent acepta un único bloque JSON fenced de Kimi", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-fenced-test-"));
+  const expected = validResult(current, null);
+  try {
+    const invocation = invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      run: () => ({
+        status: 0,
+        stderr: "",
+        stdout: [
+          JSON.stringify({ role: "meta", type: "system.version", version: "0.34.0" }),
+          JSON.stringify({ role: "assistant", content: `\`\`\`json\n${JSON.stringify(expected, null, 2)}\n\`\`\`` }),
+        ].join("\n"),
+      }),
+    });
+    assert.deepEqual(invocation.result, expected);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("invokeAgent rechaza prosa alrededor de un bloque JSON fenced de Kimi", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-kimi-fenced-prose-test-"));
+  const expected = validResult(current, null);
+  try {
+    assert.throws(() => invokeAgent({
+      contract: current,
+      adapter: { ...BASE_CONFIG.agents.kimi, timeout_ms: 1234 },
+      prompt: "PAQUETE CONGELADO",
+      runDir: root,
+      run: () => ({
+        status: 0,
+        stderr: "",
+        stdout: JSON.stringify({
+          role: "assistant",
+          content: `Resultado:\n\`\`\`json\n${JSON.stringify(expected)}\n\`\`\``,
+        }),
+      }),
+    }), /Kimi no emitió JSON válido/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("invokeAgent rechaza eventos de herramienta emitidos por Kimi", () => {
   const current = validateContract(contract({
     destinatario: "kimi",

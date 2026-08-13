@@ -374,9 +374,11 @@ function parseKimi(stdout) {
   if (forbidden) fail(`Kimi emitió un evento no permitido: ${forbidden.role ?? "sin rol"}`);
   const message = [...events].reverse().find((event) => event.role === "assistant" && typeof event.content === "string");
   if (!message) fail("Kimi no emitió contenido de Assistant");
+  const fenced = message.content.match(/^\s*```json[^\S\r\n]*\r?\n([\s\S]*?)\r?\n```[^\S\r\n]*$/i);
+  const content = fenced?.[1] ?? message.content;
   let result;
   try {
-    result = JSON.parse(message.content);
+    result = JSON.parse(content);
   } catch (error) {
     fail(`Kimi no emitió JSON válido: ${error.message}`);
   }
