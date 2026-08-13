@@ -124,6 +124,16 @@ Un agente **no puede declarar VALIDADO OPERATIVAMENTE algo que su entorno no le 
 
 De ahí se sigue una separación de roles: quien revisa responde si algo está bien construido, y quien valida responde si funciona realmente. Son preguntas distintas y no siempre las puede contestar el mismo agente.
 
+### Premisas externas de una unidad
+
+Una **premisa externa** es una afirmación sobre cómo se comporta una herramienta de terceros —una bandera, un formato de salida, una vía de autenticación, un límite— de la que depende un diseño o una implementación. Los estados de arriba dicen cómo clasificarla; esto dice cuándo hay que conseguirla y a quién le toca.
+
+- **Arquitecto / Lead.** Antes de emitir una unidad implementable, identifica las premisas externas materiales de las que depende y verifica la fuente oficial aplicable, con su versión y alcance cuando importen. Si la premisa es duradera, registra la fuente según [0002](decisiones/0002-metadata-minima-de-fuentes.md). No completa huecos por memoria ni por suposición: si una premisa material sigue sin verificar y es razonablemente verificable, la unidad todavía no está lista para implementarse.
+- **Ejecutor.** No da por cierta una premisa sólo porque está escrita en la orden. Si al implementar aparece una contradicción con la documentación, una versión incompatible o una capacidad que no puede demostrar, detiene esa parte y la devuelve al Arquitecto en vez de resolverla por su cuenta.
+- **Reviewer independiente.** No repite la investigación. Comprueba que las premisas externas materiales estén identificadas y con evidencia trazable, y no toma como fundamento suficiente una especificación que no la tenga.
+
+Verificar no significa poder siempre: cuando la fuente oficial no sea alcanzable desde el entorno del agente, eso se declara —igual que cualquier otro límite— y se decide con la evidencia que sí exista, sabiendo que se apoya en observación y no en documentación.
+
 ## Intervención crítica del agente
 
 - Estas reglas aplican a cualquier agente, modelo o ejecutor que trabaje en el proyecto.
