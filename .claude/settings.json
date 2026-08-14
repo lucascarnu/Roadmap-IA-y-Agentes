@@ -22,7 +22,8 @@
       "PowerShell(gh pr view *)",
       "PowerShell(gh pr list *)",
       "PowerShell(gh pr diff *)",
-      "PowerShell(.\\scripts\\get-pr-comments.ps1 *)"
+      "PowerShell(.\\scripts\\get-pr-comments.ps1 *)",
+      "PowerShell(node scripts/handoff/handoff.mjs poll)"
     ],
     "deny": [
       "Edit(/.claude/**)",
