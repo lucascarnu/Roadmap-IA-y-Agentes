@@ -42,7 +42,7 @@ export const GOVERNING_CONTEXT = Object.freeze({
 });
 
 export const LABELS = [
-  "handoff:ready", "handoff:running", "handoff:done", "handoff:failed",
+  "handoff:waiting", "handoff:ready", "handoff:running", "handoff:done", "handoff:failed",
   "handoff:stale", "handoff:blocked", "handoff:blocked-via",
 ];
 
@@ -483,7 +483,7 @@ export class GithubBackend {
   }
 
   ensureLabels() {
-    const colors = { ready: "1f883d", running: "bf8700", done: "0969da", failed: "cf222e", stale: "8250df", blocked: "bc4c00", "blocked-via": "a40e26" };
+    const colors = { waiting: "d4c5f9", ready: "1f883d", running: "bf8700", done: "0969da", failed: "cf222e", stale: "8250df", blocked: "bc4c00", "blocked-via": "a40e26" };
     for (const label of LABELS) this.gh(["label", "create", label, "--repo", this.repository, "--color", colors[label.slice(8)], "--force"]);
   }
 
@@ -510,6 +510,14 @@ export class GithubBackend {
 
   currentHead(ref) {
     return this.gh(["api", `repos/${this.repository}/git/ref/heads/${ref}`, "--jq", ".object.sha"]);
+  }
+
+  checkRun(pr, name) {
+    const raw = this.gh(["pr", "view", String(pr), "--repo", this.repository, "--json", "statusCheckRollup"]);
+    const checks = JSON.parse(raw || "{}").statusCheckRollup ?? [];
+    const matches = checks.filter((check) => check.__typename === "CheckRun" && check.name === name);
+    if (matches.length > 1) fail(`Check run ambiguo en PR #${pr}: ${name}`, "handoff:blocked");
+    return matches[0] ?? null;
   }
 
   findChild(marker) {
@@ -772,6 +780,316 @@ async function notifyPollResult({ backend, processed, notify }) {
   }
 }
 
+const WAIT_CONDITIONS = new Set(["tiempo", "check_run"]);
+const WAIT_FIELDS = [
+  "handoff_wait_version", "condicion", "parametros", "intervalo_segundos", "max_intentos", "blocked_since",
+];
+const MAX_BACKOFF_SECONDS = 60 * 60;
+const BLOCKED_LONG_MS = 24 * 60 * 60 * 1000;
+
+function labelsOf(issue) {
+  if (issue.labels instanceof Set) return [...issue.labels];
+  return (issue.labels ?? []).map((label) => typeof label === "string" ? label : label.name);
+}
+
+function parseWaitDescriptor(issue, comments) {
+  const markerPattern = new RegExp(`^<!-- handoff-wait:${issue.number}:([0-9a-f]{40}) -->\\r?$`, "m");
+  const candidates = comments.filter((comment) => markerPattern.test(comment.body ?? ""));
+  if (candidates.length !== 1) fail(
+    candidates.length ? "Descriptor de espera ambiguo" : "Descriptor de espera ausente",
+    "handoff:blocked",
+  );
+  const body = candidates[0].body ?? "";
+  const exact = body.match(/^<!-- handoff-wait:(\d+):([0-9a-f]{40}) -->\s*```json\s*([\s\S]*?)```\s*$/i);
+  if (!exact || Number(exact[1]) !== issue.number) fail("Descriptor de espera inválido", "handoff:blocked");
+  let descriptor;
+  try {
+    descriptor = JSON.parse(exact[3]);
+  } catch (error) {
+    fail(`Descriptor de espera JSON inválido: ${error.message}`, "handoff:blocked");
+  }
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) fail("Descriptor de espera no es objeto", "handoff:blocked");
+  onlyKeys(descriptor, WAIT_FIELDS, "descriptor de espera");
+  if (WAIT_FIELDS.some((field) => !Object.hasOwn(descriptor, field))) fail("Descriptor de espera incompleto", "handoff:blocked");
+  if (descriptor.handoff_wait_version !== "1") fail("handoff_wait_version incompatible", "handoff:blocked");
+  if (!WAIT_CONDITIONS.has(descriptor.condicion)) fail(`Condición de espera desconocida: ${descriptor.condicion}`, "handoff:blocked");
+  if (!descriptor.parametros || typeof descriptor.parametros !== "object" || Array.isArray(descriptor.parametros)) fail("parametros de espera inválidos", "handoff:blocked");
+  if (!Number.isInteger(descriptor.intervalo_segundos) || descriptor.intervalo_segundos < 1) fail("intervalo_segundos inválido", "handoff:blocked");
+  if (!Number.isInteger(descriptor.max_intentos) || descriptor.max_intentos < 1) fail("max_intentos inválido", "handoff:blocked");
+  const blockedAt = Date.parse(descriptor.blocked_since);
+  if (typeof descriptor.blocked_since !== "string" || !Number.isFinite(blockedAt)) fail("blocked_since inválido", "handoff:blocked");
+  if (descriptor.condicion === "tiempo") {
+    onlyKeys(descriptor.parametros, [], "parametros de tiempo");
+  } else {
+    onlyKeys(descriptor.parametros, ["pr", "nombre"], "parametros de check_run");
+    if (!Number.isInteger(descriptor.parametros.pr) || descriptor.parametros.pr < 1
+      || typeof descriptor.parametros.nombre !== "string" || !descriptor.parametros.nombre) {
+      fail("parametros de check_run inválidos", "handoff:blocked");
+    }
+  }
+  const contract = parseContractBody(issue.body);
+  if (contract.head_sha !== exact[2]) fail("HEAD del descriptor de espera no coincide con el contrato", "handoff:blocked");
+  return { descriptor, blockedAt };
+}
+
+async function evaluateWaitCondition(descriptor, backend) {
+  if (descriptor.condicion === "tiempo") return { fulfilled: true, error: null };
+  const check = await backend.checkRun(descriptor.parametros.pr, descriptor.parametros.nombre);
+  const conclusion = check?.conclusion ?? null;
+  return {
+    fulfilled: conclusion === "SUCCESS",
+    error: check ? `check_run ${descriptor.parametros.nombre}: ${conclusion ?? check.status ?? "SIN_CONCLUSION"}`
+      : `check_run ${descriptor.parametros.nombre}: NO_ENCONTRADO`,
+  };
+}
+
+async function notifyWaitBlocked({ notify, issue, reason, exhausted = false }) {
+  if (exhausted) {
+    await notifySafely(notify, {
+      event: "terminal_error",
+      title: "Handoff agotó reintentos",
+      message: `Issue #${issue.number} terminó en handoff:blocked: ${compactReason(reason)}`,
+      priority: 4,
+      tags: ["warning"],
+    });
+  }
+  await notifySafely(notify, {
+    event: "needs_human",
+    title: "Handoff requiere intervención",
+    message: `Issue #${issue.number} requiere atención: ${compactReason(reason)}`,
+    priority: 5,
+    tags: ["rotating_light"],
+  });
+}
+
+function retryPolicy(descriptor, state) {
+  if (descriptor) return {
+    intervalo_segundos: descriptor.intervalo_segundos,
+    max_intentos: descriptor.max_intentos,
+  };
+  return state.retry_policy ?? null;
+}
+
+async function blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason, intentos, exhausted = false }) {
+  backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
+  saveState(runtimeDir, issue.number, {
+    ...state, phase: "blocked", ...(intentos === undefined ? {} : { intentos }),
+    next_check_at: null, ultimo_error: reason,
+  });
+  transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
+  await notifyWaitBlocked({ notify, issue, reason, exhausted });
+}
+
+async function recordUnexpectedWaitFailure({
+  backend, runtimeDir, transitions, notify, issue, state, descriptor, currentMs, error,
+}) {
+  const reason = `Error inesperado al evaluar la espera: ${error.message}`;
+  if (state.intentos !== undefined && (!Number.isInteger(state.intentos) || state.intentos < 0)) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state, reason: "intentos local inválido",
+    });
+    return;
+  }
+  const intentos = (state.intentos ?? 0) + 1;
+  const policy = retryPolicy(descriptor, state);
+  if (policy && (!Number.isInteger(policy.intervalo_segundos) || policy.intervalo_segundos < 1
+    || !Number.isInteger(policy.max_intentos) || policy.max_intentos < 1)) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state, reason: "retry_policy local inválida",
+    });
+    return;
+  }
+  if (policy && intentos > policy.max_intentos) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state,
+      reason: `max_intentos agotado (${policy.max_intentos}): ${reason}`,
+      intentos, exhausted: true,
+    });
+    return;
+  }
+  const backoffSeconds = policy
+    ? Math.min(MAX_BACKOFF_SECONDS, policy.intervalo_segundos * (2 ** (intentos - 1)))
+    : MAX_BACKOFF_SECONDS;
+  saveState(runtimeDir, issue.number, {
+    ...state, phase: "waiting", intentos,
+    next_check_at: new Date(currentMs + backoffSeconds * 1000).toISOString(),
+    ultimo_error: reason,
+  });
+  transitionLog(transitions, {
+    issue: issue.number, from: "waiting", to: "waiting", error: reason, recoverable: true,
+  });
+  await notifySafely(notify, {
+    event: "wait_check_error",
+    title: "Handoff no pudo evaluar la espera",
+    message: `Issue #${issue.number} seguirá en handoff:waiting: ${compactReason(reason)}`,
+    priority: 4,
+    tags: ["warning"],
+  });
+}
+
+export async function tick(options = {}) {
+  const config = options.config ?? readJson(options.configPath ?? DEFAULT_CONFIG);
+  const repo = resolve(options.repo ?? ROOT);
+  const runtimeDir = resolve(options.runtimeDir ?? RUNTIME);
+  const artifactsDir = resolve(options.artifactsDir ?? ARTIFACTS);
+  const backend = options.backend ?? new GithubBackend(config.repository);
+  const notify = options.notify ?? createNotifier();
+  const warn = options.warn ?? console.warn;
+  const now = options.now ?? (() => new Date());
+  const pollFn = options.pollFn ?? poll;
+  const transitions = join(artifactsDir, "transitions.log");
+  mkdirSync(runtimeDir, { recursive: true });
+  mkdirSync(artifactsDir, { recursive: true });
+  const globalLock = join(runtimeDir, "poll.lock");
+  if (!acquireRecoverableProcessLock(globalLock)) return { status: "locked", promovidas: [], poll: null };
+  const promovidas = [];
+  let rescatables = [];
+  try {
+    if (options.ensureLabels === true) await backend.ensureLabels();
+    const waiting = await backend.listByLabel("handoff:waiting");
+    rescatables = (await backend.listByLabel("handoff:ready"))
+      .filter((issue) => stateFor(runtimeDir, issue.number)?.phase === "ready")
+      .map((issue) => issue.number);
+    for (const issue of waiting) {
+      if (labelsOf(issue).some((label) => TERMINAL_LABELS.has(label))) continue;
+      let state = stateFor(runtimeDir, issue.number) ?? {};
+      const currentTime = now();
+      const currentMs = currentTime.getTime();
+      let parsed;
+      try {
+        parsed = parseWaitDescriptor(issue, await backend.comments(issue.number));
+      } catch (error) {
+        if (error instanceof HandoffError) {
+          await blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason: error.message });
+        } else {
+          await recordUnexpectedWaitFailure({
+            backend, runtimeDir, transitions, notify, issue, state, descriptor: null, currentMs, error,
+          });
+        }
+        continue;
+      }
+
+      const { descriptor, blockedAt } = parsed;
+      state = { ...state, retry_policy: retryPolicy(descriptor, state) };
+      if (currentMs - blockedAt > BLOCKED_LONG_MS && state.blocked_long_notified !== true) {
+        await notifySafely(notify, {
+          event: "blocked_long",
+          title: "Handoff en espera prolongada",
+          message: `Issue #${issue.number} lleva más de 24 h en handoff:waiting.`,
+          priority: 3,
+          tags: ["hourglass"],
+        });
+        state = { ...state, blocked_long_notified: true };
+        saveState(runtimeDir, issue.number, state);
+      }
+      if (state.intentos !== undefined && (!Number.isInteger(state.intentos) || state.intentos < 0)) {
+        const reason = "intentos local inválido";
+        backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
+        saveState(runtimeDir, issue.number, { ...state, phase: "blocked", ultimo_error: reason });
+        transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
+        await notifyWaitBlocked({ notify, issue, reason });
+        continue;
+      }
+      const initialNextMs = blockedAt + descriptor.intervalo_segundos * 1000;
+      const nextCheckMs = state.next_check_at ? Date.parse(state.next_check_at) : initialNextMs;
+      if (!Number.isFinite(nextCheckMs)) {
+        const reason = "next_check_at local inválido";
+        backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
+        saveState(runtimeDir, issue.number, { ...state, phase: "blocked", ultimo_error: reason });
+        transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
+        await notifyWaitBlocked({ notify, issue, reason });
+        continue;
+      }
+      if (!state.next_check_at) state = { ...state, intentos: state.intentos ?? 0, next_check_at: new Date(nextCheckMs).toISOString(), ultimo_error: state.ultimo_error ?? null };
+      if (nextCheckMs > currentMs) {
+        saveState(runtimeDir, issue.number, state);
+        continue;
+      }
+
+      let evaluated;
+      try {
+        evaluated = await evaluateWaitCondition(descriptor, backend);
+      } catch (error) {
+        if (error instanceof HandoffError) {
+          await blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason: error.message });
+        } else {
+          await recordUnexpectedWaitFailure({
+            backend, runtimeDir, transitions, notify, issue, state, descriptor, currentMs, error,
+          });
+        }
+        continue;
+      }
+      if (!evaluated.fulfilled) {
+        const intentos = (state.intentos ?? 0) + 1;
+        if (intentos > descriptor.max_intentos) {
+          const reason = `max_intentos agotado (${descriptor.max_intentos}): ${evaluated.error}`;
+          backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
+          saveState(runtimeDir, issue.number, { ...state, phase: "blocked", intentos, next_check_at: null, ultimo_error: reason });
+          transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
+          await notifyWaitBlocked({ notify, issue, reason, exhausted: true });
+          continue;
+        }
+        const backoffSeconds = Math.min(MAX_BACKOFF_SECONDS, descriptor.intervalo_segundos * (2 ** (intentos - 1)));
+        saveState(runtimeDir, issue.number, {
+          ...state, phase: "waiting", intentos,
+          next_check_at: new Date(currentMs + backoffSeconds * 1000).toISOString(),
+          ultimo_error: evaluated.error,
+        });
+        continue;
+      }
+
+      backend.setState(issue.number, "handoff:waiting", "handoff:ready");
+      const { retry_policy: _retryPolicy, ...stateWithoutRetryPolicy } = state;
+      saveState(runtimeDir, issue.number, {
+        ...stateWithoutRetryPolicy, phase: "ready", intentos: 0, blocked_long_notified: false,
+        next_check_at: null, ultimo_error: null, resumed_at: currentTime.toISOString(),
+      });
+      transitionLog(transitions, { issue: issue.number, from: "waiting", to: "ready", condition: descriptor.condicion });
+      promovidas.push(issue.number);
+      await notifySafely(notify, {
+        event: "resumed",
+        title: "Handoff reanudado",
+        message: `Issue #${issue.number} pasó de handoff:waiting a handoff:ready.`,
+        priority: 3,
+        tags: ["arrow_forward"],
+      });
+    }
+  } finally {
+    releaseLock(globalLock);
+  }
+
+  for (const issue of rescatables) {
+    transitionLog(transitions, {
+      issue, from: "ready", to: "ready", reason: "scheduler_retry_dispatch", recoverable: true,
+    });
+  }
+  const pollResult = (promovidas.length || rescatables.length) ? await pollFn({
+    config, repo, runtimeDir, artifactsDir, backend, notify,
+    invoke: options.invoke, authObserver: options.authObserver, run: options.run,
+  }) : null;
+  if (promovidas.length) {
+    const processed = new Set((pollResult?.processed ?? []).map((result) => result.issue));
+    const pendientes = promovidas.filter((issue) => !processed.has(issue));
+    if (pendientes.length) {
+      const reason = `poll no procesó unidades promovidas por tick: ${pendientes.join(", ")}`;
+      warn(`handoff: ${reason}`);
+      for (const issue of pendientes) {
+        transitionLog(transitions, {
+          issue, from: "ready", to: "ready", reason: "poll_no_proceso_promocion", recoverable: true,
+        });
+      }
+      await notifySafely(notify, {
+        event: "dispatch_gap",
+        title: "Handoff promovido pendiente",
+        message: `${reason}. Un tick posterior intentará rescatarlo.`,
+        priority: 4,
+        tags: ["warning"],
+      });
+    }
+  }
+  return { status: "complete", promovidas, poll: pollResult };
+}
+
 export async function poll(options = {}) {
   const config = options.config ?? readJson(options.configPath ?? DEFAULT_CONFIG);
   const repo = resolve(options.repo ?? ROOT);
@@ -788,16 +1106,19 @@ export async function poll(options = {}) {
   const lockOwner = { pid: options.hooks?.crash_owner_pid ?? process.pid, created_at: new Date().toISOString() };
   if (!acquireRecoverableProcessLock(globalLock, lockOwner)) return { status: "locked", processed: [] };
   const processed = [];
+  const processedIssues = new Set();
   try {
     if (options.ensureLabels === true) await backend.ensureLabels();
     await recoverOrphans({ backend, runtimeDir, transitions });
     while (processed.length < config.max_unidades_por_corrida) {
       const ready = await backend.listByLabel("handoff:ready");
-      if (!ready.length) break;
+      const issue = ready.find((candidate) => !processedIssues.has(candidate.number));
+      if (!issue) break;
+      processedIssues.add(issue.number);
       const result = await processIssue({
         backend, config, repo, runtimeDir, artifactsDir, transitions, invoke, authObserver,
         hooks: options.hooks, run: options.run ?? runProcess,
-      }, ready[0]);
+      }, issue);
       processed.push(result);
       if (result.status === "locked") break;
     }
@@ -814,7 +1135,7 @@ export async function poll(options = {}) {
 }
 
 function usage() {
-  return "Uso: node scripts/handoff/handoff.mjs poll | setup-labels";
+  return "Uso: node scripts/handoff/handoff.mjs poll | tick | setup-labels";
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -826,6 +1147,7 @@ export async function main(argv = process.argv.slice(2)) {
     return { status: "labels_ready" };
   }
   if (command === "poll") return poll({ config, backend });
+  if (command === "tick") return tick({ config, backend });
   fail(usage(), "handoff:blocked");
 }
 

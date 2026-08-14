@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CrashSimulation, GOVERNING_CONTEXT, acquireLock, buildPrompt, invokeAgent, parseContractBody, poll, prepareInput, sha256,
+  CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
+  parseContractBody, poll, prepareInput, sha256, tick,
   validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
@@ -90,6 +91,7 @@ class FakeBackend {
     this.lastHead = this.heads.at(-1) ?? HEAD;
     this.next = Math.max(0, ...this.issues.map((item) => item.number)) + 1;
     this.publishFailures = options.publishFailures ?? 0;
+    this.checkRuns = options.checkRuns ?? {};
   }
 
   ensureLabels() {}
@@ -123,6 +125,10 @@ class FakeBackend {
   currentHead() {
     if (this.heads.length) this.lastHead = this.heads.shift();
     return this.lastHead;
+  }
+
+  checkRun(pr, name) {
+    return this.checkRuns[`${pr}:${name}`] ?? null;
   }
 
   findChild(marker) {
@@ -161,6 +167,45 @@ function fixture(backend, overrides = {}) {
 
 function clean(item) {
   rmSync(item.root, { recursive: true, force: true });
+}
+
+function waitDescriptor(issue, overrides = {}, markerHead = HEAD) {
+  const descriptor = {
+    handoff_wait_version: "1",
+    condicion: "tiempo",
+    parametros: {},
+    intervalo_segundos: 60,
+    max_intentos: 3,
+    blocked_since: "2026-08-13T10:00:00.000Z",
+    ...overrides,
+  };
+  return `<!-- handoff-wait:${issue}:${markerHead} -->\n\n\`\`\`json\n${JSON.stringify(descriptor, null, 2)}\n\`\`\`\n`;
+}
+
+function waitingIssue(number = 1, descriptorOverrides = {}, overrides = {}) {
+  return {
+    number,
+    title: `waiting-${number}`,
+    body: issueBody(contract()),
+    createdAt: `2026-08-13T0${number}:00:00Z`,
+    labels: ["handoff:waiting"],
+    comments: [{ body: waitDescriptor(number, descriptorOverrides) }],
+    ...overrides,
+  };
+}
+
+function waitStatePath(fx, issue) {
+  return join(fx.options.runtimeDir, "issues", String(issue), "state.json");
+}
+
+function setWaitState(fx, issue, state) {
+  const path = waitStatePath(fx, issue);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+function getWaitState(fx, issue) {
+  return JSON.parse(readFileSync(waitStatePath(fx, issue), "utf8"));
 }
 
 function spawnFailure(code, command) {
@@ -1242,6 +1287,567 @@ test("fallo de ambos launchers durante observación termina blocked-via sin infe
     assert.equal(invocations, 0);
     assert.equal(backend.issues[0].comments.length, 0);
     assert(backend.issues[0].labels.has("handoff:blocked-via"));
+  } finally { clean(fx); }
+});
+
+test("tick sin waiting ni ready termina limpio sin poll ni agente", async () => {
+  let polls = 0;
+  let invocations = 0;
+  const fx = fixture(new FakeBackend(), {
+    pollFn: async () => { polls += 1; return { status: "unexpected" }; },
+    invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result, { status: "complete", promovidas: [], poll: null });
+    assert.equal(polls, 0);
+    assert.equal(invocations, 0);
+  } finally { clean(fx); }
+});
+
+test("tick con next_check_at futuro no promueve, no llama poll ni notifica", async () => {
+  let polls = 0;
+  const notifications = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:00:30.000Z"),
+    pollFn: async () => { polls += 1; },
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result, { status: "complete", promovidas: [], poll: null });
+    assert.equal(polls, 0);
+    assert.equal(notifications.length, 0);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    assert.equal(getWaitState(fx, 1).next_check_at, "2026-08-13T10:01:00.000Z");
+  } finally { clean(fx); }
+});
+
+test("tick tiempo cumplido promueve, registra transición y llama poll una vez", async () => {
+  let polls = 0;
+  const notifications = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => { polls += 1; return { status: "complete", processed: [{ issue: 1, status: "done" }] }; },
+    notify: async (payload) => { notifications.push(payload); return { sent: true }; },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result, {
+      status: "complete", promovidas: [1], poll: { status: "complete", processed: [{ issue: 1, status: "done" }] },
+    });
+    assert.equal(polls, 1);
+    assert(backend.issues[0].labels.has("handoff:ready"));
+    assert.match(readFileSync(join(fx.options.artifactsDir, "transitions.log"), "utf8"), /"from":"waiting","to":"ready"/);
+    assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [{ event: "resumed", priority: 3 }]);
+  } finally { clean(fx); }
+});
+
+test("tick posterior rescata una promoción que el primer poll no vio", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const originalList = backend.listByLabel.bind(backend);
+  let ocultarPrimeraAlta = true;
+  backend.listByLabel = (label) => {
+    const issues = originalList(label);
+    if (label === "handoff:ready" && issues.length && ocultarPrimeraAlta) {
+      ocultarPrimeraAlta = false;
+      return [];
+    }
+    return issues;
+  };
+  let invocations = 0;
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    warn: () => {},
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  try {
+    const first = await tick(fx.options);
+    assert.deepEqual(first.promovidas, [1]);
+    assert.deepEqual(first.poll.processed, []);
+    assert(backend.issues[0].labels.has("handoff:ready"));
+    assert.equal(getWaitState(fx, 1).phase, "ready");
+
+    const second = await tick(fx.options);
+    assert.deepEqual(second.promovidas, []);
+    assert.deepEqual(second.poll.processed.map(({ issue, status }) => ({ issue, status })), [{ issue: 1, status: "done" }]);
+    assert.equal(invocations, 1);
+    assert(backend.issues[0].labels.has("handoff:done"));
+  } finally { clean(fx); }
+});
+
+test("tick despacha ready cuando state.json demuestra promoción del scheduler", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-promovida", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  let invocations = 0;
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  setWaitState(fx, 1, { phase: "ready", intentos: 0, next_check_at: null, ultimo_error: null });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, []);
+    assert.deepEqual(result.poll.processed.map(({ issue, status }) => ({ issue, status })), [{ issue: 1, status: "done" }]);
+    assert.equal(invocations, 1);
+  } finally { clean(fx); }
+});
+
+test("tick no despacha ready sin procedencia local del scheduler", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-manual", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  let polls = 0;
+  let invocations = 0;
+  const fx = fixture(backend, {
+    pollFn: async () => { polls += 1; return { status: "complete", processed: [] }; },
+    invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result, { status: "complete", promovidas: [], poll: null });
+    assert.equal(polls, 0);
+    assert.equal(invocations, 0);
+    assert(backend.issues[0].labels.has("handoff:ready"));
+  } finally { clean(fx); }
+});
+
+test("poll no procesa dos veces una unidad repetida por el índice de labels", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-repetida", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  const staleIssue = backend.issues[0];
+  const originalList = backend.listByLabel.bind(backend);
+  backend.listByLabel = (label) => label === "handoff:ready" ? [staleIssue] : originalList(label);
+  let invocations = 0;
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed.length, 1);
+    assert.deepEqual(result.processed[0], { issue: 1, status: "done", child_issue: null });
+    assert.equal(invocations, 1);
+    assert.equal(backend.issues[0].comments.length, 1);
+  } finally { clean(fx); }
+});
+
+test("tick señala una promoción que poll no cubrió", async () => {
+  const notifications = [];
+  const warnings = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => ({ status: "complete", processed: [] }),
+    notify: async (payload) => { notifications.push(payload); },
+    warn: (message) => { warnings.push(message); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, [1]);
+    assert.deepEqual(result.poll.processed, []);
+    assert.deepEqual(notifications.map(({ event }) => event), ["resumed", "dispatch_gap"]);
+    assert.deepEqual(warnings, ["handoff: poll no procesó unidades promovidas por tick: 1"]);
+    assert.match(readFileSync(join(fx.options.artifactsDir, "transitions.log"), "utf8"), /"reason":"poll_no_proceso_promocion"/);
+  } finally { clean(fx); }
+});
+
+test("tick aísla un fallo por unidad, evalúa las posteriores y despacha promociones previas", async () => {
+  let polls = 0;
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1),
+    waitingIssue(2, { condicion: "check_run", parametros: { pr: 49, nombre: "review" } }),
+    waitingIssue(3),
+  ]);
+  backend.checkRun = () => { throw new Error("GitHub temporalmente inaccesible"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => {
+      polls += 1;
+      assert(backend.issues[0].labels.has("handoff:ready"));
+      assert(backend.issues[2].labels.has("handoff:ready"));
+      return { status: "complete", processed: [{ issue: 1 }, { issue: 3 }] };
+    },
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, [1, 3]);
+    assert.equal(polls, 1);
+    assert(backend.issues[1].labels.has("handoff:waiting"));
+    assert.equal(getWaitState(fx, 2).intentos, 1);
+    assert.match(getWaitState(fx, 2).ultimo_error, /GitHub temporalmente inaccesible/);
+    assert.deepEqual(notifications.map(({ event }) => event), ["resumed", "wait_check_error", "resumed"]);
+  } finally { clean(fx); }
+});
+
+test("tick agota el presupuesto de errores inesperados y termina needs_human", async () => {
+  let nowValue = new Date("2026-08-13T10:02:00.000Z");
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1, {
+      condicion: "check_run", parametros: { pr: 49, nombre: "review" }, max_intentos: 1,
+    }),
+  ]);
+  backend.checkRun = () => { throw new Error("fallo persistente del checker"); };
+  const fx = fixture(backend, {
+    now: () => nowValue,
+    pollFn: async () => assert.fail("No debe llamar poll"),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    await tick(fx.options);
+    const retryState = getWaitState(fx, 1);
+    assert.equal(retryState.intentos, 1);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    nowValue = new Date(retryState.next_check_at);
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).intentos, 2);
+    assert.deepEqual(notifications.map(({ event }) => event), [
+      "wait_check_error", "terminal_error", "needs_human",
+    ]);
+  } finally { clean(fx); }
+});
+
+test("tick admite el descriptor congelado con finales CRLF de Windows", async () => {
+  const issue = waitingIssue();
+  issue.comments[0].body = issue.comments[0].body.replaceAll("\n", "\r\n");
+  const backend = new FakeBackend([issue]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => ({ status: "complete", processed: [] }),
+  });
+  try {
+    assert.deepEqual((await tick(fx.options)).promovidas, [1]);
+  } finally { clean(fx); }
+});
+
+test("tick check_run FAILURE permanece waiting y registra el error", async () => {
+  const backend = new FakeBackend([
+    waitingIssue(1, { condicion: "check_run", parametros: { pr: 46, nombre: "review / review" } }),
+  ], { checkRuns: { "46:review / review": { conclusion: "FAILURE", status: "COMPLETED" } } });
+  const fx = fixture(backend, { now: () => new Date("2026-08-13T10:02:00.000Z"), pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, []);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    const state = getWaitState(fx, 1);
+    assert.equal(state.intentos, 1);
+    assert.equal(state.ultimo_error, "check_run review / review: FAILURE");
+  } finally { clean(fx); }
+});
+
+test("tick aplica backoff exponencial creciente con techo de una hora", async () => {
+  let nowValue = new Date("2026-08-13T10:40:00.000Z");
+  const backend = new FakeBackend([
+    waitingIssue(1, {
+      condicion: "check_run", parametros: { pr: 46, nombre: "review" }, intervalo_segundos: 2000,
+    }),
+  ], { checkRuns: { "46:review": { conclusion: "FAILURE" } } });
+  const fx = fixture(backend, { now: () => nowValue, pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    let state = getWaitState(fx, 1);
+    assert.equal(state.intentos, 1);
+    assert.equal(Date.parse(state.next_check_at) - nowValue.getTime(), 2_000_000);
+    nowValue = new Date(state.next_check_at);
+    await tick(fx.options);
+    state = getWaitState(fx, 1);
+    assert.equal(state.intentos, 2);
+    assert.equal(Date.parse(state.next_check_at) - nowValue.getTime(), 3_600_000);
+  } finally { clean(fx); }
+});
+
+test("tick bloquea al superar max_intentos y emite terminal_error más needs_human", async () => {
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1, { condicion: "check_run", parametros: { pr: 46, nombre: "review" }, max_intentos: 3 }),
+  ], { checkRuns: { "46:review": { conclusion: "FAILURE" } } });
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+    pollFn: async () => assert.fail("No debe llamar poll"),
+  });
+  setWaitState(fx, 1, { phase: "waiting", intentos: 3, next_check_at: "2026-08-13T10:01:00.000Z", ultimo_error: "previo" });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, []);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).intentos, 4);
+    assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [
+      { event: "terminal_error", priority: 4 }, { event: "needs_human", priority: 5 },
+    ]);
+  } finally { clean(fx); }
+});
+
+test("tick bloquea por descriptor ausente, JSON inválido y condición desconocida", async (t) => {
+  const cases = [
+    ["ausente", []],
+    ["JSON inválido", [{ body: `<!-- handoff-wait:1:${HEAD} -->\n\n\`\`\`json\n{\n\`\`\`` }]],
+    ["condición desconocida", [{ body: waitDescriptor(1, { condicion: "cuota", parametros: {} }) }]],
+  ];
+  for (const [name, comments] of cases) await t.test(name, async () => {
+    const notifications = [];
+    const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
+    const fx = fixture(backend, { notify: async (payload) => { notifications.push(payload); }, pollFn: async () => assert.fail("No debe llamar poll") });
+    try {
+      const result = await tick(fx.options);
+      assert.deepEqual(result.promovidas, []);
+      assert(backend.issues[0].labels.has("handoff:blocked"));
+      assert.deepEqual(notifications.map(({ event }) => event), ["needs_human"]);
+    } finally { clean(fx); }
+  });
+});
+
+test("tick bloquea un descriptor ambiguo con múltiples marcadores", async () => {
+  const comments = [{ body: waitDescriptor(1) }, { body: waitDescriptor(1) }];
+  const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "Descriptor de espera ambiguo");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea si el HEAD del marcador no coincide con el contrato", async () => {
+  const comments = [{ body: waitDescriptor(1, {}, "a".repeat(40)) }];
+  const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "HEAD del descriptor de espera no coincide con el contrato");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea un descriptor incompleto", async () => {
+  const backend = new FakeBackend([waitingIssue(1, { max_intentos: undefined })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "Descriptor de espera incompleto");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea un descriptor con campos extra", async () => {
+  const backend = new FakeBackend([waitingIssue(1, { campo_inesperado: true })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.match(getWaitState(fx, 1).ultimo_error, /campos incompatibles: campo_inesperado/);
+  } finally { clean(fx); }
+});
+
+test("tick conserva waiting ante un fallo transitorio al leer comentarios", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const notifications = [];
+  backend.comments = () => { throw new Error("GitHub inaccesible"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    assert.equal(backend.issues[0].labels.has("handoff:blocked"), false);
+    assert.equal(getWaitState(fx, 1).intentos, 1);
+    assert.deepEqual(notifications.map(({ event }) => event), ["wait_check_error"]);
+  } finally { clean(fx); }
+});
+
+test("tick falla globalmente si no puede listar handoff:waiting", async () => {
+  let polls = 0;
+  const backend = new FakeBackend();
+  backend.listByLabel = () => { throw new Error("No se pudo listar waiting"); };
+  const fx = fixture(backend, { pollFn: async () => { polls += 1; } });
+  try {
+    await assert.rejects(() => tick(fx.options), /No se pudo listar waiting/);
+    assert.equal(polls, 0);
+  } finally { clean(fx); }
+});
+
+test("tick bloquea fail-closed si el contador local está corrupto", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, { now: () => new Date("2026-08-13T10:02:00.000Z"), pollFn: async () => assert.fail("No debe llamar poll") });
+  setWaitState(fx, 1, { intentos: "dos", next_check_at: "2026-08-13T10:01:00.000Z" });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "intentos local inválido");
+  } finally { clean(fx); }
+});
+
+test("tick no toca una unidad que también tiene label terminal", async () => {
+  const backend = new FakeBackend([waitingIssue(1, {}, { labels: ["handoff:waiting", "handoff:done"] })]);
+  const fx = fixture(backend, { now: () => new Date("2026-08-13T10:02:00.000Z"), pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, []);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    assert(backend.issues[0].labels.has("handoff:done"));
+    assert.equal(existsSync(waitStatePath(fx, 1)), false);
+  } finally { clean(fx); }
+});
+
+test("tick respeta lock vivo y recupera lock de proceso muerto", async () => {
+  const lockedFx = fixture(new FakeBackend());
+  const liveLock = join(lockedFx.options.runtimeDir, "poll.lock");
+  assert.equal(acquireLock(liveLock), true);
+  try {
+    assert.deepEqual(await tick(lockedFx.options), { status: "locked", promovidas: [], poll: null });
+  } finally { clean(lockedFx); }
+
+  const recoveredFx = fixture(new FakeBackend());
+  const deadLock = join(recoveredFx.options.runtimeDir, "poll.lock");
+  assert.equal(acquireLock(deadLock, { pid: 999999, created_at: "2026-08-13T00:00:00.000Z" }), true);
+  try {
+    assert.deepEqual(await tick(recoveredFx.options), { status: "complete", promovidas: [], poll: null });
+    assert.equal(existsSync(deadLock), false);
+  } finally { clean(recoveredFx); }
+});
+
+test("dos tick seguidos no duplican promoción ni notificación", async () => {
+  let polls = 0;
+  const notifications = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => {
+      polls += 1;
+      backend.setState(1, "handoff:ready", "handoff:done");
+      return { status: "complete", processed: [{ issue: 1, status: "done" }] };
+    },
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    assert.deepEqual((await tick(fx.options)).promovidas, [1]);
+    assert.deepEqual((await tick(fx.options)).promovidas, []);
+    assert.equal(polls, 1);
+    assert.deepEqual(notifications.map(({ event }) => event), ["resumed"]);
+  } finally { clean(fx); }
+});
+
+test("la promoción resetea contadores y flags de una espera anterior", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => ({ status: "complete", processed: [{ issue: 1, status: "done" }] }),
+  });
+  setWaitState(fx, 1, {
+    phase: "waiting", intentos: 2, blocked_long_notified: true,
+    retry_policy: { intervalo_segundos: 60, max_intentos: 3 },
+    next_check_at: "2026-08-13T10:01:00.000Z", ultimo_error: "previo",
+  });
+  try {
+    await tick(fx.options);
+    const state = getWaitState(fx, 1);
+    assert.equal(state.intentos, 0);
+    assert.equal(state.blocked_long_notified, false);
+    assert.equal(state.next_check_at, null);
+    assert.equal(state.ultimo_error, null);
+    assert.equal(Object.hasOwn(state, "retry_policy"), false);
+  } finally { clean(fx); }
+});
+
+test("check_run ambiguo es HandoffError permanente y tick bloquea sin reintentar", async () => {
+  const rollup = {
+    statusCheckRollup: [
+      { __typename: "CheckRun", name: "review", conclusion: "SUCCESS" },
+      { __typename: "CheckRun", name: "review", conclusion: "FAILURE" },
+    ],
+  };
+  const github = new GithubBackend("example/repo", {
+    run: () => ({ status: 0, stdout: JSON.stringify(rollup), stderr: "" }),
+  });
+  assert.throws(
+    () => github.checkRun(49, "review"),
+    (error) => error instanceof HandoffError && error.label === "handoff:blocked" && /ambiguo/.test(error.message),
+  );
+
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1, { condicion: "check_run", parametros: { pr: 49, nombre: "review" } }),
+  ]);
+  backend.checkRun = () => { throw new HandoffError("Check run ambiguo en PR #49: review", "handoff:blocked"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+    pollFn: async () => assert.fail("No debe llamar poll"),
+  });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).intentos ?? 0, 0);
+    assert.deepEqual(notifications.map(({ event }) => event), ["needs_human"]);
+  } finally { clean(fx); }
+});
+
+test("tick check_run sólo cumple con SUCCESS exacto", async () => {
+  for (const [conclusion, expected] of [["SUCCESS", true], [null, false]]) {
+    let polls = 0;
+    const checks = conclusion === null ? {} : { "46:review": { conclusion } };
+    const backend = new FakeBackend([
+      waitingIssue(1, { condicion: "check_run", parametros: { pr: 46, nombre: "review" } }),
+    ], { checkRuns: checks });
+    const fx = fixture(backend, {
+      now: () => new Date("2026-08-13T10:02:00.000Z"),
+      pollFn: async () => { polls += 1; return { status: "complete", processed: [{ issue: 1, status: "done" }] }; },
+    });
+    try {
+      const result = await tick(fx.options);
+      assert.equal(result.promovidas.length === 1, expected, String(conclusion));
+      assert.equal(polls, expected ? 1 : 0);
+    } finally { clean(fx); }
+  }
+});
+
+test("blocked_long se notifica una sola vez mediante state.json", async () => {
+  const notifications = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-15T10:00:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+    pollFn: async () => assert.fail("No debe llamar poll"),
+  });
+  setWaitState(fx, 1, { intentos: 0, next_check_at: "2026-08-16T10:00:00.000Z", ultimo_error: null });
+  try {
+    await tick(fx.options);
+    await tick(fx.options);
+    assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [{ event: "blocked_long", priority: 3 }]);
+    assert.equal(getWaitState(fx, 1).blocked_long_notified, true);
+  } finally { clean(fx); }
+});
+
+test("un fallo de ntfy no altera el resultado de tick", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async () => { throw new Error("ntfy caído"); },
+    pollFn: async () => ({ status: "complete", processed: [{ issue: 1, status: "done" }] }),
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, [1]);
+    assert.equal(result.status, "complete");
   } finally { clean(fx); }
 });
 

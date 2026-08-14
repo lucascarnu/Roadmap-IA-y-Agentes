@@ -48,6 +48,7 @@ Issue ya marcado `handoff:ready`.
 
 Estados de tránsito:
 
+- `handoff:waiting`
 - `handoff:ready`
 - `handoff:running`
 - `handoff:done`
@@ -58,6 +59,100 @@ Fallos cerrados:
 - `handoff:stale`
 - `handoff:blocked`
 - `handoff:blocked-via`
+
+## Espera durable y `tick`
+
+Una unidad que espera una condición externa conserva su contrato normal, cambia
+a `handoff:waiting` y recibe exactamente un comentario con este marcador:
+
+```text
+<!-- handoff-wait:<issue>:<head_sha> -->
+```
+
+El Arquitecto / Lead u operador que pone la unidad en espera aplica la label y
+publica ese comentario. `tick` consume el estado; ni `tick` ni `poll` lo crean.
+
+El marcador va seguido por un único bloque `json` con
+`handoff_wait_version`, `condicion`, `parametros`, `intervalo_segundos`,
+`max_intentos` y `blocked_since`, sin campos adicionales. Las condiciones
+admitidas forman un registro cerrado:
+
+- `tiempo`, con `parametros: {}`;
+- `check_run`, con `parametros: { "pr": <entero>, "nombre": "<check exacto>" }`.
+
+Los datos mutables no se duplican en GitHub: `intentos`, `next_check_at`,
+`ultimo_error` y el flag de aviso prolongado reutilizan el `state.json` local de
+cada Issue. Si el archivo todavía no existe, `next_check_at` se inicializa como
+`blocked_since + intervalo_segundos`.
+
+```powershell
+node scripts/handoff/handoff.mjs tick
+```
+
+`tick` toma el mismo `poll.lock`, recorre `handoff:waiting` por antigüedad y no
+invoca agentes. Omite checks futuros; para un check no satisfecho incrementa los
+intentos y aplica `intervalo_segundos × 2^(intentos-1)`, con techo de una hora.
+Un descriptor inválido o desconocido falla cerrado en `handoff:blocked`. Cuando
+se supera `max_intentos`, también bloquea y pide intervención humana.
+
+Si una condición se cumple, `tick` registra una única transición a
+`handoff:ready`, libera el lock y recién entonces delega en el `poll()` existente.
+En pasadas posteriores también delega en `poll` cuando encuentra al menos una
+unidad rescatable: debe tener el label `handoff:ready` y su `state.json` local
+debe declarar `phase: "ready"`, marca que sólo escribe una promoción de `tick`.
+Por diseño, una unidad etiquetada `handoff:ready` a mano no es despachada sola
+por el scheduler. Sin promociones ni unidades rescatables termina con
+`poll: null`, por lo que no despierta ningún LLM.
+
+Si se borra el directorio de estado local, el scheduler pierde esa prueba de
+procedencia y el rescate degrada al comportamiento anterior: la unidad espera un
+`poll` manual, con aviso `ready_pending`, sin ejecución indebida. Una unidad
+promovida que el `poll` inmediato no procesa se rescata como máximo en la pasada
+siguiente, es decir, dentro de un intervalo de planificación. `transitions.log`
+registra `scheduler_retry_dispatch` al reintentar el despacho y
+`poll_no_proceso_promocion` cuando el `poll` inmediato no cubre una promoción.
+La salida es `{ "status", "promovidas", "poll" }`; un lock vivo devuelve
+`status: "locked"` y un fallo no controlado conserva `FAIL_CLOSED` y exit code 1.
+Los eventos `resumed`, `dispatch_gap`, `blocked_long`, `wait_check_error`,
+`terminal_error` y `needs_human` reutilizan el notifier ntfy tolerante a fallos.
+
+## Windows Task Scheduler (procedimiento PRE-MVP)
+
+La semántica de estas opciones está **DOCUMENTADA** por Microsoft y su
+trazabilidad vive en
+[la fuente registrada](../../fuentes/documentacion-task-scheduler-windows.md).
+El alta todavía no se ejecuta ni se presenta como validada operativamente.
+
+En Task Scheduler, crear una sola tarea bajo la cuenta del usuario que posee las
+sesiones OAuth de `gh` y de los CLIs, con **Run only when user is logged on**; no
+usar `SYSTEM`. Configurar:
+
+1. un trigger temporal que repita la tarea cada 15 minutos durante la duración
+   configurada para la fase PRE-MVP;
+2. un trigger adicional **At log on** para ese mismo usuario;
+3. **Run task as soon as possible after a scheduled start is missed**;
+4. **If the task is already running: Do not start a new instance**;
+5. una acción que ejecute `cmd.exe`, con el directorio raíz absoluto del
+   repositorio en **Start in** y estos argumentos:
+
+   ```text
+   /d /s /c "node scripts/handoff/handoff.mjs tick >> scripts\handoff\.handoff\tick.log 2>&1"
+   ```
+
+Antes de registrar o ejecutar esa acción, crear una vez el directorio local
+ignorado con `New-Item -ItemType Directory -Force scripts/handoff/.handoff`; `cmd`
+resuelve la redirección antes de iniciar Node. La redirección conserva
+stdout/stderr en un archivo local ignorado. El resultado
+de la última ejecución y la definición efectiva se inspeccionan desde Task
+Scheduler o con `schtasks /query /tn <NOMBRE> /fo LIST /v`; no se oculta el exit
+code del comando. Antes de aceptar el mecanismo hay que ejecutar el QA con
+reinicio definido por la unidad: cerrar agentes y terminales, reiniciar, no abrir
+agentes, observar el tick antes y después del vencimiento y comprobar promoción,
+`poll`, ausencia de duplicados, evidencia en GitHub y ntfy.
+
+Hasta completar ese QA independiente, el registro real, el contexto OAuth tras
+reinicio y el circuito Task Scheduler → `tick` → `poll` quedan
+**NO VALIDADOS OPERATIVAMENTE**.
 
 ## Contrato del Issue inicial
 
