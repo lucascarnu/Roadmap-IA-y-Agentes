@@ -69,6 +69,55 @@ Cada punto se usó para decidir una regla concreta de la política:
   concreta. Lo más cercano es `/permissions`, que lista las reglas y el archivo
   `settings.json` del que proviene cada una.
 
+## Semántica observada del matcher
+
+**PROBADO LOCALMENTE — 2026-08-14.** Estas observaciones describen el matcher
+efectivo en este entorno; no son una garantía universal del producto salvo donde
+la documentación oficial citada arriba diga lo mismo.
+
+### Parámetros adicionales y tuberías
+
+Un patrón de la forma `PowerShell(<cmd> <arg> *)` puede admitir parámetros
+adicionales posteriores y tuberías. La observación utilizada fue:
+
+`Get-ScheduledTaskInfo -TaskName "..." | Format-List * | Out-String`
+
+Esa invocación fue autorizada por `PowerShell(Get-ScheduledTaskInfo *)`.
+
+### El comodín final no funciona como glob libre sobre toda la cadena
+
+Las formas:
+
+- `Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational,Application ...`
+- `Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational','Application' ...`
+
+no matchearon las reglas destinadas al único canal permitido. Ambas fueron
+denegadas. Por lo tanto, en este entorno, el comodín final no debe asumirse como
+un glob libre sobre cualquier continuación sintáctica.
+
+### Hashtable
+
+La regla `PowerShell(Get-WinEvent -FilterHashtable *)` no autorizó
+`Get-WinEvent -FilterHashtable @{...}`. Por eso esa forma fue abandonada y
+reemplazada por `-LogName`.
+
+### Mensajes de denegación observados
+
+- `denied because Claude Code is running in don't ask mode` significa que
+  ninguna regla `allow` matcheó.
+- `Permission to use PowerShell with command ... has been denied` indica
+  coincidencia con una regla `deny` explícita.
+
+Esta distinción es comportamiento observado localmente, no una garantía
+universal del producto salvo que una fuente oficial futura la respalde.
+
+### Límite residual conocido
+
+PowerShell admite abreviaturas de nombres de parámetro. Por lo tanto, un `deny`
+anclado al nombre completo `-ComputerName` no necesariamente cubre todas las
+posibles abreviaturas de ese parámetro. UO-fix2 registra este límite sin intentar
+resolver todas las abreviaturas posibles.
+
 ## Por qué oro
 
 Determinó decisiones concretas y verificables, no impresiones. Corrigió tres

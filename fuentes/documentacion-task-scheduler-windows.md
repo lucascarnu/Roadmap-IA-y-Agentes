@@ -92,6 +92,20 @@ Consultadas el **2026-08-14**:
   `Microsoft-Windows-TaskScheduler/Operational` está habilitado y si contiene
   eventos, porque la vía autorizada anterior era precisamente la que no
   funcionaba.
+- El canal `Microsoft-Windows-TaskScheduler/Operational` existe y responde a
+  `Get-WinEvent`.
+- Actualmente no devuelve eventos recuperables: `Get-WinEvent` termina con
+  `NoMatchingEventsFound`. Ese resultado demuestra que el permiso funciona y
+  el cmdlet llega a ejecutarse.
+- La superficie autorizada no permite determinar si el canal está deshabilitado
+  o simplemente vacío. Determinarlo exigiría usar `Get-WinEvent -ListLog`, que
+  UO deniega deliberadamente porque expone `EventLogConfiguration` y su método
+  `SaveChanges()`.
+- Esta limitación es una consecuencia aceptada del diseño de UO, no una
+  capacidad faltante.
+- La observación **REMOTA** de tareas y de Event Log queda fuera del alcance de
+  UO. Esa superficie se cierra mediante reglas `deny` para `-ComputerName`,
+  `-Credential`, `schtasks /s`, `schtasks /u` y `schtasks /p`.
 
 ## Estado y revalidación
 
