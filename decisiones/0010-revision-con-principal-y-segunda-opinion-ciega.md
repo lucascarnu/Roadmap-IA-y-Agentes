@@ -58,6 +58,48 @@ elegibles. El shadow corre solo si se cumple alguna de estas tres condiciones:
 El muestreo es lo único que puede detectar **falsos negativos** del principal, y
 por eso no se elimina cuando el sistema parece estable: se espacia.
 
+### Estatus del shadow: capacidad medida, no gate de integración
+
+Esta decisión describía **cuándo corre** el shadow, pero no decía **qué pasa cuando no
+corre**. `0013` define el gate de integración remitiendo a "la revisión independiente
+exigida por las reglas vigentes", y `0014` remite a esta decisión para todo lo relativo
+al shadow. Ese triángulo admitía dos lecturas razonables: que el shadow formaba parte
+del gate, o que era una capacidad del pipeline. La práctica posterior del proyecto no lo
+aplicó como gate de forma sistemática, y sobre las mismas reglas distintos agentes
+resolvieron la ambigüedad de manera distinta.
+
+Es una ambigüedad real del texto, no un malentendido de quien lo leyó. Por eso se
+resuelve de forma explícita y **hacia adelante**: lo ya ocurrido no se reinterpreta.
+
+- El **reviewer independiente** —el rol que fija `0009` y que esta decisión instancia
+  como `principal`— es el **gate ordinario de revisión**, y sigue siendo obligatorio
+  donde el canon ya lo exige.
+- **La ausencia de shadow, por sí sola, no bloquea la integración.**
+- **La ausencia de shadow no constituye un hallazgo M1 ni M2, ni un defecto técnico**,
+  ni de la unidad ni del circuito, y no se registra como tal.
+- Los hallazgos **M1 o M2 materiales siguen bloqueando**, exactamente como fija la regla
+  de fusión, y vengan del reviewer que vengan.
+- **QA y las verificaciones reforzadas de la clase Riesgo declarado de `0014` quedan
+  intactas.** Esta sección no toca ningún piso de verificación.
+- El shadow queda como **capacidad**: segunda opinión cuando aporta señal, medición, y
+  evaluación del reviewer principal.
+- El **muestreo** puede seguir usándose para detectar falsos negativos del principal.
+  Que no corra, o que su ocupante no esté disponible, **no convierte una pull request en
+  no integrable**.
+- Cuando exista una **razón observable** para pensar que una segunda opinión habría
+  aportado señal en una unidad concreta, se registra como evidencia, **sin bloquear esa
+  unidad**, para poder evaluar más adelante si el shadow merece una función más fuerte.
+
+Nada de esto contradice a `0009`. Su regla de que la indisponibilidad de un revisor
+nunca cuenta como aprobación, y de que un gate obligatorio que no puede cubrirse detiene
+el circuito de forma segura, sigue rigiendo con toda su fuerza **para el reviewer
+independiente y para QA**, que son los gates obligatorios. Lo que esta sección fija es
+que el shadow no es uno de ellos.
+
+Tampoco decide otras tres cosas, que siguen abiertas y se tratan por separado: los
+disparadores del shadow, el cierre de la calibración, y con qué evidencia el shadow
+podría ascender a una función más fuerte.
+
 ### La segunda opinión es ciega
 
 El shadow recibe el mismo HEAD, el mismo material permitido y las mismas reglas.
@@ -211,3 +253,7 @@ aplicada en el sentido inverso.
   señal clara: alargarla indefinidamente sería no decidir.
 - Si el muestreo puede espaciarse a una de cada diez, y con qué evidencia.
 - Si la deduplicación de hallazgos equivalentes llega a hacer falta.
+- Con qué evidencia acumulada el shadow podría pasar de capacidad medida a una
+  función más fuerte, y qué datos mínimos habría que registrar para poder
+  decidirlo. No se fija ningún umbral acá: fijarlo sin evidencia sería inventar
+  una regla en vez de derivarla.
