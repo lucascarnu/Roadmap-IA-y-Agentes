@@ -16,6 +16,7 @@ el material que respalda la política de permisos de `.claude/settings.json`.
 ## Páginas consultadas
 
 Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
+Reconsultadas el **2026-08-13**, contra **Claude Code 2.1.227**.
 
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
@@ -60,6 +61,13 @@ Cada punto se usó para decidir una regla concreta de la política:
 - **Comandos de solo lectura.** Existe un conjunto interno que corre sin prompt
   en todos los modos, e incluye las formas de solo lectura de `git`. Una regla
   `ask` o `deny` explícita lo revierte.
+- **Ruta del ejecutable: NO DOCUMENTADO.** La documentación no establece si una
+  invocación mediante ruta absoluta al ejecutable coincide con una regla escrita
+  para su nombre desnudo, por ejemplo una ruta a `node.exe` frente a `node`.
+- **Regla efectiva por ejecución: NO DOCUMENTADO.** La documentación no describe
+  un registro auditable que identifique qué regla autorizó cada ejecución
+  concreta. Lo más cercano es `/permissions`, que lista las reglas y el archivo
+  `settings.json` del que proviene cada una.
 
 ## Por qué oro
 
@@ -74,8 +82,9 @@ estrechar una regla, no una lectura que se termine.
 
 ## Vigencia
 
-Lo anterior describe el comportamiento documentado al **2026-08-08** para
-**Claude Code 2.1.226**. No son afirmaciones permanentes.
+Lo anterior describe el comportamiento documentado tras la reconsulta del
+**2026-08-13** para **Claude Code 2.1.227**, junto a la consulta original del
+**2026-08-08** para **Claude Code 2.1.226**. No son afirmaciones permanentes.
 
 Debe revalidarse cuando cambie de forma relevante la versión de Claude Code o la
 documentación de permisos, y de inmediato ante cualquier comportamiento
