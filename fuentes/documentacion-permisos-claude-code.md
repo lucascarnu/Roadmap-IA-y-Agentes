@@ -75,14 +75,52 @@ Cada punto se usó para decidir una regla concreta de la política:
 efectivo en este entorno; no son una garantía universal del producto salvo donde
 la documentación oficial citada arriba diga lo mismo.
 
-### Parámetros adicionales y tuberías
+### Composición por segmentos
 
-Un patrón de la forma `PowerShell(<cmd> <arg> *)` puede admitir parámetros
-adicionales posteriores y tuberías. La observación utilizada fue:
+**PROBADO LOCALMENTE — 2026-08-14.** La composición se evalúa por segmentos.
+Las sondas observadas fueron:
 
-`Get-ScheduledTaskInfo -TaskName "..." | Format-List * | Out-String`
+- `Get-ScheduledTask -TaskName "<inexistente>" | Disable-ScheduledTask` →
+  denegado por regla explícita.
+- `Get-ScheduledTask -TaskName "<inexistente>"; Start-ScheduledTask -TaskName
+  "<inexistente>"` → denegado por regla explícita.
 
-Esa invocación fue autorizada por `PowerShell(Get-ScheduledTaskInfo *)`.
+Un cmdlet de mutación presente en un segmento posterior sigue siendo alcanzado
+por su `deny`: el primer comando permitido no autoriza automáticamente toda la
+composición.
+
+### Subexpresiones
+
+**PROBADO LOCALMENTE — 2026-08-14.** La sonda
+`Get-ScheduledTask -TaskName (Write-Output "<inexistente>")` fue denegada por
+omisión. En este entorno, esa invocación con una subexpresión `( ... )` no
+coincidió con el `allow` correspondiente.
+
+Como consecuencia de seguridad observada, una construcción del tipo
+`(New-CimSession ...)` embebida dentro de un comando permitido no quedó
+automáticamente autorizada mediante el `allow` exterior. Esta conclusión no se
+generaliza más allá de las formas observadas.
+
+### Conjunto implícito observado
+
+**OBSERVACIÓN:** `Format-List`, `Out-String` y `Select-Object` se ejecutaron como
+segmentos de tubería sin aparecer en reglas `allow` explícitas del proyecto.
+Esto explica que una composición como `Get-ScheduledTaskInfo ... | Format-List
+* | Out-String` pueda funcionar: el primer segmento coincide con su `allow`, la
+composición se descompone y los segmentos posteriores observados pueden
+ejecutarse sin reglas propias.
+
+El criterio exacto mediante el cual Claude Code permite ese conjunto implícito
+no está respaldado por la documentación oficial disponible en el proyecto. No
+se infiere qué otros cmdlets pertenecen al conjunto ni que todos los cmdlets
+read-only estén implícitamente permitidos.
+
+### Alcance de la garantía read-only observada
+
+**PROBADO LOCALMENTE — 2026-08-14.** La garantía read-only de UO resistió las
+tres clases observadas: tubería, punto y coma y subexpresión. Esto queda limitado
+a las formas probadas y no constituye una garantía absoluta sobre toda sintaxis
+PowerShell imaginable.
 
 ### El comodín final no funciona como glob libre sobre toda la cadena
 
