@@ -1290,7 +1290,7 @@ test("fallo de ambos launchers durante observación termina blocked-via sin infe
   } finally { clean(fx); }
 });
 
-test("tick sin waiting termina limpio sin poll ni agente", async () => {
+test("tick sin waiting ni ready termina limpio sin poll ni agente", async () => {
   let polls = 0;
   let invocations = 0;
   const fx = fixture(new FakeBackend(), {
@@ -1330,18 +1330,139 @@ test("tick tiempo cumplido promueve, registra transición y llama poll una vez",
   const backend = new FakeBackend([waitingIssue()]);
   const fx = fixture(backend, {
     now: () => new Date("2026-08-13T10:02:00.000Z"),
-    pollFn: async () => { polls += 1; return { status: "complete", processed: [] }; },
+    pollFn: async () => { polls += 1; return { status: "complete", processed: [{ issue: 1, status: "done" }] }; },
     notify: async (payload) => { notifications.push(payload); return { sent: true }; },
   });
   try {
     const result = await tick(fx.options);
     assert.deepEqual(result, {
-      status: "complete", promovidas: [1], poll: { status: "complete", processed: [] },
+      status: "complete", promovidas: [1], poll: { status: "complete", processed: [{ issue: 1, status: "done" }] },
     });
     assert.equal(polls, 1);
     assert(backend.issues[0].labels.has("handoff:ready"));
     assert.match(readFileSync(join(fx.options.artifactsDir, "transitions.log"), "utf8"), /"from":"waiting","to":"ready"/);
     assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [{ event: "resumed", priority: 3 }]);
+  } finally { clean(fx); }
+});
+
+test("tick posterior rescata una promoción que el primer poll no vio", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const originalList = backend.listByLabel.bind(backend);
+  let ocultarPrimeraAlta = true;
+  backend.listByLabel = (label) => {
+    const issues = originalList(label);
+    if (label === "handoff:ready" && issues.length && ocultarPrimeraAlta) {
+      ocultarPrimeraAlta = false;
+      return [];
+    }
+    return issues;
+  };
+  let invocations = 0;
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    warn: () => {},
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  try {
+    const first = await tick(fx.options);
+    assert.deepEqual(first.promovidas, [1]);
+    assert.deepEqual(first.poll.processed, []);
+    assert(backend.issues[0].labels.has("handoff:ready"));
+    assert.equal(getWaitState(fx, 1).phase, "ready");
+
+    const second = await tick(fx.options);
+    assert.deepEqual(second.promovidas, []);
+    assert.deepEqual(second.poll.processed.map(({ issue, status }) => ({ issue, status })), [{ issue: 1, status: "done" }]);
+    assert.equal(invocations, 1);
+    assert(backend.issues[0].labels.has("handoff:done"));
+  } finally { clean(fx); }
+});
+
+test("tick despacha ready cuando state.json demuestra promoción del scheduler", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-promovida", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  let invocations = 0;
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  setWaitState(fx, 1, { phase: "ready", intentos: 0, next_check_at: null, ultimo_error: null });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, []);
+    assert.deepEqual(result.poll.processed.map(({ issue, status }) => ({ issue, status })), [{ issue: 1, status: "done" }]);
+    assert.equal(invocations, 1);
+  } finally { clean(fx); }
+});
+
+test("tick no despacha ready sin procedencia local del scheduler", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-manual", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  let polls = 0;
+  let invocations = 0;
+  const fx = fixture(backend, {
+    pollFn: async () => { polls += 1; return { status: "complete", processed: [] }; },
+    invoke: () => { invocations += 1; throw new Error("No debe inferir"); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result, { status: "complete", promovidas: [], poll: null });
+    assert.equal(polls, 0);
+    assert.equal(invocations, 0);
+    assert(backend.issues[0].labels.has("handoff:ready"));
+  } finally { clean(fx); }
+});
+
+test("poll no procesa dos veces una unidad repetida por el índice de labels", async () => {
+  const backend = new FakeBackend([{
+    number: 1, title: "ready-repetida", body: issueBody(contract()),
+    createdAt: "2026-08-13T01:00:00Z", labels: ["handoff:ready"], comments: [],
+  }]);
+  const staleIssue = backend.issues[0];
+  const originalList = backend.listByLabel.bind(backend);
+  backend.listByLabel = (label) => label === "handoff:ready" ? [staleIssue] : originalList(label);
+  let invocations = 0;
+  const fx = fixture(backend, {
+    invoke: ({ contract: current }) => {
+      invocations += 1;
+      return { result: validResult(current, null), telemetry: {}, duration_ms: 1 };
+    },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed.length, 1);
+    assert.deepEqual(result.processed[0], { issue: 1, status: "done", child_issue: null });
+    assert.equal(invocations, 1);
+    assert.equal(backend.issues[0].comments.length, 1);
+  } finally { clean(fx); }
+});
+
+test("tick señala una promoción que poll no cubrió", async () => {
+  const notifications = [];
+  const warnings = [];
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => ({ status: "complete", processed: [] }),
+    notify: async (payload) => { notifications.push(payload); },
+    warn: (message) => { warnings.push(message); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, [1]);
+    assert.deepEqual(result.poll.processed, []);
+    assert.deepEqual(notifications.map(({ event }) => event), ["resumed", "dispatch_gap"]);
+    assert.deepEqual(warnings, ["handoff: poll no procesó unidades promovidas por tick: 1"]);
+    assert.match(readFileSync(join(fx.options.artifactsDir, "transitions.log"), "utf8"), /"reason":"poll_no_proceso_promocion"/);
   } finally { clean(fx); }
 });
 
@@ -1360,7 +1481,7 @@ test("tick aísla un fallo por unidad, evalúa las posteriores y despacha promoc
       polls += 1;
       assert(backend.issues[0].labels.has("handoff:ready"));
       assert(backend.issues[2].labels.has("handoff:ready"));
-      return { status: "complete", processed: [] };
+      return { status: "complete", processed: [{ issue: 1 }, { issue: 3 }] };
     },
     notify: async (payload) => { notifications.push(payload); },
   });
@@ -1610,7 +1731,11 @@ test("dos tick seguidos no duplican promoción ni notificación", async () => {
   const backend = new FakeBackend([waitingIssue()]);
   const fx = fixture(backend, {
     now: () => new Date("2026-08-13T10:02:00.000Z"),
-    pollFn: async () => { polls += 1; return { status: "complete", processed: [] }; },
+    pollFn: async () => {
+      polls += 1;
+      backend.setState(1, "handoff:ready", "handoff:done");
+      return { status: "complete", processed: [{ issue: 1, status: "done" }] };
+    },
     notify: async (payload) => { notifications.push(payload); },
   });
   try {
@@ -1625,7 +1750,7 @@ test("la promoción resetea contadores y flags de una espera anterior", async ()
   const backend = new FakeBackend([waitingIssue()]);
   const fx = fixture(backend, {
     now: () => new Date("2026-08-13T10:02:00.000Z"),
-    pollFn: async () => ({ status: "complete", processed: [] }),
+    pollFn: async () => ({ status: "complete", processed: [{ issue: 1, status: "done" }] }),
   });
   setWaitState(fx, 1, {
     phase: "waiting", intentos: 2, blocked_long_notified: true,
@@ -1685,7 +1810,7 @@ test("tick check_run sólo cumple con SUCCESS exacto", async () => {
     ], { checkRuns: checks });
     const fx = fixture(backend, {
       now: () => new Date("2026-08-13T10:02:00.000Z"),
-      pollFn: async () => { polls += 1; return { status: "complete", processed: [] }; },
+      pollFn: async () => { polls += 1; return { status: "complete", processed: [{ issue: 1, status: "done" }] }; },
     });
     try {
       const result = await tick(fx.options);
@@ -1717,7 +1842,7 @@ test("un fallo de ntfy no altera el resultado de tick", async () => {
   const fx = fixture(backend, {
     now: () => new Date("2026-08-13T10:02:00.000Z"),
     notify: async () => { throw new Error("ntfy caído"); },
-    pollFn: async () => ({ status: "complete", processed: [] }),
+    pollFn: async () => ({ status: "complete", processed: [{ issue: 1, status: "done" }] }),
   });
   try {
     const result = await tick(fx.options);

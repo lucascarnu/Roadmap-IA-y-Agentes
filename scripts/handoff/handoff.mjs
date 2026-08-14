@@ -934,6 +934,7 @@ export async function tick(options = {}) {
   const artifactsDir = resolve(options.artifactsDir ?? ARTIFACTS);
   const backend = options.backend ?? new GithubBackend(config.repository);
   const notify = options.notify ?? createNotifier();
+  const warn = options.warn ?? console.warn;
   const now = options.now ?? (() => new Date());
   const pollFn = options.pollFn ?? poll;
   const transitions = join(artifactsDir, "transitions.log");
@@ -942,9 +943,13 @@ export async function tick(options = {}) {
   const globalLock = join(runtimeDir, "poll.lock");
   if (!acquireRecoverableProcessLock(globalLock)) return { status: "locked", promovidas: [], poll: null };
   const promovidas = [];
+  let rescatables = [];
   try {
     if (options.ensureLabels === true) await backend.ensureLabels();
     const waiting = await backend.listByLabel("handoff:waiting");
+    rescatables = (await backend.listByLabel("handoff:ready"))
+      .filter((issue) => stateFor(runtimeDir, issue.number)?.phase === "ready")
+      .map((issue) => issue.number);
     for (const issue of waiting) {
       if (labelsOf(issue).some((label) => TERMINAL_LABELS.has(label))) continue;
       let state = stateFor(runtimeDir, issue.number) ?? {};
@@ -1053,10 +1058,35 @@ export async function tick(options = {}) {
     releaseLock(globalLock);
   }
 
-  const pollResult = promovidas.length ? await pollFn({
+  for (const issue of rescatables) {
+    transitionLog(transitions, {
+      issue, from: "ready", to: "ready", reason: "scheduler_retry_dispatch", recoverable: true,
+    });
+  }
+  const pollResult = (promovidas.length || rescatables.length) ? await pollFn({
     config, repo, runtimeDir, artifactsDir, backend, notify,
     invoke: options.invoke, authObserver: options.authObserver, run: options.run,
   }) : null;
+  if (promovidas.length) {
+    const processed = new Set((pollResult?.processed ?? []).map((result) => result.issue));
+    const pendientes = promovidas.filter((issue) => !processed.has(issue));
+    if (pendientes.length) {
+      const reason = `poll no procesó unidades promovidas por tick: ${pendientes.join(", ")}`;
+      warn(`handoff: ${reason}`);
+      for (const issue of pendientes) {
+        transitionLog(transitions, {
+          issue, from: "ready", to: "ready", reason: "poll_no_proceso_promocion", recoverable: true,
+        });
+      }
+      await notifySafely(notify, {
+        event: "dispatch_gap",
+        title: "Handoff promovido pendiente",
+        message: `${reason}. Un tick posterior intentará rescatarlo.`,
+        priority: 4,
+        tags: ["warning"],
+      });
+    }
+  }
   return { status: "complete", promovidas, poll: pollResult };
 }
 
@@ -1076,16 +1106,19 @@ export async function poll(options = {}) {
   const lockOwner = { pid: options.hooks?.crash_owner_pid ?? process.pid, created_at: new Date().toISOString() };
   if (!acquireRecoverableProcessLock(globalLock, lockOwner)) return { status: "locked", processed: [] };
   const processed = [];
+  const processedIssues = new Set();
   try {
     if (options.ensureLabels === true) await backend.ensureLabels();
     await recoverOrphans({ backend, runtimeDir, transitions });
     while (processed.length < config.max_unidades_por_corrida) {
       const ready = await backend.listByLabel("handoff:ready");
-      if (!ready.length) break;
+      const issue = ready.find((candidate) => !processedIssues.has(candidate.number));
+      if (!issue) break;
+      processedIssues.add(issue.number);
       const result = await processIssue({
         backend, config, repo, runtimeDir, artifactsDir, transitions, invoke, authObserver,
         hooks: options.hooks, run: options.run ?? runProcess,
-      }, ready[0]);
+      }, issue);
       processed.push(result);
       if (result.status === "locked") break;
     }
