@@ -27,7 +27,8 @@
       "PowerShell(Get-ScheduledTask)",
       "PowerShell(Get-ScheduledTask *)",
       "PowerShell(Get-ScheduledTaskInfo *)",
-      "PowerShell(Get-WinEvent -FilterHashtable *)",
+      "PowerShell(Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational*)",
+      "PowerShell(Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational'*)",
       "PowerShell(schtasks /query *)"
     ],
     "deny": [

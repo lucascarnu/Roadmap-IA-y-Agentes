@@ -69,6 +69,30 @@ Consultadas el **2026-08-14**:
 - Por lo tanto, los nombres exactos de sus propiedades quedan como **PROBADO
   LOCALMENTE** por observación, no como **DOCUMENTADO**.
 
+### Observaciones de la política efectiva — PROBADO LOCALMENTE — 2026-08-14
+
+- Los nombres de propiedad observados de `MSFT_TaskDynamicInfo` son
+  `LastRunTime`, `LastTaskResult`, `NextRunTime`, `NumberOfMissedRuns`,
+  `TaskName` y `TaskPath`.
+- `Get-ScheduledTask` expone efectivamente `State`, `Triggers`, `Principal` y
+  `Settings`.
+- Dentro de `Settings` se observaron `MultipleInstances` y
+  `StartWhenAvailable`.
+- Dentro de `Triggers` se observaron tipos como `MSFT_TaskBootTrigger`,
+  `MSFT_TaskTimeTrigger` y `MSFT_TaskTrigger`, junto con sus parámetros.
+- La forma `Get-WinEvent -FilterHashtable @{...}` **NO** es alcanzable bajo la
+  política efectiva actual del ejecutor porque el argumento con forma de tabla
+  hash no matchea la regla autorizada.
+- Las consultas al canal se realizarán mediante `Get-WinEvent -LogName ...` y,
+  cuando haga falta, se combinarán con filtrado posterior o con formas
+  compatibles con la política.
+- La salida de `schtasks` está localizada al idioma del sistema. Si alguna vez
+  se parsea automáticamente, debe preferirse `/xml`.
+- Sigue **SIN VERIFICAR** si
+  `Microsoft-Windows-TaskScheduler/Operational` está habilitado y si contiene
+  eventos, porque la vía autorizada anterior era precisamente la que no
+  funcionaba.
+
 ## Estado y revalidación
 
 Estas afirmaciones están **DOCUMENTADAS**; no demuestran que la tarea del
