@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CrashSimulation, GOVERNING_CONTEXT, acquireLock, buildPrompt, invokeAgent, parseContractBody, poll, prepareInput, sha256, tick,
+  CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
+  parseContractBody, poll, prepareInput, sha256, tick,
   validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
@@ -1344,6 +1345,65 @@ test("tick tiempo cumplido promueve, registra transición y llama poll una vez",
   } finally { clean(fx); }
 });
 
+test("tick aísla un fallo por unidad, evalúa las posteriores y despacha promociones previas", async () => {
+  let polls = 0;
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1),
+    waitingIssue(2, { condicion: "check_run", parametros: { pr: 49, nombre: "review" } }),
+    waitingIssue(3),
+  ]);
+  backend.checkRun = () => { throw new Error("GitHub temporalmente inaccesible"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => {
+      polls += 1;
+      assert(backend.issues[0].labels.has("handoff:ready"));
+      assert(backend.issues[2].labels.has("handoff:ready"));
+      return { status: "complete", processed: [] };
+    },
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    const result = await tick(fx.options);
+    assert.deepEqual(result.promovidas, [1, 3]);
+    assert.equal(polls, 1);
+    assert(backend.issues[1].labels.has("handoff:waiting"));
+    assert.equal(getWaitState(fx, 2).intentos, 1);
+    assert.match(getWaitState(fx, 2).ultimo_error, /GitHub temporalmente inaccesible/);
+    assert.deepEqual(notifications.map(({ event }) => event), ["resumed", "wait_check_error", "resumed"]);
+  } finally { clean(fx); }
+});
+
+test("tick agota el presupuesto de errores inesperados y termina needs_human", async () => {
+  let nowValue = new Date("2026-08-13T10:02:00.000Z");
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1, {
+      condicion: "check_run", parametros: { pr: 49, nombre: "review" }, max_intentos: 1,
+    }),
+  ]);
+  backend.checkRun = () => { throw new Error("fallo persistente del checker"); };
+  const fx = fixture(backend, {
+    now: () => nowValue,
+    pollFn: async () => assert.fail("No debe llamar poll"),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    await tick(fx.options);
+    const retryState = getWaitState(fx, 1);
+    assert.equal(retryState.intentos, 1);
+    assert(backend.issues[0].labels.has("handoff:waiting"));
+    nowValue = new Date(retryState.next_check_at);
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).intentos, 2);
+    assert.deepEqual(notifications.map(({ event }) => event), [
+      "wait_check_error", "terminal_error", "needs_human",
+    ]);
+  } finally { clean(fx); }
+});
+
 test("tick admite el descriptor congelado con finales CRLF de Windows", async () => {
   const issue = waitingIssue();
   issue.comments[0].body = issue.comments[0].body.replaceAll("\n", "\r\n");
@@ -1434,14 +1494,73 @@ test("tick bloquea por descriptor ausente, JSON inválido y condición desconoci
   });
 });
 
-test("tick no confunde un fallo de GitHub con descriptor inválido", async () => {
-  const backend = new FakeBackend([waitingIssue()]);
-  backend.comments = () => { throw new Error("GitHub inaccesible"); };
-  const fx = fixture(backend);
+test("tick bloquea un descriptor ambiguo con múltiples marcadores", async () => {
+  const comments = [{ body: waitDescriptor(1) }, { body: waitDescriptor(1) }];
+  const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
   try {
-    await assert.rejects(() => tick(fx.options), /GitHub inaccesible/);
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "Descriptor de espera ambiguo");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea si el HEAD del marcador no coincide con el contrato", async () => {
+  const comments = [{ body: waitDescriptor(1, {}, "a".repeat(40)) }];
+  const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "HEAD del descriptor de espera no coincide con el contrato");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea un descriptor incompleto", async () => {
+  const backend = new FakeBackend([waitingIssue(1, { max_intentos: undefined })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).ultimo_error, "Descriptor de espera incompleto");
+  } finally { clean(fx); }
+});
+
+test("tick bloquea un descriptor con campos extra", async () => {
+  const backend = new FakeBackend([waitingIssue(1, { campo_inesperado: true })]);
+  const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.match(getWaitState(fx, 1).ultimo_error, /campos incompatibles: campo_inesperado/);
+  } finally { clean(fx); }
+});
+
+test("tick conserva waiting ante un fallo transitorio al leer comentarios", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const notifications = [];
+  backend.comments = () => { throw new Error("GitHub inaccesible"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    await tick(fx.options);
     assert(backend.issues[0].labels.has("handoff:waiting"));
     assert.equal(backend.issues[0].labels.has("handoff:blocked"), false);
+    assert.equal(getWaitState(fx, 1).intentos, 1);
+    assert.deepEqual(notifications.map(({ event }) => event), ["wait_check_error"]);
+  } finally { clean(fx); }
+});
+
+test("tick falla globalmente si no puede listar handoff:waiting", async () => {
+  let polls = 0;
+  const backend = new FakeBackend();
+  backend.listByLabel = () => { throw new Error("No se pudo listar waiting"); };
+  const fx = fixture(backend, { pollFn: async () => { polls += 1; } });
+  try {
+    await assert.rejects(() => tick(fx.options), /No se pudo listar waiting/);
+    assert.equal(polls, 0);
   } finally { clean(fx); }
 });
 
@@ -1499,6 +1618,61 @@ test("dos tick seguidos no duplican promoción ni notificación", async () => {
     assert.deepEqual((await tick(fx.options)).promovidas, []);
     assert.equal(polls, 1);
     assert.deepEqual(notifications.map(({ event }) => event), ["resumed"]);
+  } finally { clean(fx); }
+});
+
+test("la promoción resetea contadores y flags de una espera anterior", async () => {
+  const backend = new FakeBackend([waitingIssue()]);
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    pollFn: async () => ({ status: "complete", processed: [] }),
+  });
+  setWaitState(fx, 1, {
+    phase: "waiting", intentos: 2, blocked_long_notified: true,
+    retry_policy: { intervalo_segundos: 60, max_intentos: 3 },
+    next_check_at: "2026-08-13T10:01:00.000Z", ultimo_error: "previo",
+  });
+  try {
+    await tick(fx.options);
+    const state = getWaitState(fx, 1);
+    assert.equal(state.intentos, 0);
+    assert.equal(state.blocked_long_notified, false);
+    assert.equal(state.next_check_at, null);
+    assert.equal(state.ultimo_error, null);
+    assert.equal(Object.hasOwn(state, "retry_policy"), false);
+  } finally { clean(fx); }
+});
+
+test("check_run ambiguo es HandoffError permanente y tick bloquea sin reintentar", async () => {
+  const rollup = {
+    statusCheckRollup: [
+      { __typename: "CheckRun", name: "review", conclusion: "SUCCESS" },
+      { __typename: "CheckRun", name: "review", conclusion: "FAILURE" },
+    ],
+  };
+  const github = new GithubBackend("example/repo", {
+    run: () => ({ status: 0, stdout: JSON.stringify(rollup), stderr: "" }),
+  });
+  assert.throws(
+    () => github.checkRun(49, "review"),
+    (error) => error instanceof HandoffError && error.label === "handoff:blocked" && /ambiguo/.test(error.message),
+  );
+
+  const notifications = [];
+  const backend = new FakeBackend([
+    waitingIssue(1, { condicion: "check_run", parametros: { pr: 49, nombre: "review" } }),
+  ]);
+  backend.checkRun = () => { throw new HandoffError("Check run ambiguo en PR #49: review", "handoff:blocked"); };
+  const fx = fixture(backend, {
+    now: () => new Date("2026-08-13T10:02:00.000Z"),
+    notify: async (payload) => { notifications.push(payload); },
+    pollFn: async () => assert.fail("No debe llamar poll"),
+  });
+  try {
+    await tick(fx.options);
+    assert(backend.issues[0].labels.has("handoff:blocked"));
+    assert.equal(getWaitState(fx, 1).intentos ?? 0, 0);
+    assert.deepEqual(notifications.map(({ event }) => event), ["needs_human"]);
   } finally { clean(fx); }
 });
 

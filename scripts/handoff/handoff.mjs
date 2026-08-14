@@ -516,7 +516,7 @@ export class GithubBackend {
     const raw = this.gh(["pr", "view", String(pr), "--repo", this.repository, "--json", "statusCheckRollup"]);
     const checks = JSON.parse(raw || "{}").statusCheckRollup ?? [];
     const matches = checks.filter((check) => check.__typename === "CheckRun" && check.name === name);
-    if (matches.length > 1) throw new Error(`Check run ambiguo en PR #${pr}: ${name}`);
+    if (matches.length > 1) fail(`Check run ambiguo en PR #${pr}: ${name}`, "handoff:blocked");
     return matches[0] ?? null;
   }
 
@@ -862,6 +862,71 @@ async function notifyWaitBlocked({ notify, issue, reason, exhausted = false }) {
   });
 }
 
+function retryPolicy(descriptor, state) {
+  if (descriptor) return {
+    intervalo_segundos: descriptor.intervalo_segundos,
+    max_intentos: descriptor.max_intentos,
+  };
+  return state.retry_policy ?? null;
+}
+
+async function blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason, intentos, exhausted = false }) {
+  backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
+  saveState(runtimeDir, issue.number, {
+    ...state, phase: "blocked", ...(intentos === undefined ? {} : { intentos }),
+    next_check_at: null, ultimo_error: reason,
+  });
+  transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
+  await notifyWaitBlocked({ notify, issue, reason, exhausted });
+}
+
+async function recordUnexpectedWaitFailure({
+  backend, runtimeDir, transitions, notify, issue, state, descriptor, currentMs, error,
+}) {
+  const reason = `Error inesperado al evaluar la espera: ${error.message}`;
+  if (state.intentos !== undefined && (!Number.isInteger(state.intentos) || state.intentos < 0)) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state, reason: "intentos local inválido",
+    });
+    return;
+  }
+  const intentos = (state.intentos ?? 0) + 1;
+  const policy = retryPolicy(descriptor, state);
+  if (policy && (!Number.isInteger(policy.intervalo_segundos) || policy.intervalo_segundos < 1
+    || !Number.isInteger(policy.max_intentos) || policy.max_intentos < 1)) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state, reason: "retry_policy local inválida",
+    });
+    return;
+  }
+  if (policy && intentos > policy.max_intentos) {
+    await blockWaitingUnit({
+      backend, runtimeDir, transitions, notify, issue, state,
+      reason: `max_intentos agotado (${policy.max_intentos}): ${reason}`,
+      intentos, exhausted: true,
+    });
+    return;
+  }
+  const backoffSeconds = policy
+    ? Math.min(MAX_BACKOFF_SECONDS, policy.intervalo_segundos * (2 ** (intentos - 1)))
+    : MAX_BACKOFF_SECONDS;
+  saveState(runtimeDir, issue.number, {
+    ...state, phase: "waiting", intentos,
+    next_check_at: new Date(currentMs + backoffSeconds * 1000).toISOString(),
+    ultimo_error: reason,
+  });
+  transitionLog(transitions, {
+    issue: issue.number, from: "waiting", to: "waiting", error: reason, recoverable: true,
+  });
+  await notifySafely(notify, {
+    event: "wait_check_error",
+    title: "Handoff no pudo evaluar la espera",
+    message: `Issue #${issue.number} seguirá en handoff:waiting: ${compactReason(reason)}`,
+    priority: 4,
+    tags: ["warning"],
+  });
+}
+
 export async function tick(options = {}) {
   const config = options.config ?? readJson(options.configPath ?? DEFAULT_CONFIG);
   const repo = resolve(options.repo ?? ROOT);
@@ -882,24 +947,25 @@ export async function tick(options = {}) {
     const waiting = await backend.listByLabel("handoff:waiting");
     for (const issue of waiting) {
       if (labelsOf(issue).some((label) => TERMINAL_LABELS.has(label))) continue;
+      let state = stateFor(runtimeDir, issue.number) ?? {};
+      const currentTime = now();
+      const currentMs = currentTime.getTime();
       let parsed;
       try {
         parsed = parseWaitDescriptor(issue, await backend.comments(issue.number));
       } catch (error) {
-        if (!(error instanceof HandoffError)) throw error;
-        const reason = error.message;
-        backend.setState(issue.number, "handoff:waiting", "handoff:blocked");
-        const state = stateFor(runtimeDir, issue.number) ?? {};
-        saveState(runtimeDir, issue.number, { ...state, phase: "blocked", ultimo_error: reason });
-        transitionLog(transitions, { issue: issue.number, from: "waiting", to: "blocked", reason });
-        await notifyWaitBlocked({ notify, issue, reason });
+        if (error instanceof HandoffError) {
+          await blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason: error.message });
+        } else {
+          await recordUnexpectedWaitFailure({
+            backend, runtimeDir, transitions, notify, issue, state, descriptor: null, currentMs, error,
+          });
+        }
         continue;
       }
 
       const { descriptor, blockedAt } = parsed;
-      let state = stateFor(runtimeDir, issue.number) ?? {};
-      const currentTime = now();
-      const currentMs = currentTime.getTime();
+      state = { ...state, retry_policy: retryPolicy(descriptor, state) };
       if (currentMs - blockedAt > BLOCKED_LONG_MS && state.blocked_long_notified !== true) {
         await notifySafely(notify, {
           event: "blocked_long",
@@ -935,7 +1001,19 @@ export async function tick(options = {}) {
         continue;
       }
 
-      const evaluated = await evaluateWaitCondition(descriptor, backend);
+      let evaluated;
+      try {
+        evaluated = await evaluateWaitCondition(descriptor, backend);
+      } catch (error) {
+        if (error instanceof HandoffError) {
+          await blockWaitingUnit({ backend, runtimeDir, transitions, notify, issue, state, reason: error.message });
+        } else {
+          await recordUnexpectedWaitFailure({
+            backend, runtimeDir, transitions, notify, issue, state, descriptor, currentMs, error,
+          });
+        }
+        continue;
+      }
       if (!evaluated.fulfilled) {
         const intentos = (state.intentos ?? 0) + 1;
         if (intentos > descriptor.max_intentos) {
@@ -956,7 +1034,11 @@ export async function tick(options = {}) {
       }
 
       backend.setState(issue.number, "handoff:waiting", "handoff:ready");
-      saveState(runtimeDir, issue.number, { ...state, phase: "ready", next_check_at: null, ultimo_error: null, resumed_at: currentTime.toISOString() });
+      const { retry_policy: _retryPolicy, ...stateWithoutRetryPolicy } = state;
+      saveState(runtimeDir, issue.number, {
+        ...stateWithoutRetryPolicy, phase: "ready", intentos: 0, blocked_long_notified: false,
+        next_check_at: null, ultimo_error: null, resumed_at: currentTime.toISOString(),
+      });
       transitionLog(transitions, { issue: issue.number, from: "waiting", to: "ready", condition: descriptor.condicion });
       promovidas.push(issue.number);
       await notifySafely(notify, {

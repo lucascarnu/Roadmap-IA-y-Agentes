@@ -69,6 +69,9 @@ a `handoff:waiting` y recibe exactamente un comentario con este marcador:
 <!-- handoff-wait:<issue>:<head_sha> -->
 ```
 
+El Arquitecto / Lead u operador que pone la unidad en espera aplica la label y
+publica ese comentario. `tick` consume el estado; ni `tick` ni `poll` lo crean.
+
 El marcador va seguido por un único bloque `json` con
 `handoff_wait_version`, `condicion`, `parametros`, `intervalo_segundos`,
 `max_intentos` y `blocked_since`, sin campos adicionales. Las condiciones
@@ -97,8 +100,8 @@ Si una condición se cumple, `tick` registra una única transición a
 Sin promociones termina con `poll: null`, por lo que no despierta ningún LLM.
 La salida es `{ "status", "promovidas", "poll" }`; un lock vivo devuelve
 `status: "locked"` y un fallo no controlado conserva `FAIL_CLOSED` y exit code 1.
-Los eventos `resumed`, `blocked_long`, `terminal_error` y `needs_human` reutilizan
-el notifier ntfy tolerante a fallos.
+Los eventos `resumed`, `blocked_long`, `wait_check_error`, `terminal_error` y
+`needs_human` reutilizan el notifier ntfy tolerante a fallos.
 
 ## Windows Task Scheduler (procedimiento PRE-MVP)
 
@@ -111,7 +114,8 @@ En Task Scheduler, crear una sola tarea bajo la cuenta del usuario que posee las
 sesiones OAuth de `gh` y de los CLIs, con **Run only when user is logged on**; no
 usar `SYSTEM`. Configurar:
 
-1. un trigger temporal que repita la tarea cada 15 minutos indefinidamente;
+1. un trigger temporal que repita la tarea cada 15 minutos durante la duración
+   configurada para la fase PRE-MVP;
 2. un trigger adicional **At log on** para ese mismo usuario;
 3. **Run task as soon as possible after a scheduled start is missed**;
 4. **If the task is already running: Do not start a new instance**;
@@ -122,7 +126,10 @@ usar `SYSTEM`. Configurar:
    /d /s /c "node scripts/handoff/handoff.mjs tick >> scripts\handoff\.handoff\tick.log 2>&1"
    ```
 
-La redirección conserva stdout/stderr en un archivo local ignorado. El resultado
+Antes de registrar o ejecutar esa acción, crear una vez el directorio local
+ignorado con `New-Item -ItemType Directory -Force scripts/handoff/.handoff`; `cmd`
+resuelve la redirección antes de iniciar Node. La redirección conserva
+stdout/stderr en un archivo local ignorado. El resultado
 de la última ejecución y la definición efectiva se inspeccionan desde Task
 Scheduler o con `schtasks /query /tn <NOMBRE> /fo LIST /v`; no se oculta el exit
 code del comando. Antes de aceptar el mecanismo hay que ejecutar el QA con
