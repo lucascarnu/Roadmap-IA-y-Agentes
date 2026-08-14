@@ -76,8 +76,10 @@
       "PowerShell(schtasks /run*)",
       "PowerShell(schtasks /end*)",
       "PowerShell(Get-WinEvent -ListLog*)",
-      "PowerShell(Get-WinEvent * -ComputerName *)",
-      "PowerShell(Get-WinEvent * -Credential *)",
+      "PowerShell(Get-WinEvent * -Co*)",
+      "PowerShell(Get-WinEvent * -Cr*)",
+      "PowerShell(Get-WinEvent -Co*)",
+      "PowerShell(Get-WinEvent -Cr*)",
       "PowerShell(schtasks * /s *)",
       "PowerShell(schtasks * /u *)",
       "PowerShell(schtasks * /p *)"

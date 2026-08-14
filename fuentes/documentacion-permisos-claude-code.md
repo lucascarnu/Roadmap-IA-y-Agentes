@@ -111,12 +111,40 @@ reemplazada por `-LogName`.
 Esta distinción es comportamiento observado localmente, no una garantía
 universal del producto salvo que una fuente oficial futura la respalde.
 
-### Límite residual conocido
+### Case-insensitive
 
-PowerShell admite abreviaturas de nombres de parámetro. Por lo tanto, un `deny`
-anclado al nombre completo `-ComputerName` no necesariamente cubre todas las
-posibles abreviaturas de ese parámetro. UO-fix2 registra este límite sin intentar
-resolver todas las abreviaturas posibles.
+El matcher observado es insensible a mayúsculas/minúsculas:
+
+- `-computername` coincidió con una regla escrita usando `-ComputerName`.
+- `schtasks /S` coincidió con una regla escrita usando `/s`.
+
+### Abreviaturas de parámetros PowerShell
+
+Un `deny` anclado al nombre completo de un parámetro no necesariamente cubre las
+abreviaturas válidas que PowerShell expande. La abreviatura `-Com` eludió
+`PowerShell(Get-WinEvent * -ComputerName *)` y el comando llegó a ejecutarse.
+
+Por lo tanto, para parámetros PowerShell donde se necesite cerrar una familia
+completa, el patrón debe considerar el prefijo mínimo no ambiguo pertinente. En
+esta unidad:
+
+- `-ComputerName` → familia cubierta mediante `-Co*`.
+- `-Credential` → familia cubierta mediante `-Cr*`.
+
+El bypass fue observado, fue reproducible y queda corregido por UO-fix3.
+
+### Diferencia con flags de ejecutables clásicos
+
+Las banderas de una sola letra de herramientas como `schtasks /s` no tienen el
+mismo problema de abreviaturas PowerShell. La insensibilidad a mayúsculas ya
+cubre variantes como `/S`.
+
+### Observación abierta sobre variables PowerShell
+
+**INFERENCIA:** una invocación que contiene referencias a variables PowerShell,
+por ejemplo `$null`, pareció no coincidir con una regla `allow` en la observación
+realizada con `-Cred $null`. Esto no se trata como semántica confirmada del
+matcher y UO no se amplía para investigarlo.
 
 ## Por qué oro
 
