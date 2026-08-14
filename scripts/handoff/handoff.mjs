@@ -315,7 +315,7 @@ function canonicalResultExample(contract) {
   };
 }
 
-function buildPrompt(template, contract, previousResult, contexts, resultSchema, frozenDiff = null) {
+export function buildPrompt(template, contract, previousResult, contexts, resultSchema, frozenDiff = null) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   const renderedDiff = frozenDiff === null ? "" : [
     "\n\n## Diff congelado base → HEAD",
@@ -328,14 +328,26 @@ function buildPrompt(template, contract, previousResult, contexts, resultSchema,
     frozenDiff,
     "```",
   ].join("\n");
-  return template
-    .replace("{{DESTINATARIO_MAYUSCULAS}}", () => contract.destinatario.toUpperCase())
-    .replace("{{CONTRATO}}", () => JSON.stringify(contract, null, 2))
-    .replace("{{RESULTADO_PREVIO}}", () => previousResult ? JSON.stringify(previousResult, null, 2) : "null")
-    .replace("{{CONTEXTO}}", () => renderedContexts)
-    .replace("{{SCHEMA_SALIDA}}", () => resultSchema.trim())
-    .replace("{{EJEMPLO_SALIDA}}", () => JSON.stringify(canonicalResultExample(contract), null, 2))
-    .replace("{{DIFF_CONGELADO}}", () => renderedDiff);
+  const values = {
+    DESTINATARIO_MAYUSCULAS: contract.destinatario.toUpperCase(),
+    CONTRATO: JSON.stringify(contract, null, 2),
+    RESULTADO_PREVIO: previousResult ? JSON.stringify(previousResult, null, 2) : "null",
+    CONTEXTO: renderedContexts,
+    SCHEMA_SALIDA: resultSchema.trim(),
+    EJEMPLO_SALIDA: JSON.stringify(canonicalResultExample(contract), null, 2),
+    DIFF_CONGELADO: renderedDiff,
+  };
+  const replaced = [];
+  const prompt = template.replace(/\{\{([A-Z_]+)\}\}/g, (match, key) => {
+    if (!Object.hasOwn(values, key)) return match;
+    replaced.push(key);
+    return values[key];
+  });
+  const expected = Object.keys(values);
+  if (replaced.length !== expected.length || expected.some((key) => !replaced.includes(key))) {
+    fail(`Template de prompt incompatible: se esperaban exactamente estas claves: ${expected.join(", ")}`);
+  }
+  return prompt;
 }
 
 function extractCommentResult(body, marker, expectedHash) {

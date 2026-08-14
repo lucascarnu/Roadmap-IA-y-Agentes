@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CrashSimulation, GOVERNING_CONTEXT, acquireLock, invokeAgent, parseContractBody, poll, prepareInput, sha256,
+  CrashSimulation, GOVERNING_CONTEXT, acquireLock, buildPrompt, invokeAgent, parseContractBody, poll, prepareInput, sha256,
   validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
@@ -238,6 +238,10 @@ function extractPromptSection(prompt, heading, nextHeading) {
   const end = normalized.indexOf(`\n## ${nextHeading}`, contentStart);
   assert.notEqual(end, -1, `Falta el final de la sección ${heading}`);
   return normalized.slice(contentStart, end);
+}
+
+function countOccurrences(value, needle) {
+  return value.split(needle).length - 1;
 }
 
 function renderedPrompt(currentContract) {
@@ -489,6 +493,62 @@ test("buildPrompt conserva salida byte a byte para contenido sin sustituciones e
     });
     assert.deepEqual(Buffer.from(prepared.prompt, "utf8"), Buffer.from(expected, "utf8"));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("buildPrompt no reexamina tokens literales insertados desde contexto", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const literalTokens = "{{SCHEMA_SALIDA}}\n{{EJEMPLO_SALIDA}}\n{{DIFF_CONGELADO}}";
+  const path = current.contexto_autorizado[0];
+  const prompt = buildPrompt(
+    PROMPT_TEMPLATE, current, null, [{ path, content: literalTokens }], RESULT_SCHEMA_RAW, null,
+  );
+  assert(prompt.includes(`### ${path}\n\n${literalTokens}`));
+  assert.equal(extractPromptJsonBlock(prompt, "Schema del contrato de salida"), RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"));
+  assert.equal(validateResult(JSON.parse(extractPromptJsonBlock(prompt, "Ejemplo canónico mínimo")), current, BASE_CONFIG).estado, "COMPLETADO");
+  for (const token of ["{{SCHEMA_SALIDA}}", "{{EJEMPLO_SALIDA}}", "{{DIFF_CONGELADO}}"]) {
+    assert.equal(countOccurrences(prompt, token), 1, `${token} fue reexaminado o el hueco real quedó sin sustituir`);
+  }
+});
+
+test("buildPrompt no reexamina tokens literales insertados desde el diff", () => {
+  const current = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const literalTokens = "{{SCHEMA_SALIDA}}\n{{EJEMPLO_SALIDA}}\n{{DIFF_CONGELADO}}";
+  const prompt = buildPrompt(
+    PROMPT_TEMPLATE, current, null,
+    [{ path: current.contexto_autorizado[0], content: "contexto ordinario" }],
+    RESULT_SCHEMA_RAW, `diff-inicio\n${literalTokens}\ndiff-fin\n`,
+  );
+  assert(prompt.includes(`diff-inicio\n${literalTokens}\ndiff-fin\n`));
+  assert.equal(extractPromptJsonBlock(prompt, "Schema del contrato de salida"), RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"));
+  assert.equal(validateResult(JSON.parse(extractPromptJsonBlock(prompt, "Ejemplo canónico mínimo")), current, BASE_CONFIG).estado, "COMPLETADO");
+  for (const token of ["{{SCHEMA_SALIDA}}", "{{EJEMPLO_SALIDA}}", "{{DIFF_CONGELADO}}"]) {
+    assert.equal(countOccurrences(prompt, token), 1, `${token} fue reexaminado o el hueco real quedó sin sustituir`);
+  }
+});
+
+test("buildPrompt no deja tokens sin sustituir en un caso normal", () => {
+  const current = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const prompt = buildPrompt(
+    PROMPT_TEMPLATE, current, null,
+    [{ path: current.contexto_autorizado[0], content: "contexto ordinario" }],
+    RESULT_SCHEMA_RAW, "diff ordinario\n",
+  );
+  assert.equal(prompt.match(/\{\{[A-Z_]+\}\}/g), null);
+});
+
+test("buildPrompt falla cerrado si el template no sustituye exactamente siete claves", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const args = [
+    current, null, [{ path: current.contexto_autorizado[0], content: "contexto" }], RESULT_SCHEMA_RAW, null,
+  ];
+  const missing = PROMPT_TEMPLATE.replace("{{CONTEXTO}}", "");
+  const duplicated = `${PROMPT_TEMPLATE}\n{{CONTEXTO}}`;
+  for (const template of [missing, duplicated]) {
+    assert.throws(
+      () => buildPrompt(template, ...args),
+      (error) => error.name === "HandoffError" && /se esperaban exactamente estas claves/.test(error.message),
+    );
+  }
 });
 
 test("ejemplo canónico renderizado cumple validateResult", () => {
