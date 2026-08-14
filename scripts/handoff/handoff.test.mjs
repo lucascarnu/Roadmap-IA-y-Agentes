@@ -250,6 +250,46 @@ function renderedPrompt(currentContract) {
   return { ...prepared, clean: () => rmSync(root, { recursive: true, force: true }) };
 }
 
+function legacyPromptForOrdinaryContent({ template, currentContract, previousResult, contexts, resultSchema, frozenDiff }) {
+  const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
+  const renderedDiff = frozenDiff === null ? "" : [
+    "\n\n## Diff congelado base → HEAD",
+    "",
+    "El siguiente diff forma parte de la unidad congelada. No lo incluyas en",
+    "`archivos_leidos`: ese campo sigue admitiendo únicamente paths de",
+    "`contexto_autorizado`.",
+    "",
+    "```diff",
+    frozenDiff,
+    "```",
+  ].join("\n");
+  const examplePath = currentContract.contexto_autorizado[0];
+  const example = {
+    handoff_version: "1",
+    estado: "COMPLETADO",
+    veredicto: "Resultado breve.",
+    resumen: "Resumen breve.",
+    evidencia: [{ archivo: examplePath, detalle: "Evidencia breve." }],
+    archivos_leidos: [examplePath],
+    accion_recomendada: "Siguiente acción breve.",
+    siguiente_destinatario: null,
+    firma: {
+      ejecutor: currentContract.destinatario,
+      modelo: "NO_OBSERVABLE",
+      esfuerzo: "NO_OBSERVABLE",
+      head_sha: currentContract.head_sha,
+    },
+  };
+  return template
+    .replace("{{DESTINATARIO_MAYUSCULAS}}", currentContract.destinatario.toUpperCase())
+    .replace("{{CONTRATO}}", JSON.stringify(currentContract, null, 2))
+    .replace("{{RESULTADO_PREVIO}}", previousResult ? JSON.stringify(previousResult, null, 2) : "null")
+    .replace("{{CONTEXTO}}", renderedContexts)
+    .replace("{{SCHEMA_SALIDA}}", resultSchema.trim())
+    .replace("{{EJEMPLO_SALIDA}}", JSON.stringify(example, null, 2))
+    .replace("{{DIFF_CONGELADO}}", renderedDiff);
+}
+
 function schemaTokens(schema) {
   const keys = new Set();
   const enumValues = new Set();
@@ -403,6 +443,52 @@ test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums"
     assert.match(rules, /telemetría del puente[\s\S]*fuente autoritativa/);
     assert.match(rules, /NO_OBSERVABLE/);
   } finally { prepared.clean(); }
+});
+
+test("buildPrompt conserva literalmente las secuencias especiales de sustitución", () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-dollar-regression-"));
+  const special = "$`\n$'\n$&\n$$";
+  const specialContext = `contexto-inicio\n${special}\ncontexto-fin`;
+  const specialDiff = "diff-inicio\n+$`\n+$'\n+$&\n+$$\ndiff-fin\n";
+  const current = validateContract(contract({ tarea: `tarea-inicio\n${special}\ntarea-fin`, base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const previousResult = { resumen: `previo-inicio\n${special}\nprevio-fin` };
+  const run = (_command, args) => {
+    if (args.includes("show")) return { status: 0, stdout: specialContext, stderr: "" };
+    if (args.includes("diff")) return { status: 0, stdout: specialDiff, stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  try {
+    const prepared = prepareInput({ repo: ROOT, contract: current, runDir: root, previousResult, run });
+    assert(prepared.prompt.includes(JSON.stringify(current, null, 2)), "el contrato no conservó las secuencias literalmente");
+    assert(prepared.prompt.includes(JSON.stringify(previousResult, null, 2)), "el resultado previo no conservó las secuencias literalmente");
+    assert(prepared.prompt.includes(specialContext), "el contexto no conservó literalmente $`, $', $& y $$");
+    assert(prepared.prompt.includes(specialDiff), "el diff no conservó literalmente $`, $', $& y $$");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("buildPrompt conserva salida byte a byte para contenido sin sustituciones especiales", () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-byte-equivalence-"));
+  const ordinaryContext = "contenido ordinario sin secuencias especiales\n";
+  const ordinaryDiff = "diff --git a/a.txt b/a.txt\n+línea ordinaria\n";
+  const current = validateContract(contract({ base_sha: "b".repeat(40) }), BASE_CONFIG);
+  const contexts = current.contexto_autorizado.map((path) => ({ path, content: ordinaryContext }));
+  const run = (_command, args) => {
+    if (args.includes("show")) return { status: 0, stdout: ordinaryContext, stderr: "" };
+    if (args.includes("diff")) return { status: 0, stdout: ordinaryDiff, stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  try {
+    const prepared = prepareInput({ repo: ROOT, contract: current, runDir: root, previousResult: null, run });
+    const expected = legacyPromptForOrdinaryContent({
+      template: PROMPT_TEMPLATE,
+      currentContract: current,
+      previousResult: null,
+      contexts,
+      resultSchema: RESULT_SCHEMA_RAW,
+      frozenDiff: ordinaryDiff,
+    });
+    assert.deepEqual(Buffer.from(prepared.prompt, "utf8"), Buffer.from(expected, "utf8"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("ejemplo canónico renderizado cumple validateResult", () => {

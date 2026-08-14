@@ -329,13 +329,13 @@ function buildPrompt(template, contract, previousResult, contexts, resultSchema,
     "```",
   ].join("\n");
   return template
-    .replace("{{DESTINATARIO_MAYUSCULAS}}", contract.destinatario.toUpperCase())
-    .replace("{{CONTRATO}}", JSON.stringify(contract, null, 2))
-    .replace("{{RESULTADO_PREVIO}}", previousResult ? JSON.stringify(previousResult, null, 2) : "null")
-    .replace("{{CONTEXTO}}", renderedContexts)
-    .replace("{{SCHEMA_SALIDA}}", resultSchema.trim())
-    .replace("{{EJEMPLO_SALIDA}}", JSON.stringify(canonicalResultExample(contract), null, 2))
-    .replace("{{DIFF_CONGELADO}}", renderedDiff);
+    .replace("{{DESTINATARIO_MAYUSCULAS}}", () => contract.destinatario.toUpperCase())
+    .replace("{{CONTRATO}}", () => JSON.stringify(contract, null, 2))
+    .replace("{{RESULTADO_PREVIO}}", () => previousResult ? JSON.stringify(previousResult, null, 2) : "null")
+    .replace("{{CONTEXTO}}", () => renderedContexts)
+    .replace("{{SCHEMA_SALIDA}}", () => resultSchema.trim())
+    .replace("{{EJEMPLO_SALIDA}}", () => JSON.stringify(canonicalResultExample(contract), null, 2))
+    .replace("{{DIFF_CONGELADO}}", () => renderedDiff);
 }
 
 function extractCommentResult(body, marker, expectedHash) {
