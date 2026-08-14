@@ -23,7 +23,12 @@
       "PowerShell(gh pr list *)",
       "PowerShell(gh pr diff *)",
       "PowerShell(.\\scripts\\get-pr-comments.ps1 *)",
-      "PowerShell(node scripts/handoff/handoff.mjs poll)"
+      "PowerShell(node scripts/handoff/handoff.mjs poll)",
+      "PowerShell(Get-ScheduledTask)",
+      "PowerShell(Get-ScheduledTask *)",
+      "PowerShell(Get-ScheduledTaskInfo *)",
+      "PowerShell(Get-WinEvent -FilterHashtable *)",
+      "PowerShell(schtasks /query *)"
     ],
     "deny": [
       "Edit(/.claude/**)",
@@ -54,7 +59,22 @@
       "PowerShell(git push * -d*)",
       "PowerShell(git push * :*)",
       "PowerShell(git push * --mirror*)",
-      "PowerShell(git push * --prune*)"
+      "PowerShell(git push * --prune*)",
+      "PowerShell(Register-ScheduledTask*)",
+      "PowerShell(Set-ScheduledTask*)",
+      "PowerShell(Unregister-ScheduledTask*)",
+      "PowerShell(Start-ScheduledTask*)",
+      "PowerShell(Stop-ScheduledTask*)",
+      "PowerShell(Enable-ScheduledTask*)",
+      "PowerShell(Disable-ScheduledTask*)",
+      "PowerShell(Export-ScheduledTask*)",
+      "PowerShell(New-ScheduledTask*)",
+      "PowerShell(schtasks /create*)",
+      "PowerShell(schtasks /change*)",
+      "PowerShell(schtasks /delete*)",
+      "PowerShell(schtasks /run*)",
+      "PowerShell(schtasks /end*)",
+      "PowerShell(Get-WinEvent -ListLog*)"
     ]
   }
 }

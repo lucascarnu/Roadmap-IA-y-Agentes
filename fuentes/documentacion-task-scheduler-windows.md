@@ -25,6 +25,14 @@ Consultadas el **2026-08-13** para Windows 10/11 y Task Scheduler 2.0:
 - `https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal?view=windowsserver2025-ps`
 - `https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query`
 
+Consultadas el **2026-08-14**:
+
+- `https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/get-scheduledtask`
+- `https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/get-scheduledtaskinfo`
+- `https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent`
+- `https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/dd315533(v=ws.10)`
+- `https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/dd315590(v=ws.10)`
+
 ## Qué afirmaciones respalda
 
 - Un trigger admite un patrón de repetición con intervalo y duración.
@@ -38,6 +46,28 @@ Consultadas el **2026-08-13** para Windows 10/11 y Task Scheduler 2.0:
 - Una acción ejecutable admite ruta, argumentos y directorio de trabajo.
 - `schtasks /query /fo LIST /v` expone la configuración detallada y permite
   verificar el patrón de recurrencia y el resultado de ejecución.
+- `Get-ScheduledTask` obtiene el objeto de definición de una tarea registrada.
+- `Get-ScheduledTaskInfo` obtiene información de ejecución de una tarea
+  registrada.
+- Ninguno de los dos admite parámetros de escritura.
+- `Get-WinEvent` permite filtrar mediante `FilterHashtable` usando claves como
+  `LogName`, `ProviderName`, `ID`, `Level`, `StartTime` y `EndTime`.
+- `Get-WinEvent -ListLog` devuelve un objeto `EventLogConfiguration` con método
+  `SaveChanges()`, documentado por Microsoft como vía capaz de modificar la
+  configuración de un log; por eso queda expresamente denegado.
+- El proveedor `Microsoft-Windows-TaskScheduler` documenta los eventos 100, 102,
+  111, 129, 200, 201, 202, 203, 323, 327, 328, 329, 330, 331, 106, 113, 115,
+  116, 140, 141 y 406.
+
+## Límites de esta documentación
+
+- La atribución de una ejecución a un trigger concreto **NO** está respaldada
+  por ninguna de las páginas oficiales consultadas.
+- Esa atribución sigue siendo inferencial.
+- Las páginas de clase `MSFT_TaskDynamicInfo` y `MSFT_ScheduledTask` devuelven
+  HTTP 404 en Microsoft Learn.
+- Por lo tanto, los nombres exactos de sus propiedades quedan como **PROBADO
+  LOCALMENTE** por observación, no como **DOCUMENTADO**.
 
 ## Estado y revalidación
 
