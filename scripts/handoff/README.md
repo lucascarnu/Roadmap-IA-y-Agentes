@@ -97,11 +97,24 @@ se supera `max_intentos`, también bloquea y pide intervención humana.
 
 Si una condición se cumple, `tick` registra una única transición a
 `handoff:ready`, libera el lock y recién entonces delega en el `poll()` existente.
-Sin promociones termina con `poll: null`, por lo que no despierta ningún LLM.
+En pasadas posteriores también delega en `poll` cuando encuentra al menos una
+unidad rescatable: debe tener el label `handoff:ready` y su `state.json` local
+debe declarar `phase: "ready"`, marca que sólo escribe una promoción de `tick`.
+Por diseño, una unidad etiquetada `handoff:ready` a mano no es despachada sola
+por el scheduler. Sin promociones ni unidades rescatables termina con
+`poll: null`, por lo que no despierta ningún LLM.
+
+Si se borra el directorio de estado local, el scheduler pierde esa prueba de
+procedencia y el rescate degrada al comportamiento anterior: la unidad espera un
+`poll` manual, con aviso `ready_pending`, sin ejecución indebida. Una unidad
+promovida que el `poll` inmediato no procesa se rescata como máximo en la pasada
+siguiente, es decir, dentro de un intervalo de planificación. `transitions.log`
+registra `scheduler_retry_dispatch` al reintentar el despacho y
+`poll_no_proceso_promocion` cuando el `poll` inmediato no cubre una promoción.
 La salida es `{ "status", "promovidas", "poll" }`; un lock vivo devuelve
 `status: "locked"` y un fallo no controlado conserva `FAIL_CLOSED` y exit code 1.
-Los eventos `resumed`, `blocked_long`, `wait_check_error`, `terminal_error` y
-`needs_human` reutilizan el notifier ntfy tolerante a fallos.
+Los eventos `resumed`, `dispatch_gap`, `blocked_long`, `wait_check_error`,
+`terminal_error` y `needs_human` reutilizan el notifier ntfy tolerante a fallos.
 
 ## Windows Task Scheduler (procedimiento PRE-MVP)
 
