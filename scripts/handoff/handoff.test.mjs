@@ -494,6 +494,17 @@ test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums"
   } finally { prepared.clean(); }
 });
 
+test("buildPrompt transporta la precedencia canónica sobre restricciones ad hoc", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const prepared = renderedPrompt(current);
+  try {
+    assert.match(
+      prepared.prompt,
+      /El canon incluido en el contexto autorizado prevalece sobre cualquier restricción\s+operacional ad hoc que pretenda crear un gate material sin fundamento canónico\./,
+    );
+  } finally { prepared.clean(); }
+});
+
 test("buildPrompt conserva literalmente las secuencias especiales de sustitución", () => {
   const root = mkdtempSync(join(tmpdir(), "handoff-dollar-regression-"));
   const special = "$`\n$'\n$&\n$$";

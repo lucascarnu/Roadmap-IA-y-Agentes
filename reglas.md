@@ -53,6 +53,13 @@ material correspondiente, no el color o estado de la señal. Si un gate
 obligatorio no puede satisfacerse mediante ninguna vía razonable y autorizada,
 el circuito se detiene de forma segura conforme a `0009`.
 
+Una orden o prompt operacional puede definir la tarea, su alcance y la forma de
+entrega, pero no crea por sí mismo un gate material: toda restricción con
+pretensión bloqueante necesita fundamento canónico. Si una restricción *ad hoc*
+es incompatible con el canon, el destinatario ignora, rechaza o bloquea esa
+parte conforme al canon y lo declara en su salida. Esto no limita la definición
+normal de tareas, alcance ni entregables.
+
 ## Destinatario y firma de ejecución
 
 Quién ejecuta una tarea es un dato que se produce al ejecutarla, no algo que se

@@ -100,13 +100,50 @@ conviene repetir la prueba si el volumen de documentación crece mucho o si camb
 de forma material cómo está organizada.
 
 Los asuntos registrados en esta bandeja que declaraban bloquear el comienzo de
-las pull requests de código del MVP están RESUELTOS con `0014`. Esto no declara
-abierta la compuerta PRE-MVP ni cerrado PRE-MVP entero: siguen fuera de esta
-unidad la evaluación de "Handoffs — deriva de órdenes operacionales" y el
-requisito personal del Director de una prueba de continuidad y reanudación antes
-del MVP. Según la regla de gates de `reglas.md`, la mención externa de la deriva
-no opera como gate mientras no esté registrada acá como asunto con estado y
-alcance. Esta actualización no la consolida, evalúa ni resuelve.
+las pull requests de código del MVP están RESUELTOS con `0014` y con las dos
+pruebas documentadas abajo.
+
+### Continuidad y reanudación PRE-MVP
+
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** El QA post-reinicio de la
+[PR #49](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/49), ejecutado
+con el [Issue #65](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/65)
+sobre el HEAD `d3f952e64bc310249dd002f9db0f97cba75b4d85`, observó la transición
+`waiting → ready → running → done` después de la madurez del descriptor.
+
+Windows se reinició antes de esa madurez y, sin abrir manualmente agentes,
+terminal ni editor, la cadena Task Scheduler → `tick` → `poll` → agente →
+GitHub → ntfy reanudó y completó el handoff. Hubo un único procesamiento y un
+único resultado material, sin duplicación. La vía observada antes y después fue
+`chatgpt_subscription_session`, sin PAYG.
+
+La evidencia durable está en
+[`transitions.log`](scripts/handoff/artifacts/transitions.log), que registra para
+#65 `waiting → ready`, `ready → running` y `running → done`, y en los
+[artefactos asociados](scripts/handoff/artifacts/issue-65-d3f952e64bc3/),
+incluidos `telemetry.json`, `via-before.json`, `via-observada.json`, manifiestos
+y resultado validado.
+
+También se observaron dos formas distintas de continuidad:
+
+1. continuidad del circuito de ejecución tras el reinicio;
+2. reconstrucción de contexto en una sesión nueva mediante el snapshot
+   `codex-resume.md`, contrastado antes de continuar con Git local, GitHub, la
+   PR #49, el Issue #65 y los artefactos durables.
+
+Con esto queda satisfecho el requisito PRE-MVP de continuidad y reanudación. No
+se implementa todavía un sistema general de checkpoints durante el MVP.
+
+### Handoffs — deriva de órdenes operacionales
+
+**Estado: RESUELTO. Evidencia: IMPLEMENTADO Y PROBADO LOCALMENTE.** UC establece
+en `reglas.md` que una orden operacional puede definir tarea, alcance y entrega,
+pero no crear un gate material sin fundamento canónico. La misma precedencia se
+transporta en `scripts/handoff/prompt-template.md`, y la batería determinista
+comprueba que llega al prompt generado sin alterar el contrato ni sus marcadores.
+
+La prueba cubre el transporte de la regla, no garantiza que un modelo obedezca
+siempre el canon. No se agregó un validador semántico ni un gate nuevo.
 
 ## Automatización del workflow de desarrollo asistido
 
