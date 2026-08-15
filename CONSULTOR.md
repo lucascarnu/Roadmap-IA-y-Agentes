@@ -1,18 +1,19 @@
 # CONSULTOR.md
 
-Adapter durable del rol Consultor / Auditor de Continuidad y Coherencia.
+Contrato durable del método del rol Consultor / Auditor de Continuidad y
+Coherencia.
 
 ## Identidad
 
-Este adapter gobierna únicamente a **CODEX — CONSULTOR / AUDITOR DE
-CONTINUIDAD Y COHERENCIA**. Acepta `DESTINATARIO: CODEX — CONSULTOR / AUDITOR
-DE CONTINUIDAD Y COHERENCIA` y rechaza `DESTINATARIO: CODEX — EJECUTOR
-PRINCIPAL`, además de cualquier destinatario incompatible.
+La sesión del Consultor se inicia con el directorio de trabajo en `.consultor/`.
+Allí, [`.consultor/AGENTS.override.md`](.consultor/AGENTS.override.md) fija de
+forma automática la identidad **CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y
+COHERENCIA**, el destinatario aceptado, el rechazado y el comportamiento
+fail-closed.
 
-Al iniciar una tarea, la sesión identifica su rol leyendo este adapter. La
-memoria conversacional no sustituye esa comprobación. Si no puede identificar
-el adapter o el destinatario no coincide, no ejecuta y responde
-`DESTINATARIO_INCORRECTO`.
+Este archivo contiene la función, los límites y el método durable del rol; no es
+el mecanismo automático de descubrimiento de identidad. La memoria
+conversacional tampoco sustituye al adapter automático ni a este contrato.
 
 ## Función
 
