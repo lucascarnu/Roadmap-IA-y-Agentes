@@ -78,13 +78,17 @@ convertir esto en burocracia.
 
 ### Encabezado de destinatario
 
-Todo prompt dirigido a un ejecutor concreto empieza con `DESTINATARIO: <AGENTE>`
-y una regla **fail closed**: antes de ejecutar, el agente verifica que es el
-destinatario; si no lo es, no ejecuta nada y responde `DESTINATARIO_INCORRECTO`.
+Todo prompt dirigido a un rol concreto empieza con `DESTINATARIO: <ROL>` y una
+regla **fail closed**: antes de ejecutar, la sesión identifica su rol leyendo su
+adapter durable y verifica que coincide con el destinatario. La memoria
+conversacional no determina el rol. Si no puede identificar el adapter o el
+destinatario no coincide, no ejecuta nada y responde
+`DESTINATARIO_INCORRECTO`.
 
-Valores previstos: `CLAUDE`, `CODEX` y `CUALQUIER_EJECUTOR_AUTORIZADO`. No es un
-sistema de identidades: es una protección contra pegar el prompt en la ventana
-equivocada.
+Valores previstos: `CLAUDE — ARQUITECTO / LEAD`, `CODEX — EJECUTOR PRINCIPAL`,
+`CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA` y
+`CUALQUIER_EJECUTOR_AUTORIZADO`. No es un sistema de identidades: es una
+protección contra pegar el prompt en la sesión equivocada.
 
 `CUALQUIER_EJECUTOR_AUTORIZADO` se usa cuando la tarea no depende materialmente
 de quién la ejecute. En ese caso no se cancela por identidad, pero la firma final

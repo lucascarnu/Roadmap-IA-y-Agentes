@@ -8,3 +8,6 @@ gha-creds-*.json
 scripts/handoff/artifacts/
 scripts/handoff/.handoff/
 scripts/handoff/notify.local.json
+
+# Replaceable, non-canonical Consultant checkpoint
+.consultor/checkpoint.md
