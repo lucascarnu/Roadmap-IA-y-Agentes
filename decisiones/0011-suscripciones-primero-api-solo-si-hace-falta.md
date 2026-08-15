@@ -67,6 +67,25 @@ Una prueba puntual con API puede ser aprobada explícitamente por Lucas, despué
 de conocer su justificación y costo estimado, sin convertir esa vía en
 arquitectura permanente.
 
+### Preautorización de saldo preexistente
+
+Un saldo API preexistente puede utilizarse sin una nueva aprobación por corrida
+cuando el Director haya dejado una preautorización explícita, acotada y vigente
+para ese saldo o vía, con sus límites materiales definidos. Mientras el uso se
+mantenga dentro de esos límites, no se vuelve a consultar al Director por cada
+corrida.
+
+Si el saldo autorizado se agota o el uso pretendido excede sus límites, el
+circuito vuelve a una vía gratuita, de suscripción u otra contingencia ya
+autorizada; si así no puede satisfacer un gate obligatorio, se detiene de forma
+segura.
+
+La preautorización no autoriza por sí sola Auto-recharge, recargas, compras de
+saldo, upgrades, cambios de plan, nuevas obligaciones económicas ni gasto por
+encima del saldo o de los límites autorizados. Cualquiera de esas acciones
+requiere una autorización nueva del Director. Esta regla formaliza una clase de
+autorización: no crea por sí misma una autorización económica.
+
 ## Relación con 0010
 
 `0010` define cómo se combinan reviewer principal y shadow, pero no obliga a ningún mecanismo de facturación ni entorno de ejecución.

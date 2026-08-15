@@ -308,6 +308,64 @@ Si el protocolo se sostiene durante varias reviews reales, corresponde
 promoverlo a una decisión en `decisiones/`. Hoy no: existe una sola corrida
 válida y el proyecto no congela lo que todavía no demostró estabilidad.
 
+#### Calibración experimental de profundidad, modelos y costo
+
+**Estado: ABIERTO. Clasificación: EN PRUEBA / DURANTE_MVP.** Este apartado
+registra evidencia e hipótesis operativas; no modifica el canon ni define una
+política permanente.
+
+**Profundidad de review.** Se usan experimentalmente las etiquetas `R1 LIGERA`,
+`R2 MEDIA`, `R3 PROFUNDA` y `R4 EXHAUSTIVA` para describir profundidad o densidad
+de una review. No reemplazan la clase de cambio de `0014`, no permiten reducir el
+rigor por costo y requieren más benchmarks antes de canonizarse.
+
+**Selección de modelo.** La hipótesis en prueba es preferir la vía por
+suscripción mientras tenga cuota, usar un modelo API económico como contingencia
+y reservar un modelo más caro o profundo para un escalamiento deliberado. La
+comparación observada entre Kimi K2.7 Code con *thinking* nativo y Kimi K3 con
+esfuerzo alto es evidencia de laboratorio, no una política: una sola comparación
+no permite asignar modelos a R1-R4.
+
+**Topes de costo.** Un cap fijo global puede bloquear una ejecución válida antes
+de inferencia. En el caso observado, el preflight de K3 fue de aproximadamente
+USD 0.364257 y un cap fijo de USD 0.35 lo habría abortado. Como hipótesis
+operativa, un cap futuro debería ser consciente del modelo y del preflight o ser
+relativo a la estimación; la fórmula queda deliberadamente sin definir.
+
+**Billing diferido — OBSERVACIÓN EXPERIMENTAL.** Para K3 se calculó un costo
+aproximado de USD 0.25398. El balance inmediato no cambió, pero en la medición
+previa a la corrida siguiente había bajado aproximadamente USD 0.2539805: el
+descenso observado salió del voucher y el cash permaneció sin cambios. Esto no
+demuestra causalidad. Predicción falsable: si la hipótesis de reflejo diferido es
+correcta, el cargo calculado de K2.7, aproximadamente USD 0.05234, debería
+aparecer posteriormente.
+
+Una telemetría futura puede representar `CARGO_PENDIENTE_DE_REFLEJO` y conservar
+balance previo, balance posterior inmediato, balance posterior, voucher y cash.
+No se implementa en esta unidad.
+
+**Runner API. Estado: ABIERTO. Clasificación: PRE_MVP_OPORTUNISTA; secuencia:
+después de U0.** El runner de review API es actualmente efímero. Conviene
+convertirlo en una vía reutilizable para evitar reconstrucciones manuales o
+*ad-hoc* cuando vuelva a agotarse una cuota de membresía; no se implementa ahora.
+
+**Documentación externa — límite operativo observado.** Algunas fuentes o
+dominios externos no son alcanzables desde determinadas superficies de agente.
+No se eleva a canon: `reglas.md` ya define cómo proceder cuando una fuente
+oficial no es alcanzable.
+
+**Saldo autorizado — estado operativo temporal.** Existe una preautorización
+vigente del Director para consumir el saldo preexistente de Kimi API Platform en
+revisiones independientes: sólo saldo ya existente, sin Auto-recharge, recarga,
+compra, upgrade, cambio de plan ni gasto más allá de ese saldo. Al agotarse, se
+usan contingencias gratuitas o autorizadas, o se detiene el circuito de forma
+segura.
+
+El último balance observado conocido antes de que se reflejara un eventual cargo
+de K2.7 fue: `available_balance = USD 9.2436695`, `voucher_balance = USD
+4.24367`, `cash_balance = USD 5.00`. Es información operacional temporal, no un
+valor permanente, y puede actualizarse cuando exista nueva evidencia observada.
+
 ### Agente investigador de soluciones externas
 
 **Estado: POSPUESTO.** Rol todavía **no adoptado**: no figura en el Nivel A de
