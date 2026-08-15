@@ -213,6 +213,17 @@ materialidad:
   revisión completa desde cero;
 - la indisponibilidad del reviewer **nunca** cuenta como aprobación.
 
+Un delta que modifica precisamente el objeto de un hallazgo abierto —incluida
+una corrección destinada a resolverlo— es **material respecto de ese hallazgo**.
+Que los demás artefactos de la unidad permanezcan byte a byte idénticos no
+traslada automáticamente al objeto cambiado la validez de la review anterior:
+ese objeto debe ser revalidado por un reviewer independiente antes de cerrar el
+hallazgo, salvo que una regla canónica más específica disponga otra cosa.
+
+Esto no obliga a repetir trabajo cuando el objeto relevante permanece
+materialmente idéntico. Ante duda razonable sobre su materialidad, se solicita
+re-review.
+
 ## Revisión y validación no son lo mismo
 
 El reviewer responde *¿está bien construido?*; QA responde *¿funciona realmente?*

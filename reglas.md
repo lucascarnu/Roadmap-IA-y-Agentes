@@ -38,6 +38,28 @@ Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad in
 - Antes de cerrar cada pull request, comprobar si sigue vigente la [obligación temporal de revisión independiente](pendientes.md#revisión-independiente-obligatoria-mientras-tanto). Su estado y alcance viven únicamente en `pendientes.md` y pueden exigir revisión aunque la proporcionalidad general de `0009` permitiera omitirla.
 - Una tarea automática no depende de poder consultar al usuario: debe estar suficientemente especificada o fallar de forma segura.
 
+### Sólo el canon crea gates
+
+Sólo bloquean el circuito los gates que el canon vigente declara obligatorios
+para la unidad concreta. No constituyen por sí mismos un gate una señal roja
+genérica, `mergeStateStatus UNSTABLE`, un check fallido que no sea *required* ni
+gate canónico, la ausencia de shadow, una herramienta temporalmente no
+disponible, una cuota temporal agotada, la observabilidad parcial, un pendiente
+que no declare bloquear ni una contingencia preferida no disponible cuando
+exista otra vía autorizada.
+
+Si una señal de ese tipo revela un problema material real, se trata el problema
+material correspondiente, no el color o estado de la señal. Si un gate
+obligatorio no puede satisfacerse mediante ninguna vía razonable y autorizada,
+el circuito se detiene de forma segura conforme a `0009`.
+
+Una orden o prompt operacional puede definir la tarea, su alcance y la forma de
+entrega, pero no crea por sí mismo un gate material: toda restricción con
+pretensión bloqueante necesita fundamento canónico. Si una restricción *ad hoc*
+es incompatible con el canon, el destinatario ignora, rechaza o bloquea esa
+parte conforme al canon y lo declara en su salida. Esto no limita la definición
+normal de tareas, alcance ni entregables.
+
 ## Destinatario y firma de ejecución
 
 Quién ejecuta una tarea es un dato que se produce al ejecutarla, no algo que se

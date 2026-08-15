@@ -40,6 +40,14 @@ Un ocupante puede quedarse sin cuota o sin disponibilidad en cualquier momento.
 Estas son las sustituciones previstas, para que el circuito no tenga que
 inventarlas en ese momento. **Ninguna está activa hoy.**
 
+Una contingencia puede mantener al mismo ocupante mediante otra vía de acceso
+autorizada, o recurrir a otro ocupante autorizado que preserve la independencia
+y las capacidades requeridas. El agotamiento temporal de cuota no se escala al
+Director mientras exista una vía alternativa autorizada capaz de satisfacer el
+gate correctamente: el circuito resuelve esa contingencia agenticamente. Sólo
+si ninguna vía autorizada puede satisfacer un gate obligatorio, el cierre se
+detiene de forma segura.
+
 **Reviewer independiente.** Si el ocupante asignado no está disponible, no pudo
 ejecutar la revisión o agotó su cuota:
 

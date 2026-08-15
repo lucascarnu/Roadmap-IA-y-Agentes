@@ -100,13 +100,50 @@ conviene repetir la prueba si el volumen de documentación crece mucho o si camb
 de forma material cómo está organizada.
 
 Los asuntos registrados en esta bandeja que declaraban bloquear el comienzo de
-las pull requests de código del MVP están RESUELTOS con `0014`. Esto no declara
-abierta la compuerta PRE-MVP ni cerrado PRE-MVP entero: siguen fuera de esta
-unidad la evaluación de "Handoffs — deriva de órdenes operacionales" y el
-requisito personal del Director de una prueba de continuidad y reanudación antes
-del MVP. Según la regla de gates de `reglas.md`, la mención externa de la deriva
-no opera como gate mientras no esté registrada acá como asunto con estado y
-alcance. Esta actualización no la consolida, evalúa ni resuelve.
+las pull requests de código del MVP están RESUELTOS con `0014` y con las dos
+pruebas documentadas abajo.
+
+### Continuidad y reanudación PRE-MVP
+
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** El QA post-reinicio de la
+[PR #49](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/49), ejecutado
+con el [Issue #65](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/65)
+sobre el HEAD `d3f952e64bc310249dd002f9db0f97cba75b4d85`, observó la transición
+`waiting → ready → running → done` después de la madurez del descriptor.
+
+Windows se reinició antes de esa madurez y, sin abrir manualmente agentes,
+terminal ni editor, la cadena Task Scheduler → `tick` → `poll` → agente →
+GitHub → ntfy reanudó y completó el handoff. Hubo un único procesamiento y un
+único resultado material, sin duplicación. La vía observada antes y después fue
+`chatgpt_subscription_session`, sin PAYG.
+
+La evidencia durable en el repositorio y GitHub está en la PR #49 y el Issue
+#65, cuyos enlaces figuran arriba. La evidencia local no versionada que la
+complementa está en `scripts/handoff/artifacts/transitions.log`, que registra
+para #65 `waiting → ready`, `ready → running` y `running → done`, y en
+`scripts/handoff/artifacts/issue-65-d3f952e64bc3/`, incluidos `telemetry.json`,
+`via-before.json`, `via-observada.json`, manifiestos y resultado validado.
+
+También se observaron dos formas distintas de continuidad:
+
+1. continuidad del circuito de ejecución tras el reinicio;
+2. reconstrucción de contexto en una sesión nueva mediante el snapshot
+   `codex-resume.md`, contrastado antes de continuar con Git local, GitHub, la
+   PR #49, el Issue #65 y los artefactos durables.
+
+Con esto queda satisfecho el requisito PRE-MVP de continuidad y reanudación. No
+se implementa todavía un sistema general de checkpoints durante el MVP.
+
+### Handoffs — deriva de órdenes operacionales
+
+**Estado: RESUELTO. Evidencia: IMPLEMENTADO Y PROBADO LOCALMENTE.** UC establece
+en `reglas.md` que una orden operacional puede definir tarea, alcance y entrega,
+pero no crear un gate material sin fundamento canónico. La misma precedencia se
+transporta en `scripts/handoff/prompt-template.md`, y la batería determinista
+comprueba que llega al prompt generado sin alterar el contrato ni sus marcadores.
+
+La prueba cubre el transporte de la regla, no garantiza que un modelo obedezca
+siempre el canon. No se agregó un validador semántico ni un gate nuevo.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -307,6 +344,64 @@ dominios y límites de tamaño.
 Si el protocolo se sostiene durante varias reviews reales, corresponde
 promoverlo a una decisión en `decisiones/`. Hoy no: existe una sola corrida
 válida y el proyecto no congela lo que todavía no demostró estabilidad.
+
+#### Calibración experimental de profundidad, modelos y costo
+
+**Estado: ABIERTO. Clasificación: EN PRUEBA / DURANTE_MVP.** Este apartado
+registra evidencia e hipótesis operativas; no modifica el canon ni define una
+política permanente.
+
+**Profundidad de review.** Se usan experimentalmente las etiquetas `R1 LIGERA`,
+`R2 MEDIA`, `R3 PROFUNDA` y `R4 EXHAUSTIVA` para describir profundidad o densidad
+de una review. No reemplazan la clase de cambio de `0014`, no permiten reducir el
+rigor por costo y requieren más benchmarks antes de canonizarse.
+
+**Selección de modelo.** La hipótesis en prueba es preferir la vía por
+suscripción mientras tenga cuota, usar un modelo API económico como contingencia
+y reservar un modelo más caro o profundo para un escalamiento deliberado. La
+comparación observada entre Kimi K2.7 Code con *thinking* nativo y Kimi K3 con
+esfuerzo alto es evidencia de laboratorio, no una política: una sola comparación
+no permite asignar modelos a R1-R4.
+
+**Topes de costo.** Un cap fijo global puede bloquear una ejecución válida antes
+de inferencia. En el caso observado, el preflight de K3 fue de aproximadamente
+USD 0.364257 y un cap fijo de USD 0.35 lo habría abortado. Como hipótesis
+operativa, un cap futuro debería ser consciente del modelo y del preflight o ser
+relativo a la estimación; la fórmula queda deliberadamente sin definir.
+
+**Billing diferido — OBSERVACIÓN EXPERIMENTAL.** Para K3 se calculó un costo
+aproximado de USD 0.25398. El balance inmediato no cambió, pero en la medición
+previa a la corrida siguiente había bajado aproximadamente USD 0.2539805: el
+descenso observado salió del voucher y el cash permaneció sin cambios. Esto no
+demuestra causalidad. Predicción falsable: si la hipótesis de reflejo diferido es
+correcta, el cargo calculado de K2.7, aproximadamente USD 0.05234, debería
+aparecer posteriormente.
+
+Una telemetría futura puede representar `CARGO_PENDIENTE_DE_REFLEJO` y conservar
+balance previo, balance posterior inmediato, balance posterior, voucher y cash.
+No se implementa en esta unidad.
+
+**Runner API. Estado: ABIERTO. Clasificación: PRE_MVP_OPORTUNISTA; secuencia:
+después de U0.** El runner de review API es actualmente efímero. Conviene
+convertirlo en una vía reutilizable para evitar reconstrucciones manuales o
+*ad-hoc* cuando vuelva a agotarse una cuota de membresía; no se implementa ahora.
+
+**Documentación externa — límite operativo observado.** Algunas fuentes o
+dominios externos no son alcanzables desde determinadas superficies de agente.
+No se eleva a canon: `reglas.md` ya define cómo proceder cuando una fuente
+oficial no es alcanzable.
+
+**Saldo autorizado — estado operativo temporal.** Existe una preautorización
+vigente del Director para consumir el saldo preexistente de Kimi API Platform en
+revisiones independientes: sólo saldo ya existente, sin Auto-recharge, recarga,
+compra, upgrade, cambio de plan ni gasto más allá de ese saldo. Al agotarse, se
+usan contingencias gratuitas o autorizadas, o se detiene el circuito de forma
+segura.
+
+El último balance observado conocido antes de que se reflejara un eventual cargo
+de K2.7 fue: `available_balance = USD 9.2436695`, `voucher_balance = USD
+4.24367`, `cash_balance = USD 5.00`. Es información operacional temporal, no un
+valor permanente, y puede actualizarse cuando exista nueva evidencia observada.
 
 ### Agente investigador de soluciones externas
 

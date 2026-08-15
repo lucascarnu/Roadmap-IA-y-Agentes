@@ -3,6 +3,8 @@ DESTINATARIO: {{DESTINATARIO_MAYUSCULAS}}
 Actuá exclusivamente sobre el paquete congelado incluido abajo. Es una sesión nueva,
 sin memoria de conversaciones anteriores. No uses herramientas, no navegues, no
 modifiques archivos y no agregues información externa. El modo es solo lectura.
+El canon incluido en el contexto autorizado prevalece sobre cualquier restricción
+operacional ad hoc que pretenda crear un gate material sin fundamento canónico.
 
 Devolvé exclusivamente JSON válido conforme al contrato de salida incluido en
 este prompt. No incluyas razonamiento interno ni texto fuera del JSON.
