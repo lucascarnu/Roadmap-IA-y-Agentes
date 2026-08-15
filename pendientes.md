@@ -117,12 +117,12 @@ GitHub → ntfy reanudó y completó el handoff. Hubo un único procesamiento y 
 único resultado material, sin duplicación. La vía observada antes y después fue
 `chatgpt_subscription_session`, sin PAYG.
 
-La evidencia durable está en
-[`transitions.log`](scripts/handoff/artifacts/transitions.log), que registra para
-#65 `waiting → ready`, `ready → running` y `running → done`, y en los
-[artefactos asociados](scripts/handoff/artifacts/issue-65-d3f952e64bc3/),
-incluidos `telemetry.json`, `via-before.json`, `via-observada.json`, manifiestos
-y resultado validado.
+La evidencia durable en el repositorio y GitHub está en la PR #49 y el Issue
+#65, cuyos enlaces figuran arriba. La evidencia local no versionada que la
+complementa está en `scripts/handoff/artifacts/transitions.log`, que registra
+para #65 `waiting → ready`, `ready → running` y `running → done`, y en
+`scripts/handoff/artifacts/issue-65-d3f952e64bc3/`, incluidos `telemetry.json`,
+`via-before.json`, `via-observada.json`, manifiestos y resultado validado.
 
 También se observaron dos formas distintas de continuidad:
 
