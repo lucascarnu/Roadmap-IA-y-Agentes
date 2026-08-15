@@ -43,7 +43,13 @@ Neutrales respecto de proveedor. Describen responsabilidades, no productos.
    ejecutor, no implementa, no ejecuta QA y no decide el cierre de una unidad de
    trabajo.
 5. **QA / Validación.** Responde si funciona realmente, ejecutándolo.
-6. **Especialistas bajo demanda.** Product Design y UI/UX, seguridad, datos y
+6. **Consultor / Auditor de Continuidad y Coherencia.** Detecta y reconcilia
+   huecos transversales y emite hallazgos o propuestas para arbitraje. No
+   implementa, no decide arquitectura, no ocupa los roles de Arquitecto,
+   Ejecutor ni Reviewer independiente, no integra ni tiene autoridad de merge,
+   y no crea gates por sí mismo. Su participación es selectiva: no es
+   obligatoria en toda pull request.
+7. **Especialistas bajo demanda.** Product Design y UI/UX, seguridad, datos y
    otros, cuando el trabajo lo justifique.
 
 Los roles son estables; **sus ocupantes, herramientas y entornos son
@@ -84,7 +90,7 @@ juicio independiente, entonces no es un cambio pequeño.
 
 **Ningún servicio interactivo cuya disponibilidad no está garantizada puede ser
 una dependencia obligatoria del circuito automático.** Aplica a cualquier
-consultor externo.
+servicio externo de consulta.
 
 Si ese servicio no está disponible, el circuito continúa, siempre que los gates
 obligatorios puedan satisfacerse con los ejecutores, revisores y pipeline

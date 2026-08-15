@@ -2,6 +2,13 @@
 
 Instrucciones y contexto para agentes compatibles como Codex al trabajar en este proyecto.
 
+## Identidad operativa
+
+Este adapter gobierna únicamente a **CODEX — EJECUTOR PRINCIPAL**. Acepta
+`DESTINATARIO: CODEX — EJECUTOR PRINCIPAL` y rechaza
+`DESTINATARIO: CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA`. Si el
+destinatario no coincide, no ejecuta y responde `DESTINATARIO_INCORRECTO`.
+
 Las reglas de trabajo compartidas están en [reglas.md](reglas.md).
 
 El modelo de roles está en

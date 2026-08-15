@@ -17,9 +17,15 @@ decide una asignación y cuándo se reevalúa— está en
 | Director / Product Owner | Lucas |
 | Arquitecto / Lead | Claude |
 | Ejecutor principal | Codex |
+| Consultor / Auditor de Continuidad y Coherencia | Codex en sesión separada del Ejecutor Principal |
 | Reviewer independiente | GitHub Copilot Code Review, solo sobre pull requests |
 | QA / Validación | *Sin asignar.* Se activa por tarea |
 | Especialistas bajo demanda | *Sin asignar.* Se activan por tarea |
+
+**CODEX — EJECUTOR PRINCIPAL** y **CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD
+Y COHERENCIA** son ocupaciones operativas distintas, aunque compartan proveedor
+o modelo. Cada sesión se rige por su adapter durable y no hereda la autoridad ni
+las funciones de la otra.
 
 **QA / Validación no tiene ocupante permanente**, y no conviene inventarle uno.
 Se activa cuando una tarea necesita demostrar que algo funciona, y quien lo ocupe
