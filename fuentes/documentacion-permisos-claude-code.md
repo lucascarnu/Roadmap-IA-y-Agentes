@@ -69,6 +69,121 @@ Cada punto se usó para decidir una regla concreta de la política:
   concreta. Lo más cercano es `/permissions`, que lista las reglas y el archivo
   `settings.json` del que proviene cada una.
 
+## Semántica observada del matcher
+
+**PROBADO LOCALMENTE — 2026-08-14.** Estas observaciones describen el matcher
+efectivo en este entorno; no son una garantía universal del producto salvo donde
+la documentación oficial citada arriba diga lo mismo.
+
+### Composición por segmentos
+
+**PROBADO LOCALMENTE — 2026-08-14.** La composición se evalúa por segmentos.
+Las sondas observadas fueron:
+
+- `Get-ScheduledTask -TaskName "<inexistente>" | Disable-ScheduledTask` →
+  denegado por regla explícita.
+- `Get-ScheduledTask -TaskName "<inexistente>"; Start-ScheduledTask -TaskName
+  "<inexistente>"` → denegado por regla explícita.
+
+Un cmdlet de mutación presente en un segmento posterior sigue siendo alcanzado
+por su `deny`: el primer comando permitido no autoriza automáticamente toda la
+composición.
+
+### Subexpresiones
+
+**PROBADO LOCALMENTE — 2026-08-14.** La sonda
+`Get-ScheduledTask -TaskName (Write-Output "<inexistente>")` fue denegada por
+omisión. En este entorno, esa invocación con una subexpresión `( ... )` no
+coincidió con el `allow` correspondiente.
+
+Como consecuencia de seguridad observada, una construcción del tipo
+`(New-CimSession ...)` embebida dentro de un comando permitido no quedó
+automáticamente autorizada mediante el `allow` exterior. Esta conclusión no se
+generaliza más allá de las formas observadas.
+
+### Conjunto implícito observado
+
+**OBSERVACIÓN:** `Format-List`, `Out-String` y `Select-Object` se ejecutaron como
+segmentos de tubería sin aparecer en reglas `allow` explícitas del proyecto.
+Esto explica que una composición como `Get-ScheduledTaskInfo ... | Format-List
+* | Out-String` pueda funcionar: el primer segmento coincide con su `allow`, la
+composición se descompone y los segmentos posteriores observados pueden
+ejecutarse sin reglas propias.
+
+El criterio exacto mediante el cual Claude Code permite ese conjunto implícito
+no está respaldado por la documentación oficial disponible en el proyecto. No
+se infiere qué otros cmdlets pertenecen al conjunto ni que todos los cmdlets
+read-only estén implícitamente permitidos.
+
+### Alcance de la garantía read-only observada
+
+**PROBADO LOCALMENTE — 2026-08-14.** La garantía read-only de UO resistió las
+tres clases observadas: tubería, punto y coma y subexpresión. Esto queda limitado
+a las formas probadas y no constituye una garantía absoluta sobre toda sintaxis
+PowerShell imaginable.
+
+### El comodín final no funciona como glob libre sobre toda la cadena
+
+Las formas:
+
+- `Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational,Application ...`
+- `Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational','Application' ...`
+
+no matchearon las reglas destinadas al único canal permitido. Ambas fueron
+denegadas. Por lo tanto, en este entorno, el comodín final no debe asumirse como
+un glob libre sobre cualquier continuación sintáctica.
+
+### Hashtable
+
+La regla `PowerShell(Get-WinEvent -FilterHashtable *)` no autorizó
+`Get-WinEvent -FilterHashtable @{...}`. Por eso esa forma fue abandonada y
+reemplazada por `-LogName`.
+
+### Mensajes de denegación observados
+
+- `denied because Claude Code is running in don't ask mode` significa que
+  ninguna regla `allow` matcheó.
+- `Permission to use PowerShell with command ... has been denied` indica
+  coincidencia con una regla `deny` explícita.
+
+Esta distinción es comportamiento observado localmente, no una garantía
+universal del producto salvo que una fuente oficial futura la respalde.
+
+### Case-insensitive
+
+El matcher observado es insensible a mayúsculas/minúsculas:
+
+- `-computername` coincidió con una regla escrita usando `-ComputerName`.
+- `schtasks /S` coincidió con una regla escrita usando `/s`.
+
+### Abreviaturas de parámetros PowerShell
+
+Un `deny` anclado al nombre completo de un parámetro no necesariamente cubre las
+abreviaturas válidas que PowerShell expande. La abreviatura `-Com` eludió
+`PowerShell(Get-WinEvent * -ComputerName *)` y el comando llegó a ejecutarse.
+
+Por lo tanto, para parámetros PowerShell donde se necesite cerrar una familia
+completa, el patrón debe considerar el prefijo mínimo no ambiguo pertinente. En
+esta unidad:
+
+- `-ComputerName` → familia cubierta mediante `-Co*`.
+- `-Credential` → familia cubierta mediante `-Cr*`.
+
+El bypass fue observado, fue reproducible y queda corregido por UO-fix3.
+
+### Diferencia con flags de ejecutables clásicos
+
+Las banderas de una sola letra de herramientas como `schtasks /s` no tienen el
+mismo problema de abreviaturas PowerShell. La insensibilidad a mayúsculas ya
+cubre variantes como `/S`.
+
+### Observación abierta sobre variables PowerShell
+
+**INFERENCIA:** una invocación que contiene referencias a variables PowerShell,
+por ejemplo `$null`, pareció no coincidir con una regla `allow` en la observación
+realizada con `-Cred $null`. Esto no se trata como semántica confirmada del
+matcher y UO no se amplía para investigarlo.
+
 ## Por qué oro
 
 Determinó decisiones concretas y verificables, no impresiones. Corrigió tres
