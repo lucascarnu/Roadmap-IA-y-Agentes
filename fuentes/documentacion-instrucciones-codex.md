@@ -57,6 +57,19 @@ Esta observación describe una ejecución de Codex Desktop. No demuestra una
 garantía universal sobre cómo toda compactación futura preservará cada clase de
 contenido.
 
+**OBSERVACIÓN LOCAL — 2026-08-16.** En Windows, con Codex CLI `v0.147.0` y Codex
+Desktop, se validó el procedimiento operativo para separar las dos identidades:
+el Ejecutor usa un proyecto cuya carpeta de origen es
+`C:\Proyectos\Roadmap-IA-y-Agentes`, mientras que el Consultor usa un segundo
+proyecto cuya carpeta de origen es
+`C:\Proyectos\Roadmap-IA-y-Agentes\.consultor`. Ambos operan sobre el mismo
+repositorio Git; no son worktrees, ramas ni repositorios distintos. El cwd hace
+que el segundo proyecto cargue `.consultor/AGENTS.override.md`; el nombre visible
+del chat no determina la identidad.
+
+Este procedimiento es conocimiento operativo observado para esas versiones, ese
+sistema operativo y esa fecha, no una garantía permanente del producto.
+
 ## Por qué oro
 
 La documentación determina el mecanismo durable elegido para separar dos roles
@@ -67,4 +80,6 @@ Codex dentro del mismo repositorio: un adapter raíz por defecto y un
 
 Revalidar cuando cambie de forma relevante Codex, la documentación oficial de
 descubrimiento de instrucciones o el comportamiento observado de precedencia y
-compactación.
+compactación. Revalidar también el procedimiento de proyectos separados por cwd
+cuando cambien Codex CLI o Desktop, Windows, o la forma en que Codex Desktop
+selecciona la carpeta de origen y el directorio de trabajo de un proyecto.
