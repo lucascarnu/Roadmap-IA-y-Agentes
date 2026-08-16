@@ -25,6 +25,19 @@ La primera URL redirigía durante la consulta a
 `https://learn.chatgpt.com/docs/agent-configuration/agents-md`; la segunda, a
 `https://learn.chatgpt.com/docs/config-file/config-reference`.
 
+Consultadas además el **2026-08-16**:
+
+- `https://learn.chatgpt.com/docs/codex/cli`
+- `https://learn.chatgpt.com/codex/developer-commands?surface=cli`
+
+**Dónde vive hoy la documentación.** Todo el árbol `/codex/*` de
+`developers.openai.com` responde `308 Permanent Redirect` hacia
+`learn.chatgpt.com`; sólo la raíz del sitio anterior sigue sirviendo contenido.
+Comprobado con cuatro rutas el 2026-08-16. La referencia completa de comandos no
+está bajo `/docs`: `https://learn.chatgpt.com/docs/codex/developer-commands`
+devuelve `404`, y la que responde es
+`https://learn.chatgpt.com/codex/developer-commands?surface=cli`.
+
 ## Qué afirmaciones respalda
 
 **DOCUMENTADO — 2026-08-15.**
@@ -43,6 +56,34 @@ La primera URL redirigía durante la consulta a
 - Los nombres fallback se prueban después de `AGENTS.override.md` y `AGENTS.md`;
   por lo tanto, no desplazan al archivo preferido existente en el mismo
   directorio.
+
+**DOCUMENTADO — 2026-08-16**, sobre reanudación de sesiones, desde
+`https://learn.chatgpt.com/codex/developer-commands?surface=cli`:
+
+- `codex resume` continúa una sesión interactiva por identificador o reanuda la
+  conversación más reciente.
+- `--last` *"Skip the picker and resume the most recent chat from the current
+  working directory"*. Es decir: **el alcance de "la más reciente" está acotado al
+  directorio de trabajo actual**, no es global del usuario.
+- `--all` *"Include sessions outside the current working directory when selecting
+  the most recent session"*: es lo que amplía ese alcance, y hay que pedirlo
+  expresamente.
+- El identificador de sesión —UUID o nombre— es un argumento posicional opcional:
+  se omite cuando se usa `--last`, y se pasa cuando se quiere una sesión concreta.
+- Si el directorio actual difiere del directorio guardado de la sesión, Codex
+  pregunta cuál usar; `tui.resume_cwd` en `"current"` o `"session"` evita esa
+  pregunta y un `--cd` explícito prevalece.
+- `https://learn.chatgpt.com/docs/codex/cli` describe la función como *"Reopen a
+  recent chat from the current repository, or search across local chats when you
+  need to return to older work"*, y remite a la referencia de comandos.
+
+Esto cierra una limitación que el QA de identidad había dejado abierta: la
+reanudación del Consultor se hizo con `codex resume --last` desde `.consultor/`, y
+ahora está documentado que ese alcance es el del directorio de trabajo. Sigue
+siendo cierto que el comentario publicado no identificaba la sesión: para que una
+prueba de reanudación quede demostrada por su artefacto, hay que registrar el
+identificador de sesión, que la documentación confirma que existe y es aceptado
+como argumento.
 
 ## Observación local
 
@@ -83,3 +124,8 @@ descubrimiento de instrucciones o el comportamiento observado de precedencia y
 compactación. Revalidar también el procedimiento de proyectos separados por cwd
 cuando cambien Codex CLI o Desktop, Windows, o la forma en que Codex Desktop
 selecciona la carpeta de origen y el directorio de trabajo de un proyecto.
+
+Revalidar además cuando cambie el host donde OpenAI sirve esta documentación
+—hoy `learn.chatgpt.com`, con `developers.openai.com` redirigiendo—, porque de eso
+depende la allowlist de `WebFetch`; y cuando cambie el comportamiento de
+`codex resume`, su alcance por directorio de trabajo o sus banderas.
