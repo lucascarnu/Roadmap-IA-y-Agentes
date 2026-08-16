@@ -18,7 +18,7 @@ decide una asignación y cuándo se reevalúa— está en
 | Arquitecto / Lead | Claude |
 | Ejecutor principal | Codex |
 | Consultor / Auditor de Continuidad y Coherencia | Codex en sesión separada del Ejecutor Principal |
-| Reviewer independiente | GitHub Copilot Code Review, solo sobre pull requests |
+| Reviewer independiente | Kimi, por una vía operativa vigente según el [estado por vía](pendientes.md) |
 | QA / Validación | *Sin asignar.* Se activa por tarea |
 | Especialistas bajo demanda | *Sin asignar.* Se activan por tarea |
 
