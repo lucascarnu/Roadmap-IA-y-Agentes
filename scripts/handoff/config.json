@@ -22,7 +22,8 @@
       "model": "k3-256k",
       "alias": "kimi-code/k3-256k",
       "effort": "high",
-      "authorized_via": "kimi_membership_oauth"
+      "authorized_via": "kimi_membership_oauth",
+      "authorized_fallback_via": "kimi_open_platform_api"
     }
   }
 }

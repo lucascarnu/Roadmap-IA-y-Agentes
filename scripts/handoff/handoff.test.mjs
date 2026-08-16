@@ -33,6 +33,7 @@ const BASE_CONFIG = {
     kimi: {
       executable: "kimi", model: "k3-256k", alias: "kimi-code/k3-256k",
       effort: "high", authorized_via: "kimi_membership_oauth",
+      authorized_fallback_via: "kimi_open_platform_api",
     },
   },
 };
@@ -1010,6 +1011,88 @@ test("vía Kimi no demostrable termina blocked-via sin invocar el modelo", async
     assert.equal(result.processed[0].status, "blocked-via");
     assert.equal(invocations, 0);
   } finally { clean(fx); }
+});
+
+test("blocked-via con contingencia emite señal informativa y no needs_human", async () => {
+  const notifications = [];
+  const kimiContract = contract({
+    destinatario: "kimi",
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  });
+  const backend = new FakeBackend([{
+    number: 1, title: "Kimi", body: issueBody(kimiContract), createdAt: "2026-08-11T00:00:00Z",
+  }]);
+  const fx = fixture(backend, {
+    authObserver: () => ({
+      authorized_via: "kimi_membership_oauth", observed_via: "unverified", evidence: {}, valid: false,
+    }),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].failed_via, "kimi_membership_oauth");
+    assert.equal(result.processed[0].authorized_fallback_via, "kimi_open_platform_api");
+    assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [
+      { event: "fallback_available", priority: 2 },
+    ]);
+    assert.match(notifications[0].message, /kimi_membership_oauth/);
+    assert.match(notifications[0].message, /kimi_open_platform_api/);
+  } finally { clean(fx); }
+});
+
+test("blocked-via sin contingencia conserva escalación terminal y needs_human", async () => {
+  const notifications = [];
+  const backend = new FakeBackend([{
+    number: 1, title: "Codex", body: issueBody(contract()), createdAt: "2026-08-11T00:00:00Z",
+  }]);
+  const fx = fixture(backend, {
+    authObserver: () => ({
+      authorized_via: "chatgpt_subscription_session", observed_via: "unverified", evidence: {}, valid: false,
+    }),
+    notify: async (payload) => { notifications.push(payload); },
+  });
+  try {
+    const result = await poll(fx.options);
+    assert.equal(result.processed[0].authorized_fallback_via, null);
+    assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [
+      { event: "terminal_error", priority: 4 },
+      { event: "needs_human", priority: 5 },
+    ]);
+  } finally { clean(fx); }
+});
+
+test("failed, blocked y stale conservan terminal_error sin needs_human", async (t) => {
+  const cases = [
+    ["failed", {}, { invoke: () => { throw new Error("fallo de ejecución"); } }],
+    ["blocked", { base_sha: "main" }, {}],
+    ["stale", {}, { backendOptions: { heads: ["f".repeat(40)] } }],
+  ];
+  for (const [expected, contractOverrides, options] of cases) await t.test(expected, async () => {
+    const notifications = [];
+    const backend = new FakeBackend([{
+      number: 1, title: expected, body: issueBody(contract(contractOverrides)), createdAt: "2026-08-11T00:00:00Z",
+    }], options.backendOptions);
+    const fx = fixture(backend, {
+      ...(options.invoke ? { invoke: options.invoke } : {}),
+      notify: async (payload) => { notifications.push(payload); },
+    });
+    try {
+      const result = await poll(fx.options);
+      assert.equal(result.processed[0].status, expected);
+      assert.deepEqual(notifications.map(({ event, priority }) => ({ event, priority })), [
+        { event: "terminal_error", priority: 4 },
+      ]);
+    } finally { clean(fx); }
+  });
+});
+
+test("Gemini dispatch conserva sólo la invocación manual", () => {
+  const workflow = readFileSync(join(ROOT, ".github", "workflows", "gemini-dispatch.yml"), "utf8");
+  assert.doesNotMatch(workflow, /^  pull_request:\s*$/m);
+  assert.match(workflow, /^  issue_comment:\s*$/m);
+  assert.match(workflow, /^  pull_request_review_comment:\s*$/m);
+  assert.match(workflow, /^  pull_request_review:\s*$/m);
+  assert.match(workflow, /startsWith\(github\.event\.comment\.body \|\| github\.event\.review\.body, '@gemini-cli \/review'\)/);
 });
 
 test("head_ref rechaza recorrido relativo, extremos y componentes vacíos", () => {

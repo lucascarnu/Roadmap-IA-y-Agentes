@@ -727,7 +727,16 @@ async function processIssue(context, issue) {
       const current = stateFor(runtimeDir, issue.number) ?? state ?? {};
       saveState(runtimeDir, issue.number, { ...current, phase: label.slice(8), owner_pid: null, error: error.message });
       transitionLog(transitions, { issue: issue.number, from: "running", to: label.slice(8), error: error.message });
-      return { issue: issue.number, status: label.slice(8), error: error.message };
+      const adapter = contract ? config.agents[contract.destinatario] : null;
+      return {
+        issue: issue.number,
+        status: label.slice(8),
+        error: error.message,
+        ...(label === "handoff:blocked-via" ? {
+          failed_via: adapter?.authorized_via ?? null,
+          authorized_fallback_via: adapter?.authorized_fallback_via ?? null,
+        } : {}),
+      };
     }
   } finally {
     if (!(hooks?.preserveLockOnCrash && currentLabel === "handoff:running")) releaseLock(lockPath);
@@ -759,13 +768,40 @@ async function notifyPollResult({ backend, processed, notify }) {
     });
   }
 
-  for (const result of processed.filter((item) => ["failed", "blocked", "blocked-via", "stale"].includes(item.status))) {
+  for (const result of processed.filter((item) => ["failed", "blocked", "stale"].includes(item.status))) {
     await notifySafely(notify, {
       event: "terminal_error",
       title: "Handoff requiere atención",
       message: `Issue #${result.issue} terminó en handoff:${result.status}: ${compactReason(result.error)}`,
       priority: 4,
       tags: ["warning"],
+    });
+  }
+
+  for (const result of processed.filter((item) => item.status === "blocked-via")) {
+    if (result.authorized_fallback_via) {
+      await notifySafely(notify, {
+        event: "fallback_available",
+        title: "Handoff cambió de vía",
+        message: `Issue #${result.issue}: la vía ${result.failed_via ?? "seleccionada"} no pudo demostrarse; contingencia autorizada disponible: ${result.authorized_fallback_via}.`,
+        priority: 2,
+        tags: ["information_source"],
+      });
+      continue;
+    }
+    await notifySafely(notify, {
+      event: "terminal_error",
+      title: "Handoff requiere atención",
+      message: `Issue #${result.issue} terminó en handoff:blocked-via sin contingencia autorizada: ${compactReason(result.error)}`,
+      priority: 4,
+      tags: ["warning"],
+    });
+    await notifySafely(notify, {
+      event: "needs_human",
+      title: "Handoff requiere intervención",
+      message: `Issue #${result.issue} no tiene una vía autorizada disponible: ${compactReason(result.error)}`,
+      priority: 5,
+      tags: ["rotating_light"],
     });
   }
 
