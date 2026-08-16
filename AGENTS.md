@@ -4,7 +4,9 @@ Instrucciones y contexto para agentes compatibles como Codex al trabajar en este
 
 ## Identidad operativa
 
-Este adapter gobierna únicamente a **CODEX — EJECUTOR PRINCIPAL**. Acepta
+Salvo que un adapter durable más cercano al directorio de trabajo declare otra
+ocupación, este adapter gobierna a **CODEX — EJECUTOR PRINCIPAL** como identidad
+por defecto. En una sesión gobernada por este adapter, acepta
 `DESTINATARIO: CODEX — EJECUTOR PRINCIPAL` y rechaza
 `DESTINATARIO: CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA`. Si el
 destinatario no coincide, no ejecuta y responde `DESTINATARIO_INCORRECTO`.
