@@ -466,10 +466,32 @@ actualmente efímero. Conviene
 convertirlo en una vía reutilizable para evitar reconstrucciones manuales o
 *ad-hoc* cuando vuelva a agotarse una cuota de membresía; no se implementa ahora.
 
-**Documentación externa — límite operativo observado.** Algunas fuentes o
-dominios externos no son alcanzables desde determinadas superficies de agente.
-No se eleva a canon: `reglas.md` ya define cómo proceder cuando una fuente
-oficial no es alcanzable.
+**Documentación externa — vía de consulta oficial. Estado: RESUELTO. Evidencia:
+PROBADO LOCALMENTE.** El 2026-08-16, sobre `main`
+`e20c295212c684337565a136730dfac33ea53987`, el Arquitecto / Lead consultó
+documentación oficial de Codex mediante `WebFetch`, sin que el Director
+transportara URL, contenido, contexto ni resultado. El protocolo y las tres
+corridas están en el
+[Issue #85](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/85).
+
+De esa unidad quedan tres cosas que conviene no volver a descubrir:
+
+- **La vía por el puente de handoffs no sirve para esto.** El puente invoca a
+  Codex con `--sandbox read-only`, `web_search="disabled"` y
+  `features.shell_tool=false`, y falla la unidad si el agente intenta usar una
+  herramienta. Es una propiedad deliberada del congelado, no un defecto: no
+  corresponde habilitarle navegación.
+- **La documentación de Codex ya no se sirve desde `developers.openai.com`.** Todo
+  `/codex/*` responde `308` hacia `learn.chatgpt.com`. La allowlist de `WebFetch`
+  tiene que apuntar a ese host; hoy están autorizados los dos dominios, sin
+  `WebFetch` general.
+- **Regla.** Una premisa externa material **no se completa por memoria cuando
+  existe una vía autorizada de consulta oficial**. Concreta, para este proyecto,
+  lo que `reglas.md` §*Premisas externas de una unidad* ya exige: mientras esa vía
+  esté disponible, "no era alcanzable" deja de ser una explicación admisible.
+
+Sigue valiendo que un dominio no autorizado no se rodea por otra herramienta: se
+declara el límite y se pide la autorización.
 
 **Saldo autorizado — estado operativo temporal.** Existe una preautorización
 vigente del Director para consumir el saldo preexistente de Kimi API Platform en
