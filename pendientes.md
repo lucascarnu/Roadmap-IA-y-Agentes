@@ -259,16 +259,37 @@ efectivos permanecen `NO_VERIFICADO` donde no existe medición directa; las
 declaraciones de los agentes no se toman como medición. Los Issues #22 y #25 se
 conservan como evidencia histórica y no se reutilizaron.
 
+#### Reutilización de PID en la recuperación del lock
+
+**Estado: ABIERTO. Clasificación: DURANTE_MVP.** `scripts/handoff/handoff.mjs`
+decide si un `running` quedó huérfano mediante `process.kill(pid, 0)`, que sólo
+demuestra que algún proceso conserva ese PID; el `created_at` guardado no se
+compara. Como Windows reutiliza PID, otro proceso puede impedir la recuperación
+y la unidad quedar detenida en `running` sin notificación. Disparador para
+corregirlo: observar por primera vez una unidad detenida en `running` sin su
+proceso original vivo.
+
+#### Listados de GitHub sin paginar
+
+**Estado: ABIERTO. Clasificación: DURANTE_MVP.** `listByLabel` y `findChild` usan
+`gh issue list --limit 100`; `findChild` además consulta `--state all` para evitar
+crear dos veces el Issue hijo. Al emitir este pendiente se observaron 43 Issues,
+pero el modo de falla al superar el límite es silencioso: un hijo existente puede
+no encontrarse y duplicarse. Disparador para corregirlo: superar los 80 Issues, o
+antes si aparece un hijo duplicado.
+
 ### Solicitud y lectura de revisiones
 
 **Estado: PARCIAL.** Cómo se procesa una review y cuándo cuenta como válida ya no
 vive acá: es regla estable en `0009`, "Coordinación de revisiones". Lo que queda
 son las capacidades que al circuito todavía le faltan.
 
-- **Solicitud automática — Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.**
-  `gh pr edit <PR> --add-reviewer "@copilot"` produjo una review real sobre el
-  commit indicado, sin intervención humana. Queda pendiente el **Re-request
-  review** que GitHub ofrece después de nuevos commits en una PR ya revisada.
+- **Solicitud automática — capacidad histórica: PROBADA LOCALMENTE; estado
+  actual: NO OPERATIVO.** `gh pr edit <PR> --add-reviewer "@copilot"` produjo una
+  review real sobre el commit indicado, sin intervención humana. GitHub Copilot
+  no tiene crédito cargado y no se intenta por inercia; su estado por vía se
+  detalla abajo. Queda pendiente el **Re-request review** que GitHub ofrece
+  después de nuevos commits en una PR ya revisada.
 - **`gh pr edit` no está autorizado por la política compartida.** Hoy funciona
   por la regla amplia de `.claude/settings.local.json`. Al depurar ese archivo,
   el circuito pierde la capacidad de solicitar revisiones y de actualizar cuerpos
@@ -518,6 +539,31 @@ El estado operativo se registra por vía, sin colapsar dimensiones distintas:
   disponible, recurrir a una contingencia gratuita o detener de forma segura
   conforme a `0009`.
 
+**GitHub Copilot — estado por vía al 2026-08-16.**
+
+- **AUTORIZACIÓN.** Autorizado como producto, pero sin crédito cargado; el
+  Director decidió no agregar más.
+- **CAPACIDAD.** Demostrada históricamente: la solicitud con `@copilot` produjo
+  una review real sin intervención humana.
+- **ESTADO.** **NO OPERATIVO.**
+- **PRIORIDAD.** No se selecciona, sondea ni intenta por inercia.
+- **CONDICIÓN_DE_REVALIDACIÓN.** Nueva autorización del Director, crédito o
+  suscripción nuevos, cambio de configuración, o una prueba controlada pedida
+  expresamente. No queda prohibido: permanece inactivo hasta un hecho observable.
+
+**Gemini — estado por vía al 2026-08-16.**
+
+- **AUTORIZACIÓN.** Participó históricamente; hoy no es una vía autorizada del
+  circuito.
+- **CAPACIDAD.** Existió y el workflow sigue instalado en el repositorio.
+- **ESTADO.** **NO OPERATIVO.** La review automática falla en las pull requests;
+  el [Issue #87](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/87)
+  trata ese disparo.
+- **PRIORIDAD.** No se selecciona ni se sondea.
+- **CONDICIÓN_DE_REVALIDACIÓN.** Nueva autorización del Director, crédito o
+  suscripción nuevos, cambio de configuración, o una prueba controlada pedida
+  expresamente.
+
 Después de un `403 usage limit` conocido, no se reintenta la membresía por
 inercia. Sólo se vuelve a intentar ante una razón observable, como tiempo
 transcurrido, cambio de plan o cuota renovada; no como primer paso automático de
@@ -544,10 +590,23 @@ a tener evidencia de uso.
   construir".
 - Devuelve **alternativas, fuentes, riesgos y una recomendación**. No implementa
   ni decide arquitectura.
-- **Gemini** queda como candidato a evaluar, sin asignación todavía y sin trato
-  preferencial: la evidencia que lo justifique o lo descarte todavía no existe.
+- **Gemini** queda como candidato a evaluar, sin asignación ni trato preferencial;
+  su vía histórica está **NO OPERATIVA** y no se selecciona ni se sondea hasta una
+  revalidación por un hecho observable.
 - Objetivo futuro: que el ejecutor y el arquitecto puedan consultarlo sin que el
   director haga de intermediario.
+
+#### SuperGrok como reviewer
+
+**Estado: ABIERTO. Clasificación: FUTURO / EXPERIMENTAL.** Evaluar si Grok puede
+incorporarse como reviewer usando exclusivamente la suscripción SuperGrok
+existente. Cuando se ejecute, comparar `Claude → Grok` y `Codex → Grok` sobre un
+paquete congelado equivalente y observar autenticación efectiva, capacidad,
+límites, continuidad y calidad.
+
+La propuesta no autoriza xAI API PAYG, compra adicional, recarga ni gasto
+variable. No es PRE-MVP y una sola prueba no modifica la asignación vigente ni
+crea política canónica.
 
 ### Permisos y ejecución no interactiva
 

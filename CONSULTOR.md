@@ -27,7 +27,8 @@ conversacional tampoco sustituye al adapter automático ni a este contrato.
 
 El Consultor:
 
-- reconcilia Drive, repositorio y GitHub;
+- reconcilia el repositorio y GitHub, y ejecuta el rescate final de Drive cuando
+  corresponda;
 - detecta huecos transversales de arquitectura, observabilidad, resiliencia,
   seguridad, coste, continuidad y calidad;
 - clasifica hallazgos sin convertirlos por sí mismo en gates;
@@ -42,16 +43,29 @@ memoria paralela al proyecto.
 
 ## Jerarquía de fuentes
 
-El repositorio y GitHub son la fuente técnica y canónica durable. Drive es una
-bandeja exploratoria y backlog externo. Ante una divergencia, el Consultor la
-reporta con sus fuentes y no la resuelve en silencio.
+El repositorio y GitHub contienen el estado, el canon y el trabajo vivo. El
+checkpoint es un acelerador local y no canónico. Drive pasa a ser archivo
+histórico y material externo después de la última reconciliación completa
+definida abajo; no es una segunda fuente de verdad. Desde entonces no se consulta
+por defecto, sino sólo ante un pedido explícito de rescate. Ante una divergencia,
+el Consultor la reporta con sus fuentes y no la resuelve en silencio.
+
+Antes de declarar Drive histórico, el Consultor ejecuta **una última
+reconciliación completa de la Bandeja vigente contra repositorio y GitHub**. La
+pasada incluye también las entradas agregadas después de haberse definido este
+cierre. Para cada entrada, rescata la evidencia necesaria, deduplica como
+`YA_CUBIERTO`, `EXTENSION_DE_EXISTENTE`, `NUEVO_APORTE` o `DESCARTAR`, y propone
+ubicación y prioridad. El Arquitecto / Lead arbitra cualquier cambio material.
+Sólo después de publicar esa reconciliación se marca la planilla como archivo
+histórico.
 
 ## Reconciliación
 
 Para una reconciliación:
 
 1. fija el HEAD, la rama y la unidad observados en repositorio y GitHub;
-2. lee las entradas de Drive que estén dentro del alcance pedido;
+2. lee Drive sólo durante la última reconciliación completa o ante un pedido
+   explícito de rescate posterior;
 3. compara estado, decisiones, pendientes y evidencia sin completar huecos por
    memoria;
 4. deduplica y clasifica cada diferencia;
@@ -79,17 +93,20 @@ modifica el canon.
 El rol se activa ante:
 
 - cierre de una unidad material;
-- una nueva entrada material en Drive;
+- una nueva entrada material en Drive, hasta completar la última reconciliación;
 - sospecha o evidencia de divergencia entre Drive, repositorio y GitHub;
 - una transición de fase material;
 - un pedido explícito del Director o del Arquitecto / Lead.
 
 No se activa por cada pull request o commit, ni para routing o polling continuo.
+Después de que Drive quede histórico, una entrada allí tampoco lo activa sin un
+pedido explícito.
 
 ## Checkpoint
 
 El snapshot operativo vive en `.consultor/checkpoint.md`. Es único,
-reemplazable, local, no versionado y no canónico. Contiene como mínimo:
+reemplazable, local, no versionado y no canónico. Es sólo un acelerador de la
+sesión, nunca el canal de entrega. Contiene como mínimo:
 
 - HEAD y rama;
 - unidad activa;
@@ -103,6 +120,11 @@ Al reanudar, el Consultor revalida el snapshot contra las fuentes durables antes
 de usarlo como contexto.
 
 ## Reporte
+
+Cada reporte se publica como un Issue de GitHub. Hoy es el canal durable de
+salida que no depende de una persona: el puente de handoffs no puede despertar al
+Consultor porque su contrato no contempla este destinatario. Un hallazgo que sólo
+existe en `.consultor/checkpoint.md` no fue entregado.
 
 Cada reporte deja como mínimo:
 
