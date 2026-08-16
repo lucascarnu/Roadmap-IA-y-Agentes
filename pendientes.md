@@ -481,6 +481,63 @@ Una telemetría futura puede representar `CARGO_PENDIENTE_DE_REFLEJO` y conserva
 balance previo, balance posterior inmediato, balance posterior, voucher y cash.
 No se implementa en esta unidad.
 
+**Telemetría por intento. Estado: ABIERTO. Clasificación: recolección PRE_MVP;
+análisis DURANTE_MVP.** El bloque de telemetría que ya acompaña a cada review
+informa **sólo el intento que salió bien**. En la review de la PR #91 hubo dos
+llamadas: la primera terminó en `finish_reason=length` y no produjo review válida,
+y la segunda en `stop`. De la primera no quedó ningún registro, así que el costo
+real hasta obtener una review válida es **NO_RECONSTRUIBLE**. El detalle está en el
+[Issue #94](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/94).
+
+La corrección es de alcance, no de diseño: **un registro por intento, no uno por
+review**, dentro del mismo bloque de telemetría que ya existe. Cada intento
+conserva tamaño del input, presupuesto de output, tokens de input, output y
+reasoning, `finish_reason`, latencia, costo calculado y si esa salida fue válida.
+Y una línea acumulada hasta `REVIEW_VALIDA`: número de intentos, costo total y
+latencia total.
+
+Cuatro cosas que no deben colapsarse en una sola, porque nombran cosas distintas:
+
+- el **cap económico autorizado**, que es autorización y vive en `0011`;
+- el **presupuesto de output** de cada llamada, que es un parámetro técnico;
+- el **`finish_reason`** y la validez de cada salida;
+- el **costo calculado**, que sólo se conoce después.
+
+Un `finish_reason=length` es un evento de presupuesto de output, **no** un bloqueo
+por cap económico. No confundirlos evita atribuir a la política de costos un
+truncamiento que no produjo. Esta anotación no cambia caps, límites económicos,
+packaging ni política económica: sólo amplía lo que se registra.
+
+También se registran, en el mismo evento y sin crear una segunda base, la ruta
+intentada, la clase de fallo, el fallback usado y su resultado.
+
+**Runtime de Codex observable.** Hasta ahora las firmas de Codex declaraban modelo
+y esfuerzo efectivos como `NO_OBSERVABLE`. La auditoría del
+[Issue #93](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/93) observó
+que sí lo son: `turn_context` expone `model` y `effort`, y `token_count` expone
+input, cached input, output, reasoning y total. Desde ahora, `NO_OBSERVABLE` en
+esos campos requiere haber mirado ahí primero, conforme a `reglas.md`
+§*Firma de ejecución*.
+
+Nada de esto crea un gate, un agente, una base ni una unidad nueva, y no bloquea
+ninguna unidad en curso.
+
+**Publicación autónoma del Consultor — limitación externa aceptable. Estado:
+ABIERTO. Clasificación: DURANTE_MVP.** El conector de GitHub puede crear Issues y
+el Consultor lo demostró publicando los Issues #93 y #94, pero el primer intento
+fue frenado por una salvaguarda del propio conector hasta que el Director autorizó
+expresamente el repositorio privado y el contenido. Es una salvaguarda externa: una
+política interna del proyecto no concede capacidades ni rebaja protecciones de un
+producto de terceros, y **rodearla con `gh`, con la API directa o con otro canal
+está prohibido**, igual que cualquier otra denegación.
+
+No bloquea nada. Esa autorización es del mismo tipo que abrir una sesión de Codex
+—una acción física o de autorización que la plataforma todavía no automatiza— y no
+del tipo que este proyecto quiere eliminar, que es el Director transportando
+contexto o decidiendo cuestiones técnicas. Si alguna vez se exigiera publicación
+sin ninguna intervención humana, eso sería una necesidad nueva a arbitrar, con una
+vía oficialmente soportada que habría que verificar, no suponer.
+
 **Runner API. Estado: ABIERTO. Clasificación: PRE_MVP_OPORTUNISTA; sin secuencia
 canónica: U0 no fue promovido al repositorio.** El runner de review API es
 actualmente efímero. Conviene
