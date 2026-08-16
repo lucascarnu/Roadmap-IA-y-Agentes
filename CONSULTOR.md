@@ -11,6 +11,14 @@ forma automática la identidad **CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y
 COHERENCIA**, el destinatario aceptado, el rechazado y el comportamiento
 fail-closed.
 
+En Codex Desktop, el Ejecutor usa un proyecto apuntado a la raíz del repositorio,
+con cwd `C:\Proyectos\Roadmap-IA-y-Agentes` y adapter `AGENTS.md`. El Consultor
+usa un segundo proyecto cuya carpeta de origen es
+`C:\Proyectos\Roadmap-IA-y-Agentes\.consultor`. Ambos proyectos operan sobre el
+mismo repositorio Git: no son worktrees, ramas ni repositorios distintos; sólo
+cambia el directorio de trabajo. El nombre visible del chat no determina la
+identidad: la determina el cwd mediante `.consultor/AGENTS.override.md`.
+
 Este archivo contiene la función, los límites y el método durable del rol; no es
 el mecanismo automático de descubrimiento de identidad. La memoria
 conversacional tampoco sustituye al adapter automático ni a este contrato.

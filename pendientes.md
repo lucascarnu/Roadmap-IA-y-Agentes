@@ -185,6 +185,45 @@ comprueba que llega al prompt generado sin alterar el contrato ni sus marcadores
 La prueba cubre el transporte de la regla, no garantiza que un modelo obedezca
 siempre el canon. No se agregó un validador semántico ni un gate nuevo.
 
+### Frontera PRE-MVP → MVP
+
+**Estado: RESUELTO.** Arbitrada el 2026-08-16 por el Arquitecto / Lead sobre
+`main` `6a0756c2b3728af9f19ccd4aef9b253896a8b8ab`, con la reconciliación
+completa del Consultor contra repositorio, `origin/main`, GitHub y Drive.
+
+La compuerta queda **cerrada**: los cuatro asuntos que la componen están
+RESUELTOS y ningún asunto `ABIERTO` declara bloquear el inicio del MVP. La
+primera unidad del MVP es construir el lector de archivos del repositorio.
+
+Drive es bandeja exploratoria y no crea gates, según `CONSULTOR.md` §*Jerarquía
+de fuentes*. Sus propuestas rotuladas PRE-MVP quedaron arbitradas así:
+
+- **U0:** no promovido. No existe definición en el repositorio ni evidencia de
+  que el MVP dependa de él; su única referencia se corrige en esta unidad.
+- **Núcleo material de UB:** no promovido por la misma razón.
+- **PCI:** no se construye una prueba de integración sintética; la reemplaza la
+  primera unidad real del MVP, única capaz de comprobar el circuito con código
+  real.
+- **Estado por ocupante y vía, y no reintentar tras un 403 conocido:** promovido
+  en su forma documental mínima en esta unidad. La maquinaria de backoff no se
+  promueve y queda DURANTE_MVP.
+- **WebFetch:** PRE_MVP_OPORTUNISTA. El 2026-08-16 seguía denegado en la
+  superficie de Claude bajo `dontAsk`, pero no bloquea: la primera unidad del MVP
+  no depende de documentación externa y el Arquitecto puede delegar una lectura
+  externa necesaria en un agente autorizado que sí alcance la fuente.
+- **Objetivo de unas dos horas sin el Director como relay:** no se canoniza como
+  gate. Durante el MVP se medirá cuántas intervenciones del Director hacen falta
+  y de qué tipo, separando las físicas —abrir sesión, pegar, aprobar un permiso o
+  compactar— de las decisiones técnicas o el transporte de contexto. El objetivo
+  es que estas últimas tiendan a cero; la primera unidad del MVP registra la
+  medición.
+- **Billing diferido:** sin acción nueva. Ya está registrado como observación
+  experimental con predicción falsable, y `0011` §*Preautorización de saldo
+  preexistente* fija los límites económicos.
+
+Lo no promovido puede volver a proponerse si aparece evidencia nueva, pero no se
+promueve por haber estado antes en Drive.
+
 ## Automatización del workflow de desarrollo asistido
 
 Las decisiones del workflow y las mediciones de las pruebas son canónicas en
@@ -421,8 +460,9 @@ Una telemetría futura puede representar `CARGO_PENDIENTE_DE_REFLEJO` y conserva
 balance previo, balance posterior inmediato, balance posterior, voucher y cash.
 No se implementa en esta unidad.
 
-**Runner API. Estado: ABIERTO. Clasificación: PRE_MVP_OPORTUNISTA; secuencia:
-después de U0.** El runner de review API es actualmente efímero. Conviene
+**Runner API. Estado: ABIERTO. Clasificación: PRE_MVP_OPORTUNISTA; sin secuencia
+canónica: U0 no fue promovido al repositorio.** El runner de review API es
+actualmente efímero. Conviene
 convertirlo en una vía reutilizable para evitar reconstrucciones manuales o
 *ad-hoc* cuando vuelva a agotarse una cuota de membresía; no se implementa ahora.
 
@@ -437,6 +477,30 @@ revisiones independientes: sólo saldo ya existente, sin Auto-recharge, recarga,
 compra, upgrade, cambio de plan ni gasto más allá de ese saldo. Al agotarse, se
 usan contingencias gratuitas o autorizadas, o se detiene el circuito de forma
 segura.
+
+El estado operativo se registra por vía, sin colapsar dimensiones distintas:
+
+- **AUTORIZACIÓN.** La membresía está autorizada. La API está preautorizada
+  contra saldo preexistente, sin recarga, Auto-recharge, compra, upgrade ni gasto
+  por encima de ese saldo.
+- **CAPACIDAD.** `Codex → Kimi API` está **PROBADO**. La vía
+  `Claude → Kimi API directa` no está demostrada.
+- **ESTADO.** La membresía devolvió `403 usage limit` el 2026-08-15/16. La API
+  con saldo preexistente produjo reviews válidas mediante el runner operado desde
+  Codex en los Issues
+  [#72](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/72),
+  [#74](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/74) y
+  [#76](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/76).
+- **PRIORIDAD.** Intentar primero suscripción o membresía cuando tenga cuota; si
+  no, usar la API preautorizada dentro de sus límites; si tampoco está
+  disponible, recurrir a una contingencia gratuita o detener de forma segura
+  conforme a `0009`.
+
+Después de un `403 usage limit` conocido, no se reintenta la membresía por
+inercia. Sólo se vuelve a intentar ante una razón observable, como tiempo
+transcurrido, cambio de plan o cuota renovada; no como primer paso automático de
+cada pull request. Esto registra estado durable y no implementa backoff, máquina
+de estados ni telemetría nueva.
 
 El último balance observado conocido antes de que se reflejara un eventual cargo
 de K2.7 fue: `available_balance = USD 9.2436695`, `voucher_balance = USD
