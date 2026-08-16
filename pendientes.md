@@ -58,6 +58,46 @@ materiales. La evidencia corresponde a una sola corrida completa; para alcanzar
 VALIDADO OPERATIVAMENTE hacen falta varias pull requests reales consecutivas con
 el mismo resultado y evidencia suficiente para confiar en el circuito.
 
+### Identidad de sesiones Codex por directorio de trabajo
+
+**Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** QA ejecutado el 2026-08-16
+sobre `main` `e9d744981f4535eccad4727b024cb4e5c3d5dd95`, con el protocolo del
+[Issue #79](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/79) y la
+evidencia en el
+[Issue #78](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/78).
+
+Dos sesiones limpias de Codex, una con directorio de trabajo en la raíz y otra
+en `.consultor/`, adoptaron automáticamente `CODEX — EJECUTOR PRINCIPAL` y
+`CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA`, respectivamente, sin
+bootstrap manual y sin que ningún prompt les indicara su rol. Cada una aceptó su
+propio destinatario y rechazó el contrario con `DESTINATARIO_INCORRECTO`, sin
+ejecutar la tarea ajena. En cada ronda se envió la misma tarea textual a ambas
+sesiones y la única variable fue el encabezado `DESTINATARIO:`.
+
+La identidad sobrevivió a la compactación en ambas sesiones —`Compactar` de
+Codex Desktop en el Ejecutor y `/compact` en el Consultor por CLI— y a la
+reanudación del Consultor con `codex resume --last` desde el mismo directorio. El
+Consultor observó como instrucciones activas `AGENTS.md` de raíz,
+`.consultor/AGENTS.override.md`, `CONSULTOR.md` y `reglas.md`; el Ejecutor no
+observó `CONSULTOR.md` ni el override, que es el resultado esperado.
+
+Alcance de lo que se afirma: dos sesiones, un cliente, una máquina y una corrida.
+No es VALIDADO OPERATIVAMENTE.
+
+Observaciones del entorno durante el QA:
+
+- Las sesiones de Codex cargan también un archivo de instrucciones fuera del
+  repositorio,
+  `…\.codex\plugins\cache\openai-curated-remote\github\…\skills\github\SKILL.md`.
+  No declara ocupación ni destinatario, por lo que no compite con la identidad,
+  pero forma parte de lo que gobierna una sesión.
+- En la sesión del Consultor, Git emitió
+  `warning: unable to access C:\Users\lucas\.config\git\ignore: Permission denied`.
+  Las operaciones completaron igual. El efecto observable es que
+  `.claude/settings.local.json` aparece como untracked en esa sesión y como
+  ignorado en otras. No afecta la identidad, pero hace que `git status` no sea
+  comparable entre sesiones.
+
 ### Prueba de sustitución del ocupante de contingencia
 
 **Estado: RESUELTO. Evidencia: PROBADO LOCALMENTE.** Ejecutada el 2026-08-11 por
@@ -569,10 +609,11 @@ pull requests; no son gates salvo que declaren expresamente ese alcance.
   login interactivo, aplicación de escritorio, `localhost` o aprobación visual,
   el agente lo avisa **antes** y no manda al director a la computadora por
   comodidad propia. Medir si el MVP genera ese caso realmente.
-- **Resolución de hilos y merge.** Medir si el paso manual del director se vuelve
-  un cuello de botella con volumen real de pull requests, antes de construir nada.
-  Hay además una objeción de gobernanza pendiente: si el ejecutor resuelve sus
-  propios hilos, deja sin efecto el *Require conversation resolution*.
+- **Resolución de hilos.** Medir si el paso manual de resolución de hilos se
+  vuelve un cuello de botella con volumen real de pull requests, antes de
+  construir nada. Hay además una objeción de gobernanza pendiente: si el ejecutor
+  resuelve sus propios hilos, deja sin efecto el *Require conversation
+  resolution*.
 - **Espera y reintentos.** Como punto de partida, consultar el estado con un
   primer intento del orden del minuto y medio, reintentos espaciados y timeout
   finito. Sin polling agresivo ni infinito. Pasar a eventos solo si la evidencia
