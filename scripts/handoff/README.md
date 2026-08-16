@@ -114,7 +114,13 @@ registra `scheduler_retry_dispatch` al reintentar el despacho y
 La salida es `{ "status", "promovidas", "poll" }`; un lock vivo devuelve
 `status: "locked"` y un fallo no controlado conserva `FAIL_CLOSED` y exit code 1.
 Los eventos `resumed`, `dispatch_gap`, `blocked_long`, `wait_check_error`,
-`terminal_error` y `needs_human` reutilizan el notifier ntfy tolerante a fallos.
+`fallback_available`, `terminal_error` y `needs_human` reutilizan el notifier ntfy
+tolerante a fallos. Una entrada de agente en `config.json` puede declarar
+`authorized_fallback_via`: es estado explícito para notificar una contingencia
+autorizada, no una orden de routing ni una credencial. Si una unidad termina
+`blocked-via` con ese campo, el notifier emite `fallback_available` con prioridad
+informativa y no emite `needs_human`; sin ese campo conserva la escalación
+terminal y pide intervención.
 
 ## Windows Task Scheduler (procedimiento PRE-MVP)
 
