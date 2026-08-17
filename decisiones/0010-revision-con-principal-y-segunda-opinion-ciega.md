@@ -110,6 +110,13 @@ gate. Revisa desde cero.
 Una segunda opinión que conoce la sospecha de la primera tiende a confirmarla. Es
 el mismo principio de independencia que `0009` ya aplica al reviewer.
 
+Principal y shadow pueden usar el mismo proveedor o modelo si son instancias
+realmente separadas y preservan la ceguera. Cuando comparten modelo se registra
+`REVISION_CIEGA_MISMO_MODELO` y no se presenta como diversidad de modelo o
+proveedor. La diversidad adicional puede fortalecer la evidencia, pero su
+ausencia no convierte al shadow en gate ni contradice que la ausencia de shadow,
+por sí sola, no bloquea.
+
 ### Las dos reviews se funden con una regla determinista
 
 Cuando hay dos reviews, **no se las hace discutir**. Se aplica la misma regla de

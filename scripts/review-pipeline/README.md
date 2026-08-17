@@ -67,6 +67,18 @@ La integración en GitHub Actions requiere `ANTHROPIC_API_KEY` y
 autenticadas de ambos CLIs. Tokens de suscripción no se convierten a precios de
 API.
 
+## Transporte de completions largas
+
+Cuando el stack lo permita, una completion larga usa timeouts explícitos por
+fase y conserva en los errores la fase y una causa sanitizada. Retry y reenvío
+se rigen por el presupuesto y las condiciones de detención del sobre autorizado;
+no se agregan reintentos implícitos. Los valores concretos pertenecen al runner
+durable, no a este requisito general.
+
+El pipeline no se declara validado operativamente hasta completar una prueba
+real del circuito. Las baterías deterministas verifican su lógica, no el
+transporte efectivo de un proveedor.
+
 ## Pruebas
 
 ```powershell

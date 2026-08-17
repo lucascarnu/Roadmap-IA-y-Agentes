@@ -2,6 +2,21 @@
 
 Define cómo trabajamos paso a paso, sin saltar etapas ni agregar complejidad innecesaria.
 
+## Regla 1 — Eficiencia operativa y proporcionalidad
+
+La autorización se formula preferentemente como un sobre: objetivo, objeto o
+HEAD, mutaciones permitidas, presupuesto acumulado y condiciones de detención.
+Dentro de ese sobre, un fallo técnico recuperable no exige una consulta nueva;
+se continúa por una vía autorizada mientras no cambien alcance, riesgo, costo
+máximo, credenciales, irreversibilidad ni decisiones de producto, y mientras el
+presupuesto no se agote.
+
+La información o intervención física que el Director aporta directamente se
+verifica y permite continuar la misma unidad. No se transporta contexto por una
+cadena de roles sólo para repetir una autorización ya satisfecha. Se escala
+cuando cambia alguno de los límites del sobre, se agota o falta una decisión que
+la evidencia técnica no puede resolver.
+
 ## Alcance y autorización de cambios
 
 - Distinguir entre tareas de consulta y tareas de ejecución.
@@ -75,6 +90,18 @@ firma **registra** quién la ejecutó realmente.
 repositorio, ejecutar pruebas, evaluar, auditar, crear commits, disparar acciones
 o cambiar infraestructura. No aplica a la conversación humana corriente: no
 convertir esto en burocracia.
+
+`DESTINATARIO` encabeza una tarea ejecutable dirigida a un rol. Un informe o una
+solicitud para el Director usa un encabezado humano separado que identifica
+remitente, `DESTINATARIO_HUMANO`, acción requerida y el actor que conserva la
+unidad. Un mensaje no dirigido al rol actual no se ejecuta ni altera estado.
+
+Todo artefacto que el Director deba transportar se entrega íntegro,
+autosuficiente y con un solo destinatario dentro de un único bloque Markdown
+convencional. Las explicaciones para el Director quedan fuera del bloque y el
+artefacto no contiene instrucciones para convertirlo en operador. Si la
+continuación segura y su actor ya están definidos, la misma respuesta incluye el
+artefacto completo.
 
 ### Encabezado de destinatario
 
