@@ -212,7 +212,8 @@ de fuentes*. Sus propuestas rotuladas PRE-MVP quedaron arbitradas así:
   no depende de documentación externa y el Arquitecto puede delegar una lectura
   externa necesaria en un agente autorizado que sí alcance la fuente. El
   [Issue #98](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/98) y la
-  pull request vinculada desde allí registran el desenlace: habilitar
+  [PR #99](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/99) registran
+  el desenlace: habilitar
   `WebSearch` y `WebFetch` generales para el Arquitecto, sujeto a las sondas
   post-reinicio definidas en esa unidad.
 - **Objetivo de unas dos horas sin el Director como relay:** no se canoniza como
