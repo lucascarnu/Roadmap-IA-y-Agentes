@@ -210,7 +210,12 @@ de fuentes*. Sus propuestas rotuladas PRE-MVP quedaron arbitradas así:
 - **WebFetch:** PRE_MVP_OPORTUNISTA. El 2026-08-16 seguía denegado en la
   superficie de Claude bajo `dontAsk`, pero no bloquea: la primera unidad del MVP
   no depende de documentación externa y el Arquitecto puede delegar una lectura
-  externa necesaria en un agente autorizado que sí alcance la fuente.
+  externa necesaria en un agente autorizado que sí alcance la fuente. El
+  [Issue #98](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/98) y la
+  [PR #99](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/99) registran
+  el desenlace: habilitar
+  `WebSearch` y `WebFetch` generales para el Arquitecto, sujeto a las sondas
+  post-reinicio definidas en esa unidad.
 - **Objetivo de unas dos horas sin el Director como relay:** no se canoniza como
   gate. Durante el MVP se medirá cuántas intervenciones del Director hacen falta
   y de qué tipo, separando las físicas —abrir sesión, pegar, aprobar un permiso o
@@ -561,15 +566,24 @@ De esa unidad quedan tres cosas que conviene no volver a descubrir:
   corresponde habilitarle navegación.
 - **La documentación de Codex ya no se sirve desde `developers.openai.com`.** Todo
   `/codex/*` responde `308` hacia `learn.chatgpt.com`. La allowlist de `WebFetch`
-  tiene que apuntar a ese host; hoy están autorizados los dos dominios, sin
-  `WebFetch` general.
+  conserva ambos dominios y la unidad del
+  [Issue #98](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/98)
+  agrega `WebSearch` y `WebFetch` generales. La semántica de la regla desnuda
+  queda **DOCUMENTADA** contra Claude Code 2.1.233; su efecto real permanece
+  **NO_VERIFICADO** hasta las sondas post-reinicio del Arquitecto, que podrán
+  elevarlo a **PROBADO LOCALMENTE**.
 - **Regla.** Una premisa externa material **no se completa por memoria cuando
   existe una vía autorizada de consulta oficial**. Concreta, para este proyecto,
   lo que `reglas.md` §*Premisas externas de una unidad* ya exige: mientras esa vía
   esté disponible, "no era alcanzable" deja de ser una explicación admisible.
 
-Sigue valiendo que un dominio no autorizado no se rodea por otra herramienta: se
-declara el límite y se pide la autorización.
+La ampliación acepta como riesgos residuales la inyección de instrucciones por
+contenido externo, la exfiltración por URL, la identidad de paquetes y
+herramientas, la ausencia de humano en el lazo y las redirecciones entre hosts;
+los mitigantes están en `reglas.md` §*Investigación en fuentes externas* y en los
+`deny` que esta unidad no modifica. Queda sin probar que el preflight de
+`WebFetch` bloquee un destino malicioso concreto, que un `deny` por dominio de
+`WebFetch` funcione y cómo se comportan otros nombres de herramienta desnudos.
 
 **Saldo autorizado — estado operativo temporal.** Existe una preautorización
 vigente del Director para consumir el saldo preexistente de Kimi API Platform en

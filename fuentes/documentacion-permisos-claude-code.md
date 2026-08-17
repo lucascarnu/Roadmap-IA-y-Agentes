@@ -17,6 +17,7 @@ el material que respalda la política de permisos de `.claude/settings.json`.
 
 Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
 Reconsultadas el **2026-08-13**, contra **Claude Code 2.1.227**.
+Reconsultadas el **2026-08-16**, contra **Claude Code 2.1.233**.
 
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
@@ -29,6 +30,11 @@ Cada punto se usó para decidir una regla concreta de la política:
 - **`permissions.allow` / `ask` / `deny`.** Se evalúan en ese orden —deny, luego
   ask, luego allow— y la primera coincidencia decide. La especificidad no altera
   el orden, así que un deny amplio no admite excepciones por allow más estrecho.
+- **Nombre de herramienta desnudo.** Una regla que contiene sólo el nombre de la
+  herramienta, sin paréntesis, coincide con todos sus usos. La documentación
+  usa `WebFetch` como ejemplo explícito de una regla que alcanza todas las
+  solicitudes de esa herramienta; la sintaxis general aplica igualmente a
+  `WebSearch`.
 - **`permissions.defaultMode`.** Acepta `default`, `acceptEdits`, `plan`, `auto`,
   `dontAsk` y `bypassPermissions`.
 - **Modo `dontAsk`.** Deniega automáticamente toda llamada que en otro modo
@@ -198,8 +204,9 @@ estrechar una regla, no una lectura que se termine.
 ## Vigencia
 
 Lo anterior describe el comportamiento documentado tras la reconsulta del
-**2026-08-13** para **Claude Code 2.1.227**, junto a la consulta original del
-**2026-08-08** para **Claude Code 2.1.226**. No son afirmaciones permanentes.
+**2026-08-16** para **Claude Code 2.1.233**, junto a las consultas del
+**2026-08-13** para **Claude Code 2.1.227** y del **2026-08-08** para **Claude
+Code 2.1.226**. No son afirmaciones permanentes.
 
 Debe revalidarse cuando cambie de forma relevante la versión de Claude Code o la
 documentación de permisos, y de inmediato ante cualquier comportamiento
