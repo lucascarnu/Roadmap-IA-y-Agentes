@@ -31,7 +31,9 @@
       "PowerShell(Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational'*)",
       "PowerShell(schtasks /query *)",
       "WebFetch(domain:developers.openai.com)",
-      "WebFetch(domain:learn.chatgpt.com)"
+      "WebFetch(domain:learn.chatgpt.com)",
+      "WebSearch",
+      "WebFetch"
     ],
     "deny": [
       "Edit(/.claude/**)",
