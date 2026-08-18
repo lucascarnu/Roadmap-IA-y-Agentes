@@ -88,6 +88,15 @@ Lead arbitra. Una aceptación se documenta como decisión, regla, pendiente o
 estado durable conforme a [reglas.md](reglas.md); una propuesta no aceptada no
 modifica el canon.
 
+## Ideas durante una unidad activa
+
+Cada idea surgida durante una unidad se clasifica como
+`YA_CUBIERTO_O_DESCARTAR`, `PENDIENTE_NO_INTERRUMPE`,
+`RESOLVER_EN_LA_UNIDAD_SIN_PAUSA` o `INTERRUMPIR_Y_ARBITRAR_AHORA`. Durante una
+auditoría sólo se incorpora por adyacencia si comparte materia, tiene evidencia
+y reduce deuda sin agregar actor, riesgo, costo ni gate. En los demás casos se
+registra o se devuelve para arbitraje sin ampliar silenciosamente la unidad.
+
 ## Triggers
 
 El rol se activa ante:

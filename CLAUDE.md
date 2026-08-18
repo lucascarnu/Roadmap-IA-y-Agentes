@@ -25,24 +25,17 @@ formen parte del workflow reproducible.
 La documentación oficial que respalda el diseño está registrada en
 [fuentes/documentacion-permisos-claude-code.md](fuentes/documentacion-permisos-claude-code.md).
 
-**Límites conocidos de la política candidata.** Se registran para no confundirlos
-con problemas resueltos:
-
-- `main` está cubierta por un ruleset server-side activo, documentado en
-  [0008](decisiones/0008-proteccion-server-side-de-main.md) con el alcance de
-  evidencia que allí se establece. Ese ruleset **no cubre las ramas `claude/*`**
-  de `origin`: su borrado y su reescritura dependen por ahora de guardarraíles
-  locales de esta política.
-- Las reglas `deny Edit(...)` alcanzan también a las escrituras por redirección
-  de un subproceso, no solo a las herramientas de edición. Probado con cuatro
-  sondas: `scripts/` y `.claude/` quedaron bloqueadas, y una carpeta común sin
-  regla propia, no. Los patrones `> archivo` y `>> archivo` del `deny` no cubren
-  las formas sin espacios, pero la capa de escritura decide antes que ellos.
-- De una review se pueden **leer** sus tres canales, cada uno por su vía: los
-  comentarios inline con `scripts/get-pr-comments.ps1`, que es su único acceso
-  autorizado, y el cuerpo de la review junto con sus *suppressed comments* con
-  `gh pr view`, que sí los incluye. `gh api` directo sigue denegado, y responder
-  o resolver conversaciones sigue fuera de alcance.
+**Límites efectivos que una sesión nueva debe conocer.** Git y GitHub se operan
+con PowerShell; `Bash(git *)`, `Bash(gh *)`, `gh api` y `gh pr merge` siguen
+fuera de la superficie compartida. Los comentarios inline se leen mediante
+`scripts/get-pr-comments.ps1`; responder o resolver conversaciones no está
+autorizado. Las escrituras en `scripts/` y `.claude/` permanecen protegidas; el
+ruleset server-side de `main` no cubre las ramas `claude/*` de `origin` — alcance
+completo en [0008](decisiones/0008-proteccion-server-side-de-main.md#costos-conocidos).
+Las reglas locales pueden ampliar accidentalmente la política candidata, por lo
+que no cuentan como evidencia de su autonomía. Las preguntas y pruebas todavía
+abiertas viven en
+[Permisos y ejecución no interactiva](pendientes.md#permisos-y-ejecución-no-interactiva).
 
 **Consecuencia del modo `dontAsk`.** En ese modo `AskUserQuestion` queda
 denegada, así que durante una corrida automática no hay forma de pedir una

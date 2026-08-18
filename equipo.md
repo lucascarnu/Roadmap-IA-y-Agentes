@@ -27,6 +27,12 @@ Y COHERENCIA** son ocupaciones operativas distintas, aunque compartan proveedor
 o modelo. Cada sesión se rige por su adapter durable y no hereda la autoridad ni
 las funciones de la otra.
 
+Rol, instancia de agente, modelo y proveedor no son sinónimos. Varios agentes y
+roles pueden operar con un único proveedor; para revisar una tarea, el actor que
+la diseñó o ejecutó no reutiliza ese mismo contexto operativo. Una instancia
+nueva y ciega se rige por la independencia definida en `0009`, incluso cuando
+comparte modelo o proveedor.
+
 **QA / Validación no tiene ocupante permanente**, y no conviene inventarle uno.
 Se activa cuando una tarea necesita demostrar que algo funciona, y quien lo ocupe
 tiene que poder **ejecutar el comportamiento objetivo en su entorno real**: es un
@@ -80,7 +86,8 @@ Condiciones:
 
 Es una previsión documentada, no una asignación: no tiene integración técnica.
 La capacidad de sustitución y reconstrucción está **PROBADA LOCALMENTE**; el
-detalle de la prueba vive en [pendientes.md](pendientes.md#prueba-de-sustitución-del-ocupante-de-contingencia).
+detalle de la prueba vive en el
+[histórico PRE-MVP](historia/pendientes-resueltos-pre-mvp.md#prueba-de-sustitución-del-ocupante-de-contingencia).
 
 ## Candidatos sin asignación
 

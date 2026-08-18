@@ -167,6 +167,19 @@ evitar.
 Una segunda opinión que ya conoce la sospecha de la primera deja de ser
 independiente: tiende a confirmarla en vez de mirar el resto.
 
+Rol, instancia o sesión de agente, modelo y proveedor son dimensiones distintas:
+el rol define autoridad y responsabilidad; la instancia es el actor operativo
+concreto; el modelo es el solicitado o efectivo; y el proveedor es la empresa o
+plataforma que lo sirve. La independencia exige una **instancia nueva**, contexto
+ciego, ausencia de memoria compartida y ausencia de hallazgos previos. Puede
+cumplirse con el mismo modelo o proveedor que usaron Arquitecto o Ejecutor.
+
+Cuando se reutiliza el mismo modelo se registra
+`REVISION_CIEGA_MISMO_MODELO`: reconoce menor diversidad de entrenamiento, pero
+no invalida por sí sola la independencia. Diversidad de modelo o proveedor es un
+refuerzo preferible cuando está disponible, no un gate universal; sólo bloquea
+si una regla específica, justificada por el riesgo concreto, la exige.
+
 - Al reviewer independiente se le entrega el problema, el cambio y la evidencia.
 - **No se le adelantan los defectos que otro revisor sospecha.**
 - Su resultado se congela antes de compararlo con el de los demás.
@@ -193,10 +206,16 @@ integrar.
 ### Cuándo una review cuenta
 
 Que exista un registro de review no prueba que haya habido revisión. Para contar
-como revisión independiente hacen falta tres cosas a la vez:
+como revisión independiente hacen falta conjuntamente:
 
 - que corresponda al **HEAD** que se va a integrar;
 - que el reviewer **haya podido ejecutarla realmente**;
+- que haya terminado de forma completa;
+- que el payload requerido sea recuperable y válido;
+- que no existan señales observables de truncamiento, cancelación, timeout o
+  límite;
+- que se registre `finish_reason` o equivalente cuando el proveedor lo exponga;
+  si no lo expone se declara `NO_OBSERVABLE` y se aplican los demás controles;
 - que se procesen sus **tres canales**: el cuerpo de la review, los comentarios
   inline y los comentarios suprimidos.
 
@@ -206,6 +225,8 @@ ni la mera existencia de una entrada de review. Una revisión puede registrarse
 sobre el commit correcto y **no haberse ejecutado** —por cuota, por
 indisponibilidad o por un error del servicio—, y a veces eso solo es legible en
 el cuerpo. Una revisión que no se ejecutó no es una revisión sin hallazgos.
+El contenido parcial tampoco cuenta como review limpia ni permite rescatar
+hallazgos como si la salida hubiera terminado correctamente.
 
 ### Convergencia
 
