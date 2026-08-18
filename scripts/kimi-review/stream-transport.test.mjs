@@ -10,6 +10,7 @@ import {
   OUTPUT_TOKEN_PARAMETER,
   runStreamingReview,
   STREAM_TIMEOUT_CODES,
+  validateReviewContract,
 } from "./stream-transport.mjs";
 
 const HEAD = "b".repeat(40);
@@ -187,6 +188,43 @@ test("modelo efectivo se captura y una divergencia invalida", async () => {
   const divergent = await run(identityChunks({ laterModel: "otro-modelo" }));
   assert.ok(divergent.result.apiEnvelope.protocol_errors.includes("MODEL_DIVERGENT"));
   assert.equal(divergent.result.classification, "REVIEW_INVALIDA");
+});
+
+test("origin permitido valida y un string arbitrario se rechaza", () => {
+  const finding = {
+    impact: "M2",
+    evidence_status: "SETTLED",
+    origin: "DIFF",
+    file: "scripts/kimi-review/stream-transport.mjs",
+    line: 190,
+    issue: "hallazgo sintético",
+  };
+  assert.equal(validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [finding] }, HEAD).valid, true);
+  const invalid = { ...finding, origin: "ARBITRARY_STRING" };
+  assert.deepEqual(
+    validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [invalid] }, HEAD).errors,
+    ["FINDING_INVALID"],
+  );
+});
+
+test("line conserva contrato estricto de entero o null", () => {
+  const baseFinding = {
+    impact: "M2",
+    evidence_status: "SETTLED",
+    origin: "DIFF",
+    file: "scripts/kimi-review/stream-transport.mjs",
+    issue: "hallazgo sintético",
+  };
+  for (const line of [190, null]) {
+    assert.equal(
+      validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [{ ...baseFinding, line }] }, HEAD).valid,
+      true,
+    );
+  }
+  assert.equal(
+    validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [{ ...baseFinding, line: "190" }] }, HEAD).valid,
+    false,
+  );
 });
 
 test("stream sin DONE se clasifica incompleto", async () => {

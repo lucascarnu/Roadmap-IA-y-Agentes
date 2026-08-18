@@ -50,6 +50,21 @@ test("preserva total_tokens numérico", () => {
   assert.equal(sanitize({ total_tokens: 23 }).total_tokens, 23);
 });
 
+test("preserva max_completion_tokens numérico", () => {
+  assert.equal(sanitize({ max_completion_tokens: 32768 }).max_completion_tokens, 32768);
+});
+
+test("redacta max_completion_tokens con tipo inesperado", () => {
+  assert.equal(
+    sanitize({ max_completion_tokens: "32768" }).max_completion_tokens,
+    SANITIZE_MARKERS.unexpectedType,
+  );
+  assert.equal(
+    sanitize({ max_completion_tokens: { value: 32768 } }).max_completion_tokens,
+    SANITIZE_MARKERS.unexpectedType,
+  );
+});
+
 test("redacta contador conocido con string inesperado", () => {
   assert.equal(sanitize({ prompt_tokens: "FAKE-NOT-A-REAL-SECRET" }).prompt_tokens, SANITIZE_MARKERS.unexpectedType);
 });
@@ -220,6 +235,15 @@ test("divergencia simulada de persistencia produce INFORME_INVALIDO", () => {
 test("telemetría conserva los cuatro contadores sintéticos después", () => {
   const telemetry = { prompt_tokens: 11, completion_tokens: 12, reasoning_tokens: 13, total_tokens: 23 };
   assert.deepEqual(sanitize(telemetry), telemetry);
+});
+
+test("informe ensamblado muestra max_completion_tokens numérico", () => {
+  const report = assembleReport(
+    { review: REVIEW },
+    { telemetry: { max_completion_tokens: 32768 } },
+  );
+  assert.match(report, /"max_completion_tokens": 32768/);
+  assert.doesNotMatch(report, /"max_completion_tokens": "\[REDACTED/);
 });
 
 test("módulos durables no contienen transporte ni rutas personales", () => {

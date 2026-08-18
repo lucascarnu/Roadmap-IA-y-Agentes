@@ -29,6 +29,11 @@ structured output estricto con streaming permanecen no documentadas; ninguna de
 las dos se presupone. Un stream sin `[DONE]`, `finish_reason: stop` o usage final
 se clasifica incompleto.
 
+Los generadores de paquetes deben exigir que `findings[].line` sea un número
+entero JSON sin comillas o `null`; un string numérico no es válido y no se
+normaliza. `findings[].origin` pertenece al enum cerrado `DIFF`,
+`REPOSITORY_FILE`, `GITHUB_STATE`, `ACTIONS_RUN` o `NONE`.
+
 ## Timeouts y at-most-once
 
 Los cuatro límites predeterminados son independientes:
@@ -60,14 +65,15 @@ queda representada por `null` y no invalida la review.
 
 ## Idempotencia de publicación
 
-Cada intento expone una línea literal estable:
+El módulo construye y expone para cada intento una línea literal estable:
 
     KIMI_STREAM_REVIEW HEAD=<HEAD_EXACTO> ATTEMPT_ID=<ATTEMPT_ID_LOCAL>
 
-Antes de publicar una review se busca el marcador completo: si ya existe, no se
-duplica. También se busca y reporta cualquier comentario previo para el mismo
-HEAD, sin que eso bloquee por sí solo. `completion_id` se agrega cuando sea
-observable, pero nunca reemplaza al marcador como condición de idempotencia.
+El transporte no consulta GitHub ni publica por sí mismo. La unidad o publicador
+externo busca el marcador completo antes de publicar: si ya existe, no lo
+duplica. Ese publicador también busca y reporta cualquier comentario previo para
+el mismo HEAD, sin que eso bloquee por sí solo. `completion_id` se agrega cuando
+sea observable, pero nunca reemplaza al marcador como condición de idempotencia.
 
 El transporte importa `sanitize.mjs` y `report.mjs`; no reimplementa sus
 protecciones. La prueba estructural de ausencia de clientes de red sigue siendo
@@ -77,9 +83,25 @@ una guarda observable que hace fallar cualquier uso accidental de `fetch` o de
 las primitivas de `node:http` y `node:https`; los casos del transporte usan sólo
 una fábrica inyectada.
 
-Los dos `HEADERS_TIMEOUT` del camino no streaming son la evidencia anterior. La
-evidencia posterior con carga representativa queda pendiente de la unidad de
-review separada; esta unidad no realiza solicitudes a proveedores.
+## Evidencia operativa del transporte
+
+Dos ejecuciones no streaming terminaron en `HEADERS_TIMEOUT` con un límite de
+720.000 ms. La ejecución streaming representativa terminó correctamente con
+HTTP 200, 22.863 eventos SSE, `finish_reason: stop`, usage y `[DONE]`. El primer
+evento llegó en 8.785 ms, el intervalo máximo entre eventos fue 4.102 ms y la
+duración total fue 923.136 ms —15 minutos 23,136 segundos—, con 22.523 reasoning
+tokens y un costo calculado de USD 0,11793665.
+
+El streaming resolvió la observabilidad y continuidad del transporte. Que la
+generación durara 923.136 ms frente al límite no streaming de 720.000 ms sostiene
+fuertemente la inferencia sobre los timeouts anteriores, pero no constituye una
+traza interna del proveedor. Esta evidencia tampoco demuestra que reducir el
+paquete hubiera sido irrelevante.
+
+Una latencia de 15 minutos 23 segundos no satisface el tiempo operativo aceptable
+para un reviewer cotidiano de varias rondas. Mientras esa latencia no se
+resuelva, Kimi no se considera reviewer principal del camino crítico: queda como
+contingencia o segunda opinión, pendiente de una decisión durable posterior.
 
 ## Verificación
 

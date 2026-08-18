@@ -169,10 +169,11 @@ export function createHttpsRequestFactory() {
 function validateFinding(finding) {
   const impacts = new Set(["M1", "M2", "M3", "O"]);
   const evidence = new Set(["SETTLED", "NEEDS_EVIDENCE", "UNVERIFIABLE"]);
+  const origins = new Set(["DIFF", "REPOSITORY_FILE", "GITHUB_STATE", "ACTIONS_RUN", "NONE"]);
   return finding && typeof finding === "object" && !Array.isArray(finding)
     && impacts.has(finding.impact)
     && evidence.has(finding.evidence_status)
-    && typeof finding.origin === "string"
+    && origins.has(finding.origin)
     && (finding.file === null || typeof finding.file === "string")
     && (finding.line === null || Number.isInteger(finding.line))
     && typeof finding.issue === "string";
