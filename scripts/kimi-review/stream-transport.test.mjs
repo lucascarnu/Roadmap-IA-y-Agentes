@@ -4,6 +4,7 @@ import http from "node:http";
 import https from "node:https";
 
 import {
+  buildIdempotencyMarker,
   createSseParser,
   DEFAULT_MAX_COMPLETION_TOKENS,
   OUTPUT_TOKEN_PARAMETER,
@@ -15,6 +16,22 @@ const HEAD = "b".repeat(40);
 const REVIEW = { head: HEAD, verdict: "APROBADO", findings: [] };
 let networkRequests = 0;
 const originalNetwork = { fetch: globalThis.fetch, httpRequest: http.request, httpsRequest: https.request };
+
+class ControlledScheduler {
+  constructor(now = 0) {
+    this.value = now;
+    this.nextId = 1;
+    this.timers = new Map();
+  }
+  now = () => this.value;
+  setTimeout = (callback, delay) => {
+    const id = this.nextId++;
+    this.timers.set(id, { callback, at: this.value + delay });
+    return id;
+  };
+  clearTimeout = (id) => { this.timers.delete(id); };
+  elapse(ms) { this.value += ms; }
+}
 
 function rejectRealNetwork() {
   networkRequests += 1;
@@ -52,6 +69,15 @@ function validChunks({ reasoning = false } = {}) {
   ];
 }
 
+function identityChunks({ firstId = "completion-one", laterId = firstId, firstModel = "kimi-k2.7-code", laterModel = firstModel } = {}) {
+  return [
+    sse({ id: firstId, model: firstModel, choices: [{ delta: { content: JSON.stringify(REVIEW).slice(0, 25) }, finish_reason: null }], usage: null }),
+    sse({ id: laterId, model: laterModel, choices: [{ delta: { content: JSON.stringify(REVIEW).slice(25) }, finish_reason: "stop" }], usage: null }),
+    sse({ id: laterId, model: laterModel, choices: [], usage: { prompt_tokens: 11, completion_tokens: 12, total_tokens: 23 } }),
+    sse("[DONE]"),
+  ];
+}
+
 function factoryFor(chunks, capture = {}) {
   return (request) => {
     capture.calls = (capture.calls ?? 0) + 1;
@@ -72,6 +98,7 @@ async function run(chunks = validChunks(), overrides = {}) {
     persistAttempt: overrides.persistAttempt ?? (async () => { order.push("persist"); }),
     idFactory: () => "attempt-synthetic",
     timeouts: overrides.timeouts,
+    scheduler: overrides.scheduler,
   });
   return { result, capture, order };
 }
@@ -134,6 +161,32 @@ test("finish_reason se toma del último chunk no nulo", async () => {
 test("usage se toma del chunk final no nulo", async () => {
   const { result } = await run();
   assert.equal(result.apiEnvelope.usage.total_tokens, 23);
+});
+
+test("completion_id se captura del primer evento JSON que lo informa", async () => {
+  const { result } = await run(identityChunks());
+  assert.equal(result.apiEnvelope.completion_id, "completion-one");
+  assert.equal(result.classification, "REVIEW_VALIDA");
+});
+
+test("completion_id divergente invalida el protocolo", async () => {
+  const { result } = await run(identityChunks({ laterId: "completion-two" }));
+  assert.ok(result.apiEnvelope.protocol_errors.includes("COMPLETION_ID_DIVERGENT"));
+  assert.equal(result.classification, "REVIEW_INVALIDA");
+});
+
+test("completion_id ausente permanece null sin invalidar la review", async () => {
+  const { result } = await run(validChunks());
+  assert.equal(result.apiEnvelope.completion_id, null);
+  assert.equal(result.classification, "REVIEW_VALIDA");
+});
+
+test("modelo efectivo se captura y una divergencia invalida", async () => {
+  const valid = await run(identityChunks());
+  assert.equal(valid.result.apiEnvelope.model_effective, "kimi-k2.7-code");
+  const divergent = await run(identityChunks({ laterModel: "otro-modelo" }));
+  assert.ok(divergent.result.apiEnvelope.protocol_errors.includes("MODEL_DIVERGENT"));
+  assert.equal(divergent.result.classification, "REVIEW_INVALIDA");
 });
 
 test("stream sin DONE se clasifica incompleto", async () => {
@@ -248,15 +301,107 @@ test("timeout total tiene código propio", async () => {
   assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.total);
 });
 
-test("inactividad se reinicia con eventos y no corta un stream lento pero vivo", async () => {
-  async function* live() {
-    for (const chunk of validChunks()) {
-      await new Promise((resolve) => setTimeout(resolve, 3));
-      yield chunk;
-    }
-  }
-  const fakeResponse = { status: 200, headers: { "content-type": "text/event-stream" }, body: live() };
+test("una corriente formada sólo por comentarios termina en FIRST_EVENT_TIMEOUT", async () => {
+  const scheduler = new ControlledScheduler();
+  let calls = 0;
+  const iterator = {
+    next() { calls += 1; scheduler.elapse(2); return Promise.resolve({ value: ": keepalive\n\n", done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
   const { result } = await run([], {
+    scheduler,
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 10, firstEventMs: 5, idleMs: 5, totalMs: 100 },
+  });
+  assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.firstEvent);
+  assert.equal(calls, 3);
+});
+
+test("fragmentos parciales sostenidos no prolongan el deadline del primer evento", async () => {
+  const scheduler = new ControlledScheduler();
+  let calls = 0;
+  const iterator = {
+    next() { calls += 1; scheduler.elapse(2); return Promise.resolve({ value: "data: {", done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 10, firstEventMs: 5, idleMs: 5, totalMs: 100 },
+  });
+  assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.firstEvent);
+  assert.equal(calls, 3);
+});
+
+test("fragmentos parciales sostenidos no eluden IDLE_TIMEOUT", async () => {
+  const scheduler = new ControlledScheduler();
+  const chunks = [sse({ choices: [{ delta: { content: "{" }, finish_reason: null }] }), "data: partial", "-more", "-still"];
+  let calls = 0;
+  const iterator = {
+    next() { const value = chunks[calls++]; scheduler.elapse(2); return Promise.resolve({ value, done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 10, firstEventMs: 10, idleMs: 5, totalMs: 100 },
+  });
+  assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.idle);
+  assert.equal(calls, 4);
+});
+
+test("comentarios no reinician el plazo absoluto de inactividad", async () => {
+  const scheduler = new ControlledScheduler();
+  let calls = 0;
+  const iterator = {
+    next() {
+      calls += 1;
+      scheduler.elapse(2);
+      const value = calls === 1 ? sse({ choices: [{ delta: { content: "{" }, finish_reason: null }] }) : ": keepalive\n\n";
+      return Promise.resolve({ value, done: false });
+    },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 10, firstEventMs: 10, idleMs: 5, totalMs: 100 },
+  });
+  assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.idle);
+});
+
+test("TOTAL_TIMEOUT prevalece cuando el deadline total ya venció", async () => {
+  const scheduler = new ControlledScheduler();
+  let calls = 0;
+  const iterator = {
+    next() { calls += 1; scheduler.elapse(6); return Promise.resolve({ value: "partial", done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 10, firstEventMs: 50, idleMs: 50, totalMs: 5 },
+  });
+  assert.equal(result.apiEnvelope.transport_error.code, STREAM_TIMEOUT_CODES.total);
+  assert.equal(calls, 1);
+});
+
+test("inactividad se reinicia con eventos y no corta un stream lento pero vivo", async () => {
+  const scheduler = new ControlledScheduler();
+  const chunks = validChunks();
+  let position = 0;
+  const iterator = {
+    next() { scheduler.elapse(3); return Promise.resolve({ value: chunks[position++], done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fakeResponse = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
     requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fakeResponse), abort() {} }),
     timeouts: { connectMs: 50, firstEventMs: 20, idleMs: 20, totalMs: 200 },
   });
@@ -268,6 +413,47 @@ test("attempt_id se persiste antes del envío", async () => {
   const requestFactory = (request) => { order.push("request"); return factoryFor(validChunks())(request); };
   await run([], { order, requestFactory, persistAttempt: async () => { order.push("persist"); } });
   assert.deepEqual(order.slice(0, 2), ["persist", "request"]);
+});
+
+test("métricas temporales usan request_started_at posterior a persistAttempt", async () => {
+  const scheduler = new ControlledScheduler();
+  const identity = identityChunks();
+  const chunks = [identity[0], identity[1], `${identity[2]}${identity[3]}`];
+  const delays = [7, 10, 0];
+  let position = 0;
+  const iterator = {
+    next() { scheduler.elapse(delays[position]); return Promise.resolve({ value: chunks[position++], done: false }); },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    scheduler,
+    persistAttempt: async () => { scheduler.elapse(100); },
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 50, firstEventMs: 50, idleMs: 50, totalMs: 500 },
+  });
+  assert.equal(result.telemetry.request_started_at, 100);
+  assert.equal(result.telemetry.time_to_first_event_ms, 7);
+  assert.equal(result.telemetry.max_event_interval_ms, 10);
+  assert.equal(result.telemetry.latency_ms, 117);
+});
+
+test("informe final contiene identidad y las tres métricas", async () => {
+  const { result } = await run(identityChunks());
+  assert.match(result.report, /"completion_id": "completion-one"/);
+  assert.match(result.report, /"model_effective": "kimi-k2\.7-code"/);
+  assert.match(result.report, /"request_started_at":/);
+  assert.match(result.report, /"time_to_first_event_ms":/);
+  assert.match(result.report, /"max_event_interval_ms":/);
+});
+
+test("marcador de idempotencia es estable y combina HEAD con attempt_id", async () => {
+  const expected = `KIMI_STREAM_REVIEW HEAD=${HEAD} ATTEMPT_ID=attempt-synthetic`;
+  assert.equal(buildIdempotencyMarker(HEAD, "attempt-synthetic"), expected);
+  assert.equal(buildIdempotencyMarker(HEAD, "attempt-synthetic"), expected);
+  const { result } = await run();
+  assert.equal(result.telemetry.idempotency_marker, expected);
+  assert.match(result.report, new RegExp(expected));
 });
 
 test("fallo económico indeterminado no dispara reintento", async () => {

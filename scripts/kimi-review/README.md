@@ -36,13 +36,38 @@ Los cuatro límites predeterminados son independientes:
 - conexión: 10 segundos, para fallos previos al establecimiento del canal;
 - primer evento: 180 segundos, con amplio margen sobre la sonda mínima observada
   de aproximadamente 1,3 segundos;
-- inactividad: 60 segundos desde cada evento, reiniciado mientras el stream siga
-  vivo;
+- inactividad: 60 segundos entre eventos contados;
 - total: 20 minutos como techo absoluto para una review representativa.
 
-Cada código identifica su fase. El registro local de `attempt_id` se persiste
-antes de invocar la fábrica de request. No existe reintento automático: un fallo
-con consumo económico indeterminado termina el intento.
+El deadline del primer evento es absoluto desde que se establece la conexión y
+sólo termina con un evento contado; comentarios y bytes que todavía no completan
+un evento no lo reinician. El deadline de inactividad también es absoluto desde
+el último evento contado. Comentarios y fragmentos parciales no lo reinician. Al
+vencer cualquiera de los dos se rechaza antes de invocar otro `iterator.next()`;
+si el deadline total ya venció, `TOTAL_TIMEOUT` tiene precedencia.
+
+Cada código identifica su fase. `request_started_at` se toma inmediatamente
+antes de invocar la fábrica, después de persistir el registro local de
+`attempt_id`. La telemetría conserva el tiempo hasta el primer evento y el mayor
+intervalo entre eventos contados. Todos los eventos de un mismo fragmento
+comparten sello temporal, por lo que su intervalo interno es cero. No existe
+reintento automático: un fallo con consumo económico indeterminado termina el
+intento.
+
+Cuando los eventos lo incluyen, el transporte conserva un único `completion_id`
+y modelo efectivo; una divergencia posterior invalida el protocolo. Su ausencia
+queda representada por `null` y no invalida la review.
+
+## Idempotencia de publicación
+
+Cada intento expone una línea literal estable:
+
+    KIMI_STREAM_REVIEW HEAD=<HEAD_EXACTO> ATTEMPT_ID=<ATTEMPT_ID_LOCAL>
+
+Antes de publicar una review se busca el marcador completo: si ya existe, no se
+duplica. También se busca y reporta cualquier comentario previo para el mismo
+HEAD, sin que eso bloquee por sí solo. `completion_id` se agrega cuando sea
+observable, pero nunca reemplaza al marcador como condición de idempotencia.
 
 El transporte importa `sanitize.mjs` y `report.mjs`; no reimplementa sus
 protecciones. La prueba estructural de ausencia de clientes de red sigue siendo

@@ -21,6 +21,12 @@ export const STREAM_TIMEOUT_CODES = Object.freeze({
   total: "TOTAL_TIMEOUT",
 });
 
+export function buildIdempotencyMarker(head, attemptId) {
+  if (typeof head !== "string" || head.length === 0) throw new TypeError("head is required");
+  if (typeof attemptId !== "string" || attemptId.length === 0) throw new TypeError("attemptId is required");
+  return `KIMI_STREAM_REVIEW HEAD=${head} ATTEMPT_ID=${attemptId}`;
+}
+
 export class StreamTimeoutError extends Error {
   constructor(code, timeoutMs) {
     super(`${code} after ${timeoutMs} ms`);
@@ -204,6 +210,12 @@ function telemetryFromState(state, startedAt, endedAt, timeouts, maxCompletionTo
     usage_received: state.usage !== null,
     usage: state.usage,
     reasoning_content_observable: state.reasoningSeen,
+    request_started_at: state.requestStartedAt,
+    time_to_first_event_ms: state.timeToFirstEventMs,
+    max_event_interval_ms: state.maxEventIntervalMs,
+    completion_id: state.completionId,
+    model_effective: state.modelEffective,
+    idempotency_marker: state.idempotencyMarker,
     max_completion_tokens: maxCompletionTokens,
     timeouts_effective_ms: timeouts,
     retry_count: 0,
@@ -266,12 +278,22 @@ export async function runStreamingReview(options) {
     usage: null,
     done: false,
     malformed: [],
+    completionId: null,
+    modelEffective: null,
+    identityErrors: [],
+    requestStartedAt: null,
+    firstEventAt: null,
+    lastEventAt: null,
+    timeToFirstEventMs: null,
+    maxEventIntervalMs: null,
+    idempotencyMarker: buildIdempotencyMarker(expectedHead, attemptId),
   };
   let handle;
   let response;
   let transportError = null;
 
   try {
+    state.requestStartedAt = scheduler.now();
     handle = requestFactory({
       endpoint,
       headers: { "content-type": "application/json", accept: "text/event-stream", authorization: `Bearer ${apiKey}` },
@@ -279,31 +301,47 @@ export async function runStreamingReview(options) {
     });
     await raceTimeout(handle.connected, timeouts.connectMs, STREAM_TIMEOUT_CODES.connect, totalDeadline, scheduler);
     const firstEventDeadline = scheduler.now() + timeouts.firstEventMs;
-    response = await raceTimeout(handle.response, timeouts.firstEventMs, STREAM_TIMEOUT_CODES.firstEvent, totalDeadline, scheduler);
+    response = await waitWithinDeadline(
+      handle.response,
+      firstEventDeadline,
+      STREAM_TIMEOUT_CODES.firstEvent,
+      totalDeadline,
+      scheduler,
+    );
     const parser = createSseParser();
     const iterator = response.body[Symbol.asyncIterator]();
-    let firstEvent = true;
     let endedByDone = false;
+    let idleDeadline = null;
 
     streamLoop: while (true) {
-      const phaseMs = firstEvent ? Math.max(0, firstEventDeadline - scheduler.now()) : timeouts.idleMs;
-      const phaseCode = firstEvent ? STREAM_TIMEOUT_CODES.firstEvent : STREAM_TIMEOUT_CODES.idle;
-      const next = await raceTimeout(iterator.next(), phaseMs, phaseCode, totalDeadline, scheduler);
+      const waitingForFirstEvent = state.eventCount === 0;
+      const phaseDeadline = waitingForFirstEvent ? firstEventDeadline : idleDeadline;
+      const phaseCode = waitingForFirstEvent ? STREAM_TIMEOUT_CODES.firstEvent : STREAM_TIMEOUT_CODES.idle;
+      assertDeadlineAvailable(phaseDeadline, phaseCode, totalDeadline, scheduler);
+      const next = await waitWithinDeadline(
+        iterator.next(),
+        phaseDeadline,
+        phaseCode,
+        totalDeadline,
+        scheduler,
+      );
       if (next.done) {
         for (const event of parser.end()) {
-          processEvent(event, state);
+          processEvent(event, state, scheduler.now());
           if (state.done) break;
         }
         break;
       }
+      const chunkObservedAt = scheduler.now();
       const events = parser.push(next.value);
       for (const event of events) {
-        processEvent(event, state);
+        const before = state.eventCount;
+        processEvent(event, state, chunkObservedAt);
         if (state.done) {
           endedByDone = true;
           break streamLoop;
         }
-        firstEvent = false;
+        if (state.eventCount > before) idleDeadline = chunkObservedAt + timeouts.idleMs;
       }
     }
     if (endedByDone && typeof iterator.return === "function") {
@@ -324,6 +362,7 @@ export async function runStreamingReview(options) {
   if (state.finishReason !== "stop") protocolErrors.push("FINISH_REASON_NOT_STOP");
   if (state.usage === null) protocolErrors.push("USAGE_MISSING");
   if (state.malformed.length > 0) protocolErrors.push("MALFORMED_SSE_EVENT");
+  protocolErrors.push(...state.identityErrors);
 
   const parsed = transportError ? { review: null, validation: { valid: false, errors: ["TRANSPORT_ERROR"] }, parseError: null }
     : parseReview(state.content, expectedHead);
@@ -337,6 +376,8 @@ export async function runStreamingReview(options) {
       http_status: status,
       content_type: contentType,
       finish_reason: state.finishReason,
+      completion_id: state.completionId,
+      model_effective: state.modelEffective,
       usage: state.usage,
       done_received: state.done,
       malformed_events: state.malformed,
@@ -354,8 +395,16 @@ export async function runStreamingReview(options) {
   return result;
 }
 
-function processEvent(event, state) {
+function processEvent(event, state, observedAt) {
   if (event.type === "comment") return;
+  if (state.lastEventAt === null) {
+    state.firstEventAt = observedAt;
+    state.timeToFirstEventMs = observedAt - state.requestStartedAt;
+    state.maxEventIntervalMs = 0;
+  } else {
+    state.maxEventIntervalMs = Math.max(state.maxEventIntervalMs, observedAt - state.lastEventAt);
+  }
+  state.lastEventAt = observedAt;
   state.eventCount += 1;
   if (event.type === "done") {
     state.done = true;
@@ -365,6 +414,10 @@ function processEvent(event, state) {
     state.malformed.push(event);
     return;
   }
+  if (event.type === "json") {
+    captureStableIdentity(state, "completionId", event.value?.id, "COMPLETION_ID_DIVERGENT");
+    captureStableIdentity(state, "modelEffective", event.value?.model, "MODEL_DIVERGENT");
+  }
   const choice = event.value?.choices?.[0];
   if (typeof choice?.delta?.content === "string") state.content += choice.delta.content;
   if (typeof choice?.delta?.reasoning_content === "string") {
@@ -373,4 +426,21 @@ function processEvent(event, state) {
   }
   if (choice?.finish_reason !== null && choice?.finish_reason !== undefined) state.finishReason = choice.finish_reason;
   if (event.value?.usage !== null && event.value?.usage !== undefined) state.usage = event.value.usage;
+}
+
+function captureStableIdentity(state, key, value, errorCode) {
+  if (value === null || value === undefined) return;
+  if (state[key] === null) state[key] = value;
+  else if (state[key] !== value && !state.identityErrors.includes(errorCode)) state.identityErrors.push(errorCode);
+}
+
+function assertDeadlineAvailable(phaseDeadline, phaseCode, totalDeadline, scheduler) {
+  const now = scheduler.now();
+  if (totalDeadline <= now) throw new StreamTimeoutError(STREAM_TIMEOUT_CODES.total, 0);
+  if (phaseDeadline <= now) throw new StreamTimeoutError(phaseCode, 0);
+}
+
+function waitWithinDeadline(promise, phaseDeadline, phaseCode, totalDeadline, scheduler) {
+  assertDeadlineAvailable(phaseDeadline, phaseCode, totalDeadline, scheduler);
+  return raceTimeout(promise, phaseDeadline - scheduler.now(), phaseCode, totalDeadline, scheduler);
 }
