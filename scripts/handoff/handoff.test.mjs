@@ -8,7 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
   parseContractBody, poll, prepareInput, sha256, tick,
-  validateContract, validateResult,
+  validateContract, validateResult, validateContractV2, validateResultV2, executeDeclaredOperation,
+  executeV2Unit, snapshotVersionedPaths, detectPostMutations, acquireLeaseLock, releaseLeaseLock,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
@@ -354,6 +355,70 @@ function schemaTokens(schema) {
   };
   visit(schema);
   return { keys, enumValues };
+}
+
+const V2_ACTORS = {
+  roles: {
+    DIRECTOR_PRODUCT_OWNER: { actor: "Lucas", adapter: "reglas.md", capacidades: ["accion_fisica", "autorizacion_economica"] },
+    ARQUITECTO_LEAD: { actor: "Claude", adapter: "CLAUDE.md", capacidades: ["arbitraje", "arquitectura"] },
+    EJECUTOR_PRINCIPAL: { actor: "Codex", adapter: "AGENTS.md", capacidades: ["git", "github", "red", "filesystem"] },
+  },
+};
+
+function v2Context(overrides = {}) {
+  return {
+    actors: V2_ACTORS,
+    resolveCanonicalReference: (reference) => [
+      "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director",
+      "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo",
+    ].includes(reference),
+    resolveEvidence: (evidence) => evidence.referencia === "PR #97 / 5b7aeb7",
+    ...overrides,
+  };
+}
+
+function v2Contract(overrides = {}) {
+  return {
+    handoff_version: "2",
+    tarea: "Construir una unidad de ejecución sintética.",
+    head_sha: HEAD,
+    contexto_autorizado: ["CLAUDE.md", "AGENTS.md", "reglas.md"],
+    origen: { ejecutor: "Claude", rol: "ARQUITECTO_LEAD" },
+    destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["git"] },
+    modo: "ejecucion",
+    mutaciones_permitidas: ["fixture/output.txt"],
+    operaciones_permitidas: [{ tipo: "git", objetivo: "commit" }],
+    impacto_economico: { tipo: "no_aplica" },
+    reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
+    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
+    estado_canonico: {
+      accion_anterior: { id: "construir-lector", descripcion: "Construir el lector" },
+      evidencia_cierre: { tipo: "PR_INTEGRADA", referencia: "PR #97 / 5b7aeb7", head_o_historial: "5b7aeb7" },
+      proxima_accion: { id: "construir-listados", descripcion: "Construir listados y vistas" },
+      head_reconciliacion: HEAD,
+    },
+    operaciones_delegadas_a_humanos: [],
+    ...overrides,
+  };
+}
+
+function v2Result(overrides = {}) {
+  return {
+    handoff_version: "2",
+    estado: "COMPLETADO",
+    decision: "SIN_OBJECIONES",
+    resumen: "Unidad completada.",
+    evidencia: [],
+    archivos_leidos: ["AGENTS.md"],
+    siguiente: null,
+    firma: {
+      ejecutor_real: "Codex", entorno: "Windows / PowerShell",
+      modelo_configurado: "gpt-5.6-sol", modelo_efectivo: "NO_VERIFICADO",
+      esfuerzo_o_modo_configurado: "high", esfuerzo_o_modo_efectivo: "NO_OBSERVABLE",
+      sujeto_evaluado: "fixture U1", via_evaluada: "pruebas locales", fecha: "2026-08-18",
+    },
+    ...overrides,
+  };
 }
 
 test("runProcess no reintenta si el primer intento funciona en win32", () => {
@@ -2067,4 +2132,155 @@ test("fallos de ntfy no alteran el resultado de poll", async () => {
   ));
   assert.deepEqual(http500, baseline);
   assert.match(httpLogs.join("\n"), /HTTP 500/);
+});
+
+test("v2: unidad de ejecución se representa, ejecuta y valida", async () => {
+  assert.equal(validateContractV2(v2Contract(), v2Context()).handoff_version, "2");
+  let snapshots = 0;
+  const result = await executeV2Unit(v2Contract(), {
+    validationContext: v2Context(),
+    operations: [{ tipo: "git", objetivo: "commit", paga: false }],
+    handlers: { git: () => ({ status: 0 }) },
+    snapshotVersioned: async () => { snapshots += 1; return { "fixture/output.txt": "igual" }; },
+    invoke: async () => v2Result(),
+  });
+  assert.equal(result.decision, "SIN_OBJECIONES");
+  assert.equal(snapshots, 2);
+});
+
+test("v2: unidad de solo lectura sigue validando", () => {
+  const value = v2Contract({ modo: "solo_lectura", mutaciones_permitidas: [], operaciones_permitidas: [] });
+  assert.equal(validateContractV2(value, v2Context()).modo, "solo_lectura");
+});
+
+test("v2: firma incompleta se rechaza por vía, sujeto y fecha", () => {
+  for (const key of ["via_evaluada", "sujeto_evaluado", "fecha"]) {
+    const result = v2Result();
+    delete result.firma[key];
+    assert.throws(() => validateResultV2(result, v2Contract(), v2Context()), (error) => error.code === "CAMPO_REQUERIDO_AUSENTE");
+  }
+});
+
+test("v2: unidad local sin costo valida con no_aplica", () => {
+  assert.deepEqual(validateContractV2(v2Contract(), v2Context()).impacto_economico, { tipo: "no_aplica" });
+});
+
+test("v2: llamada paga sin sobre económico se rechaza antes de red", async () => {
+  let calls = 0;
+  await assert.rejects(
+    executeDeclaredOperation(v2Contract({ operaciones_permitidas: [{ tipo: "red", objetivo: "completion" }] }), { tipo: "red", objetivo: "completion", paga: true }, { red: () => { calls += 1; } }),
+    (error) => error.code === "OPERACION_PAGA_NO_AUTORIZADA",
+  );
+  assert.equal(calls, 0);
+});
+
+test("v2: segundo intento que excede remanente se rechaza antes de gasto", () => {
+  const impact = { tipo: "aplica", objetivo_economico: "review", moneda: "USD", cap_acumulado: 0.4, maximo_intento: 0.21, acumulado_observable: 0.2, remanente: 0.2, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" };
+  assert.throws(() => validateContractV2(v2Contract({ impacto_economico: impact }), v2Context()), (error) => error.code === "CAP_ECONOMICO_EXCEDIDO");
+});
+
+test("v2: no_aplica detiene una operación paga antes de red", async () => {
+  let network = 0;
+  await assert.rejects(executeDeclaredOperation(
+    v2Contract({ operaciones_permitidas: [{ tipo: "red", objetivo: "api" }] }),
+    { tipo: "red", objetivo: "api", paga: true }, { red: () => { network += 1; } },
+  ), (error) => error.code === "OPERACION_PAGA_NO_AUTORIZADA");
+  assert.equal(network, 0);
+});
+
+test("v2: decision incompatible con estado se rechaza en ambas direcciones", () => {
+  assert.throws(() => validateResultV2(v2Result({ estado: "BLOQUEADO" }), v2Contract(), v2Context()), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
+  assert.throws(() => validateResultV2(v2Result({ decision: "BLOQUEADO_POR_LIMITE" }), v2Contract(), v2Context()), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
+});
+
+test("v2: decision distinta de SIN_OBJECIONES exige siguiente", () => {
+  assert.throws(() => validateResultV2(v2Result({ decision: "OBJECION_MATERIAL" }), v2Contract(), v2Context()), (error) => error.code === "SIGUIENTE_REQUERIDO");
+});
+
+test("v2: fundamento inventado o referencia canónica inexistente se rechaza", () => {
+  const entry = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: "inventado.md#nada", condicion_observable: "cambió el producto", actor_o_capacidad_requerida: "arbitraje_producto", naturaleza: "DECISION_MATERIAL" };
+  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "REFERENCIA_CANONICA_NO_RESUELTA");
+});
+
+test("v2: categoría real incompatible con operación se rechaza", () => {
+  const entry = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo", condicion_observable: "decisión de producto", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "DECISION_MATERIAL" };
+  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "CATEGORIA_INCOMPATIBLE_CON_OPERACION");
+});
+
+test("v2: operación rutinaria delegada con actor capaz se rechaza", () => {
+  const entry = { categoria: "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO", referencia_canonica: "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director", condicion_observable: "hacer push", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
+  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "DELEGACION_RUTINARIA_PROHIBIDA");
+});
+
+test("v2: acción física con categoría canónica válida se acepta", () => {
+  const entry = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo", condicion_observable: "insertar dispositivo físico", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+  assert.equal(validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()).operaciones_delegadas_a_humanos.length, 1);
+});
+
+test("v2: actor se resuelve por rol, capacidad y adapter obligatorio", () => {
+  assert.equal(validateContractV2(v2Contract(), v2Context()).destinatario.rol, "EJECUTOR_PRINCIPAL");
+  const value = v2Contract({ contexto_autorizado: ["CLAUDE.md", "reglas.md"] });
+  assert.throws(() => validateContractV2(value, v2Context()), (error) => error.code === "ADAPTER_FUERA_DE_CONTEXTO");
+});
+
+test("v2: mutación Git no declarada se bloquea preventivamente", async () => {
+  let effects = 0;
+  await assert.rejects(executeDeclaredOperation(v2Contract(), { tipo: "github", objetivo: "merge", paga: false }, { github: () => { effects += 1; } }), (error) => error.code === "MUTACION_BLOQUEADA_PREVENTIVAMENTE");
+  assert.equal(effects, 0);
+});
+
+test("v2: mutación versionada fuera del alcance se detecta posteriormente y falla cerrada", () => {
+  const before = snapshotVersionedPaths({ "permitido.md": "a", "fuera.md": "a" });
+  const after = snapshotVersionedPaths({ "permitido.md": "b", "fuera.md": "b" });
+  const result = detectPostMutations(before, after, v2Contract({ mutaciones_permitidas: ["permitido.md"] }));
+  assert.deepEqual(result, { valid: false, code: "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE", paths: ["fuera.md"] });
+});
+
+test("v2: solo_lectura clasifica cualquier mutación versionada fuera del sobre", () => {
+  const result = detectPostMutations(snapshotVersionedPaths({ "a.md": "1" }), snapshotVersionedPaths({ "a.md": "2" }), v2Contract({ modo: "solo_lectura", mutaciones_permitidas: [] }));
+  assert.equal(result.code, "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
+});
+
+test("v2: lease expirado se recupera sin depender del PID reutilizado", () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-v2-lease-"));
+  const lock = join(root, "lock");
+  mkdirSync(lock);
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({ lease_id: "old", owner_instance_id: "ended-process", pid: process.pid, expires_at_ms: 100 }), "utf8");
+  const result = acquireLeaseLock(lock, { now: 101, leaseMs: 50, leaseId: "new", ownerInstanceId: "new-process-same-pid" });
+  assert.equal(result.acquired, true);
+  assert.equal(result.owner.owner_instance_id, "new-process-same-pid");
+  assert.equal(releaseLeaseLock(lock, result.owner), true);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("v2: reconciliación detecta construir-lector ya cerrado sin depender de loader.py", () => {
+  const state = { ...v2Contract().estado_canonico, proxima_accion: { id: "construir-lector", descripcion: "Construir nuevamente el lector" } };
+  assert.throws(() => validateContractV2(v2Contract({ estado_canonico: state }), v2Context()), (error) => error.code === "ESTADO_CANONICO_DIVERGENTE");
+});
+
+test("v2: evidencia de cierre cuya referencia no resuelve invalida el contrato", () => {
+  assert.throws(() => validateContractV2(v2Contract(), v2Context({ resolveEvidence: () => false })), (error) => error.code === "EVIDENCIA_CIERRE_NO_RESUELTA");
+});
+
+test("v2: ninguna ruta fallida ejecuta red, gasto ni mutación", async () => {
+  const effects = { red: 0, git: 0, github: 0 };
+  const handlers = Object.fromEntries(Object.keys(effects).map((key) => [key, () => { effects[key] += 1; }]));
+  const attempts = [
+    executeDeclaredOperation(v2Contract(), { tipo: "red", objetivo: "no-declarada", paga: true }, handlers),
+    executeDeclaredOperation(v2Contract(), { tipo: "git", objetivo: "no-declarada", paga: false }, handlers),
+    executeDeclaredOperation(v2Contract(), { tipo: "github", objetivo: "no-declarada", paga: false }, handlers),
+  ];
+  for (const attempt of attempts) await assert.rejects(attempt);
+  await assert.rejects(executeV2Unit(v2Contract(), {
+    validationContext: v2Context(),
+    operations: [{ tipo: "git", objetivo: "commit", paga: false }],
+    handlers,
+    snapshotVersioned: async () => ({ "fixture/output.txt": "igual" }),
+    invoke: async () => v2Result({ estado: "BLOQUEADO" }),
+  }), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
+  assert.deepEqual(effects, { red: 0, git: 0, github: 0 });
+});
+
+test("v2: contrato handoff_version 1 se rechaza con código propio sin reinterpretación", () => {
+  assert.throws(() => validateContractV2(contract(), v2Context()), (error) => error.code === "CONTRATO_VERSION_NO_SOPORTADA");
 });

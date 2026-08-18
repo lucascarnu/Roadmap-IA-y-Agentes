@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync,
   readdirSync, statSync,
@@ -51,10 +51,11 @@ const TERMINAL_LABELS = new Set([
 ]);
 
 export class HandoffError extends Error {
-  constructor(message, label = "handoff:failed") {
+  constructor(message, label = "handoff:failed", code = "HANDOFF_ERROR") {
     super(message);
     this.name = "HandoffError";
     this.label = label;
+    this.code = code;
   }
 }
 
@@ -67,6 +68,302 @@ export class CrashSimulation extends Error {
 
 function fail(message, label = "handoff:failed") {
   throw new HandoffError(message, label);
+}
+
+function failV2(code, message, label = "handoff:blocked") {
+  throw new HandoffError(message, label, code);
+}
+
+export const HANDOFF_V2_DECISIONS = Object.freeze([
+  "SIN_OBJECIONES", "OBJECION_MATERIAL", "REQUIERE_ARBITRAJE",
+  "BLOQUEADO_POR_LIMITE", "BLOQUEADO_POR_GATE",
+]);
+
+export const HANDOFF_V2_HUMAN_CATEGORIES = Object.freeze([
+  "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION",
+  "COSTO_RELEVANTE_O_PAYG",
+  "PRIVACIDAD_O_SEGURIDAD_ACEPTADA",
+  "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO",
+  "ALTERNATIVAS_MATERIALES_NO_RESUELTAS_POR_EVIDENCIA",
+  "CONTRADICCION_CON_INSTRUCCION_DEL_DIRECTOR",
+  "EVIDENCIA_INSUFICIENTE_PARA_GATE_OBLIGATORIO",
+  "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE",
+]);
+
+export const HANDOFF_V2_EVIDENCE_TYPES = Object.freeze([
+  "PR_INTEGRADA", "COMMIT", "ARTEFACTO_CON_HASH", "RESULTADO_VALIDADO",
+]);
+
+const DECISION_STATE = Object.freeze({
+  SIN_OBJECIONES: "COMPLETADO",
+  OBJECION_MATERIAL: "COMPLETADO",
+  REQUIERE_ARBITRAJE: "COMPLETADO",
+  BLOQUEADO_POR_LIMITE: "BLOQUEADO",
+  BLOQUEADO_POR_GATE: "BLOQUEADO",
+});
+
+const HUMAN_CATEGORY_NATURE = Object.freeze(Object.fromEntries(
+  HANDOFF_V2_HUMAN_CATEGORIES.map((category) => [
+    category,
+    category === "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE" ? "ACCION_FISICA" : "DECISION_MATERIAL",
+  ]),
+));
+
+const HUMAN_CATEGORY_REFERENCE = Object.freeze(Object.fromEntries(
+  HANDOFF_V2_HUMAN_CATEGORIES.map((category) => [
+    category,
+    category === "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE"
+      ? "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo"
+      : "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director",
+  ]),
+));
+
+function object(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function requireKeys(value, keys, label) {
+  if (!object(value)) failV2("ESTRUCTURA_INVALIDA", `${label} debe ser objeto`);
+  const missing = keys.filter((key) => !Object.hasOwn(value, key));
+  if (missing.length) failV2("CAMPO_REQUERIDO_AUSENTE", `${label} omite: ${missing.join(", ")}`);
+}
+
+function rejectExtras(value, keys, label) {
+  const extras = Object.keys(value).filter((key) => !keys.includes(key));
+  if (extras.length) failV2("CAMPO_NO_ADMITIDO", `${label} contiene: ${extras.join(", ")}`);
+}
+
+function defaultActorsPath() {
+  return join(HERE, "actores.json");
+}
+
+function actorRegistry(context = {}) {
+  const registry = context.actors ?? readJson(context.actorsPath ?? defaultActorsPath());
+  if (!object(registry) || !object(registry.roles)) failV2("ACTORES_INVALIDOS", "actores.json no define roles");
+  return registry;
+}
+
+function resolveRole(role, requiredCapabilities, context = {}) {
+  const entry = actorRegistry(context).roles[role];
+  if (!entry) failV2("ROL_NO_RESUELTO", `Rol no configurado: ${role}`);
+  const capabilities = new Set(entry.capacidades ?? []);
+  const missing = requiredCapabilities.filter((capability) => !capabilities.has(capability));
+  if (missing.length) failV2("CAPACIDAD_ESTATICA_AUSENTE", `${role} carece de: ${missing.join(", ")}`);
+  return entry;
+}
+
+function githubAnchor(value) {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
+}
+
+export function canonicalReferenceResolves(reference, context = {}) {
+  if (typeof reference !== "string" || !reference.includes("#")) return false;
+  if (context.resolveCanonicalReference) return context.resolveCanonicalReference(reference) === true;
+  const [path, anchor] = reference.split("#", 2);
+  if (!safeRelativePath(path) || !anchor) return false;
+  const absolute = resolve(context.repoRoot ?? ROOT, path);
+  if (!existsSync(absolute)) return false;
+  const headings = readFileSync(absolute, "utf8").split(/\r?\n/)
+    .filter((line) => /^#{1,6}\s+/.test(line))
+    .map((line) => githubAnchor(line.replace(/^#{1,6}\s+/, "")));
+  return headings.includes(anchor.toLowerCase());
+}
+
+function validateActorDescriptor(descriptor, authorizedContext, context, label) {
+  requireKeys(descriptor, ["rol", "capacidades_requeridas"], label);
+  rejectExtras(descriptor, ["rol", "capacidades_requeridas"], label);
+  if (!Array.isArray(descriptor.capacidades_requeridas)) failV2("ESTRUCTURA_INVALIDA", `${label}.capacidades_requeridas inválido`);
+  const actor = resolveRole(descriptor.rol, descriptor.capacidades_requeridas, context);
+  if (!authorizedContext.includes(actor.adapter)) failV2("ADAPTER_FUERA_DE_CONTEXTO", `${actor.adapter} no está en contexto_autorizado`);
+  return actor;
+}
+
+function validateEconomicImpact(impact) {
+  requireKeys(impact, ["tipo"], "impacto_economico");
+  if (impact.tipo === "no_aplica") {
+    rejectExtras(impact, ["tipo"], "impacto_economico");
+    return;
+  }
+  if (impact.tipo !== "aplica") failV2("IMPACTO_ECONOMICO_INVALIDO", "impacto_economico.tipo inválido");
+  const keys = ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "acumulado_observable", "remanente", "politica_costo_indeterminado"];
+  requireKeys(impact, keys, "impacto_economico");
+  rejectExtras(impact, keys, "impacto_economico");
+  for (const key of ["cap_acumulado", "maximo_intento", "acumulado_observable", "remanente"]) {
+    if (typeof impact[key] !== "number" || impact[key] < 0) failV2("IMPACTO_ECONOMICO_INVALIDO", `${key} inválido`);
+  }
+  if (impact.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") failV2("REINTENTO_ECONOMICO_INVALIDO", "Costo indeterminado debe detener sin reintento");
+  const expected = impact.cap_acumulado - impact.acumulado_observable;
+  if (Math.abs(expected - impact.remanente) > 1e-9) failV2("REMANENTE_INCONSISTENTE", "remanente no corresponde al acumulado por objetivo");
+  if (impact.maximo_intento > impact.remanente) failV2("CAP_ECONOMICO_EXCEDIDO", "El máximo del intento excede el remanente");
+}
+
+function validateHumanDelegations(entries, context) {
+  if (!Array.isArray(entries)) failV2("ESTRUCTURA_INVALIDA", "operaciones_delegadas_a_humanos debe ser array");
+  for (const entry of entries) {
+    const keys = ["categoria", "referencia_canonica", "condicion_observable", "actor_o_capacidad_requerida", "naturaleza", "explicacion"];
+    requireKeys(entry, keys.slice(0, 5), "operación delegada");
+    rejectExtras(entry, keys, "operación delegada");
+    if (!HANDOFF_V2_HUMAN_CATEGORIES.includes(entry.categoria)) failV2("CATEGORIA_ESCALAMIENTO_INVALIDA", entry.categoria);
+    if (!canonicalReferenceResolves(entry.referencia_canonica, context)) failV2("REFERENCIA_CANONICA_NO_RESUELTA", entry.referencia_canonica);
+    if (entry.referencia_canonica !== HUMAN_CATEGORY_REFERENCE[entry.categoria]) failV2("REFERENCIA_CANONICA_INCOMPATIBLE", entry.categoria);
+    if (entry.naturaleza === "OPERACION_RUTINARIA") {
+      const available = Object.values(actorRegistry(context).roles).some((actor) => (actor.capacidades ?? []).includes(entry.actor_o_capacidad_requerida));
+      if (available) failV2("DELEGACION_RUTINARIA_PROHIBIDA", "Existe un actor estático con la capacidad rutinaria");
+      failV2("DISPONIBILIDAD_DINAMICA_NO_OBSERVABLE", "La falta de disponibilidad dinámica no autoriza delegar al Director");
+    }
+    if (HUMAN_CATEGORY_NATURE[entry.categoria] !== entry.naturaleza) failV2("CATEGORIA_INCOMPATIBLE_CON_OPERACION", entry.categoria);
+  }
+}
+
+function validateCanonicalState(state, context) {
+  requireKeys(state, ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"], "estado_canonico");
+  rejectExtras(state, ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion", "paths_senal"], "estado_canonico");
+  for (const key of ["accion_anterior", "proxima_accion"]) {
+    requireKeys(state[key], ["id", "descripcion"], `estado_canonico.${key}`);
+    if (!state[key].id || !state[key].descripcion) failV2("ESTADO_CANONICO_INVALIDO", key);
+  }
+  if (state.accion_anterior.id === state.proxima_accion.id) failV2("ESTADO_CANONICO_DIVERGENTE", "La próxima acción ya está cerrada");
+  requireKeys(state.evidencia_cierre, ["tipo", "referencia", "head_o_historial"], "evidencia_cierre");
+  if (!HANDOFF_V2_EVIDENCE_TYPES.includes(state.evidencia_cierre.tipo)) failV2("EVIDENCIA_CIERRE_INVALIDA", "tipo inválido");
+  const resolver = context.resolveEvidence ?? (() => false);
+  if (!resolver(state.evidencia_cierre, state.head_reconciliacion)) failV2("EVIDENCIA_CIERRE_NO_RESUELTA", state.evidencia_cierre.referencia);
+  if (!/^[0-9a-f]{40}$/.test(state.head_reconciliacion ?? "")) failV2("HEAD_RECONCILIACION_INVALIDO", "HEAD inválido");
+  return state.paths_senal?.length ? { warning: "ESTADO_CANONICO_POTENCIALMENTE_DIVERGENTE" } : { warning: null };
+}
+
+export function validateContractV2(contract, context = {}) {
+  if (!object(contract)) failV2("ESTRUCTURA_INVALIDA", "Contrato no es objeto");
+  if (contract.handoff_version !== "2") failV2("CONTRATO_VERSION_NO_SOPORTADA", `handoff_version ${contract.handoff_version ?? "ausente"} no se migra ni reinterpreta`);
+  const keys = ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"];
+  requireKeys(contract, keys, "contrato v2");
+  rejectExtras(contract, keys, "contrato v2");
+  if (!/^[0-9a-f]{40}$/.test(contract.head_sha ?? "")) failV2("HEAD_INVALIDO", "head_sha inválido");
+  if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) failV2("CONTEXTO_INVALIDO", "contexto_autorizado inválido");
+  requireKeys(contract.origen, ["ejecutor", "rol"], "origen");
+  const originActor = resolveRole(contract.origen.rol, [], context);
+  if (originActor.actor !== contract.origen.ejecutor) failV2("ORIGEN_NO_RESUELTO", "ejecutor y rol no corresponden");
+  if (!contract.contexto_autorizado.includes(originActor.adapter)) failV2("ADAPTER_FUERA_DE_CONTEXTO", originActor.adapter);
+  validateActorDescriptor(contract.destinatario, contract.contexto_autorizado, context, "destinatario");
+  if (!["solo_lectura", "ejecucion"].includes(contract.modo)) failV2("MODO_INVALIDO", contract.modo);
+  if (!Array.isArray(contract.mutaciones_permitidas) || !Array.isArray(contract.operaciones_permitidas)) failV2("MUTACIONES_INVALIDAS", "listas requeridas");
+  if (contract.mutaciones_permitidas.some((path) => !safeRelativePath(path))) failV2("MUTACIONES_INVALIDAS", "path de mutación inseguro");
+  for (const operation of contract.operaciones_permitidas) {
+    requireKeys(operation, ["tipo", "objetivo"], "operación permitida");
+    rejectExtras(operation, ["tipo", "objetivo"], "operación permitida");
+    if (!["git", "github", "red", "filesystem"].includes(operation.tipo) || typeof operation.objetivo !== "string" || !operation.objetivo) failV2("OPERACION_INVALIDA", "operación permitida inválida");
+  }
+  if (contract.modo === "solo_lectura" && contract.mutaciones_permitidas.length) failV2("SOLO_LECTURA_CON_MUTACIONES", "solo_lectura no admite mutaciones");
+  validateEconomicImpact(contract.impacto_economico);
+  requireKeys(contract.reintentos, ["maximos", "politica_costo_indeterminado"], "reintentos");
+  if (!Number.isInteger(contract.reintentos.maximos) || contract.reintentos.maximos < 0 || contract.reintentos.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") failV2("REINTENTOS_INVALIDOS", "política inválida");
+  if (!Array.isArray(contract.transiciones_permitidas)) failV2("TRANSICIONES_INVALIDAS", "tabla requerida");
+  validateHumanDelegations(contract.operaciones_delegadas_a_humanos, context);
+  const canonical = validateCanonicalState(contract.estado_canonico, context);
+  return { ...contract, advertencia_estado_canonico: canonical.warning };
+}
+
+export function validateResultV2(result, contract, context = {}) {
+  if (!object(result)) failV2("RESULTADO_INVALIDO", "Resultado no es objeto", "handoff:failed");
+  if (result.handoff_version !== "2") failV2("CONTRATO_VERSION_NO_SOPORTADA", "Resultado no es v2", "handoff:failed");
+  const keys = ["handoff_version", "estado", "decision", "resumen", "evidencia", "archivos_leidos", "siguiente", "firma"];
+  requireKeys(result, keys, "resultado v2");
+  rejectExtras(result, keys, "resultado v2");
+  if (!HANDOFF_V2_DECISIONS.includes(result.decision)) failV2("DECISION_INVALIDA", result.decision, "handoff:failed");
+  if (typeof result.resumen !== "string" || !result.resumen.trim()) failV2("RESUMEN_INVALIDO", "resumen vacío", "handoff:failed");
+  if (!Array.isArray(result.evidencia)) failV2("EVIDENCIA_INVALIDA", "evidencia debe ser array", "handoff:failed");
+  for (const item of result.evidencia) {
+    requireKeys(item, ["archivo", "detalle"], "evidencia");
+    rejectExtras(item, ["archivo", "detalle"], "evidencia");
+    if (typeof item.archivo !== "string" || typeof item.detalle !== "string") failV2("EVIDENCIA_INVALIDA", "ítem inválido", "handoff:failed");
+  }
+  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) failV2("ARCHIVOS_LEIDOS_FUERA_DE_CONTEXTO", "archivos_leidos inválido", "handoff:failed");
+  if (DECISION_STATE[result.decision] !== result.estado) failV2("DECISION_ESTADO_INCOMPATIBLE", "decision y estado no corresponden", "handoff:failed");
+  if (result.decision !== "SIN_OBJECIONES" && result.siguiente === null) failV2("SIGUIENTE_REQUERIDO", "La decisión exige siguiente", "handoff:failed");
+  if (result.siguiente !== null) {
+    const actor = validateActorDescriptor(result.siguiente, contract.contexto_autorizado, context, "siguiente");
+    if (result.decision === "REQUIERE_ARBITRAJE" && !(actor.capacidades ?? []).includes("arbitraje")) failV2("SIGUIENTE_SIN_AUTORIDAD", "El siguiente no arbitra", "handoff:failed");
+    const transition = `${result.estado}->${result.siguiente.rol}`;
+    if (!contract.transiciones_permitidas.includes(transition)) failV2("TRANSICION_NO_PERMITIDA", transition, "handoff:failed");
+  }
+  const signatureKeys = ["ejecutor_real", "entorno", "modelo_configurado", "modelo_efectivo", "esfuerzo_o_modo_configurado", "esfuerzo_o_modo_efectivo", "sujeto_evaluado", "via_evaluada", "fecha"];
+  requireKeys(result.firma, signatureKeys, "firma");
+  rejectExtras(result.firma, signatureKeys, "firma");
+  for (const key of signatureKeys) if (typeof result.firma[key] !== "string" || !result.firma[key]) failV2("FIRMA_INCOMPLETA", key, "handoff:failed");
+  return result;
+}
+
+export function assertEconomicAuthorization(contract, operation) {
+  if (operation.paga && contract.impacto_economico.tipo === "no_aplica") failV2("OPERACION_PAGA_NO_AUTORIZADA", "Bloqueada antes de red o gasto");
+  if (operation.paga && contract.impacto_economico.maximo_intento > contract.impacto_economico.remanente) failV2("CAP_ECONOMICO_EXCEDIDO", "Bloqueada antes de red o gasto");
+  return true;
+}
+
+export async function executeDeclaredOperation(contract, operation, handlers = {}) {
+  const declared = contract.operaciones_permitidas.some((item) => item.tipo === operation.tipo && item.objetivo === operation.objetivo);
+  if (!declared) failV2("MUTACION_BLOQUEADA_PREVENTIVAMENTE", `${operation.tipo}:${operation.objetivo}`);
+  assertEconomicAuthorization(contract, operation);
+  const handler = handlers[operation.tipo];
+  if (typeof handler !== "function") failV2("CAPACIDAD_NO_IMPLEMENTADA", operation.tipo);
+  return handler(operation);
+}
+
+export async function executeV2Unit(contract, options = {}) {
+  const validated = validateContractV2(contract, options.validationContext);
+  const snapshot = options.snapshotVersioned ?? (async () => ({}));
+  const before = snapshotVersionedPaths(await snapshot());
+  const result = await options.invoke(validated);
+  const after = snapshotVersionedPaths(await snapshot());
+  const mutations = detectPostMutations(before, after, validated);
+  if (!mutations.valid) failV2(mutations.code, `Paths fuera del sobre: ${mutations.paths.join(", ")}`, "handoff:failed");
+  const validatedResult = validateResultV2(result, validated, options.validationContext);
+  for (const operation of options.operations ?? []) {
+    await executeDeclaredOperation(validated, operation, options.handlers);
+  }
+  return validatedResult;
+}
+
+export function snapshotVersionedPaths(entries) {
+  return new Map(Object.entries(entries));
+}
+
+export function detectPostMutations(before, after, contract) {
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter((path) => before.get(path) !== after.get(path));
+  const allowed = contract.modo === "solo_lectura" ? [] : contract.mutaciones_permitidas;
+  const outside = changed.filter((path) => !allowed.includes(path));
+  if (outside.length) return { valid: false, code: "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE", paths: outside };
+  return { valid: true, code: null, paths: changed };
+}
+
+export function acquireLeaseLock(path, options = {}) {
+  const now = options.now ?? Date.now();
+  const leaseMs = options.leaseMs ?? 60_000;
+  const owner = { lease_id: options.leaseId ?? randomUUID(), owner_instance_id: options.ownerInstanceId ?? randomUUID(), acquired_at_ms: now, heartbeat_at_ms: now, expires_at_ms: now + leaseMs };
+  if (existsSync(path)) {
+    let current;
+    try { current = readJson(join(path, "owner.json")); } catch { return { acquired: false, reason: "LOCK_IDENTITY_UNREADABLE" }; }
+    if (current.expires_at_ms > now) return { acquired: false, reason: "LEASE_ACTIVE", owner: current };
+    releaseLock(path);
+  }
+  if (!acquireLock(path, owner)) return { acquired: false, reason: "LEASE_RACE" };
+  return { acquired: true, owner };
+}
+
+export function heartbeatLeaseLock(path, owner, options = {}) {
+  const current = readJson(join(path, "owner.json"));
+  if (current.lease_id !== owner.lease_id || current.owner_instance_id !== owner.owner_instance_id) return false;
+  const now = options.now ?? Date.now();
+  const updated = { ...current, heartbeat_at_ms: now, expires_at_ms: now + (options.leaseMs ?? 60_000) };
+  writeJson(join(path, "owner.json"), updated);
+  return updated;
+}
+
+export function releaseLeaseLock(path, owner) {
+  if (!existsSync(path)) return false;
+  const current = readJson(join(path, "owner.json"));
+  if (current.lease_id !== owner.lease_id || current.owner_instance_id !== owner.owner_instance_id) return false;
+  releaseLock(path);
+  return true;
 }
 
 export function sha256(value) {
@@ -92,7 +389,7 @@ function writeText(path, value) {
 function safeRelativePath(path) {
   if (typeof path !== "string" || !path || path.startsWith("/") || path.startsWith("\\")) return false;
   const normalized = path.replaceAll("\\", "/");
-  return !normalized.split("/").includes("..") && !normalized.includes("\0");
+  return !/^[A-Za-z]:\//.test(normalized) && !normalized.split("/").includes("..") && !normalized.includes("\0");
 }
 
 function onlyKeys(value, keys, label, terminalLabel = "handoff:blocked") {

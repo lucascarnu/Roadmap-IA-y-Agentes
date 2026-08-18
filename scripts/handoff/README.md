@@ -325,6 +325,93 @@ reclamos locales. Ambos se crean con `mkdir`, que es atómico. Un `running` cuyo
 PID local ya no existe se recupera una vez. Si vuelve a quedar huérfano antes de
 persistir resultado, termina `handoff:blocked`.
 
+## Contrato ejecutable v2
+
+Los archivos `handoff-v2.schema.json` y `handoff-result-v2.schema.json` definen
+el contrato nuevo. Los schemas sin sufijo permanecen sin cambios como lectura
+histórica de los artefactos v1. `validateContractV2` rechaza explícitamente una
+entrada `handoff_version: "1"` con `CONTRATO_VERSION_NO_SOPORTADA`: no migra el
+modo `solo_lectura`, no completa defaults y no reinterpreta campos narrativos.
+En particular, los 17 valores históricos de `veredicto` son prosa libre y no
+forman un vocabulario normativo.
+
+El resultado v2 separa `resumen`, narrativo, de `decision`, mecánico. Sus cinco
+identificadores son vocabulario nuevo para conceptos ya anclados en el canon:
+
+- `SIN_OBJECIONES`: unidad completada sin impedimento para continuar;
+- `OBJECION_MATERIAL`: objeción que debe resolverse, según
+  [Intervención crítica del agente](../../reglas.md#intervencion-critica-del-agente)
+  y la fusión de revisiones de `0010`;
+- `REQUIERE_ARBITRAJE`: decisión fuera de la autoridad del actor, según
+  [Autoridad y escalación](../../decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md#autoridad-y-escalacion)
+  y [Cuándo sí se escala al Director](../../decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director);
+- `BLOQUEADO_POR_LIMITE`: límite real de entorno, permiso o capacidad, conforme
+  al adapter del Ejecutor;
+- `BLOQUEADO_POR_GATE`: gate obligatorio sin vía autorizada, conforme a
+  [Servicios fuera del camino crítico](../../decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md#servicios-fuera-del-camino-critico)
+  y el punto 7 de `0013`.
+
+Las tres primeras decisiones exigen `COMPLETADO`; las dos últimas,
+`BLOQUEADO`. Sólo `SIN_OBJECIONES` admite `siguiente: null` y
+`REQUIERE_ARBITRAJE` exige un actor con capacidad estática `arbitraje`.
+`actores.json` resuelve rol → actor, adapter y capacidades. El adapter resuelto
+debe estar incluido en `contexto_autorizado`, tanto para origen y destinatario
+como para el actor siguiente. Este registro es estático: no demuestra
+disponibilidad dinámica. `NO_OBSERVABLE` nunca se convierte automáticamente en
+delegación al Director.
+
+`operaciones_delegadas_a_humanos` usa las ocho categorías cerradas de `0013` y
+del pendiente de publicación autónoma del Consultor. Cada entrada incluye una
+referencia documento-sección resoluble, condición observable, capacidad o actor
+requerido y naturaleza. La explicación libre no autoriza. Una operación
+rutinaria que un actor registrado puede ejecutar se rechaza, al igual que una
+categoría incompatible con la naturaleza de la operación.
+
+### Economía, reintentos y mutaciones
+
+`impacto_economico` siempre está presente. `no_aplica` no admite importes y
+bloquea una operación paga antes de red. `aplica` declara objetivo económico,
+moneda, cap acumulado por objetivo, máximo del intento, acumulado observable,
+remanente y la política `DETENER_SIN_REINTENTO`. Un máximo mayor al remanente se
+detiene antes de red o gasto. La política de reintentos es explícita; un costo
+indeterminado nunca habilita reintento automático.
+
+La protección de mutaciones tiene dos niveles y no los confunde:
+
+- `executeDeclaredOperation` previene las operaciones Git, GitHub, red o
+  filesystem que el puente inicia: compara tipo y objetivo con
+  `operaciones_permitidas` antes de llamar al handler. Una discrepancia es
+  `MUTACION_BLOQUEADA_PREVENTIVAMENTE` y no produce efecto.
+- Las escrituras que ocurren dentro del proceso de un agente no son
+  interceptables por el puente. Se comparan snapshots de paths versionados antes
+  y después. Un cambio fuera de `mutaciones_permitidas` se **detecta después**
+  como `MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE` y la unidad falla
+  cerrada. En `solo_lectura`, cualquier mutación versionada queda fuera del
+  sobre.
+
+No se describe una detección posterior como rechazo preventivo. La tabla
+`transiciones_permitidas` valida el siguiente estado y actor.
+
+### Estado canónico y lock v2
+
+`estado_canonico` identifica de manera estable la acción anterior y la próxima,
+la evidencia durable de cierre y el HEAD de reconciliación. La evidencia debe
+resolver y corresponder al historial; repetir como próxima una acción ya cerrada
+produce `ESTADO_CANONICO_DIVERGENTE` antes de crear rama o editar. La mera
+existencia de paths sólo puede producir la señal
+`ESTADO_CANONICO_POTENCIALMENTE_DIVERGENTE`, nunca probar cierre.
+
+Para v2 se eligió **lease/heartbeat renovable con expiración absoluta**. El owner
+combina `lease_id` y `owner_instance_id` aleatorios; adquirir, renovar y liberar
+exigen esa identidad. Un lease sólo se recupera después de expirar y jamás se
+señaliza ni termina un PID. Esto es portable y evita confundir un proceso nuevo
+con otro terminado cuyo PID fue reutilizado. El lock PID de v1 se conserva sólo
+para el runtime histórico y no se presenta como identidad suficiente de v2.
+
+La firma v2 sigue la firma de ejecución de `reglas.md`: ejecutor real, entorno,
+modelo configurado y efectivo, esfuerzo o modo configurado y efectivo, sujeto,
+vía y fecha. `NO_OBSERVABLE` y `NO_VERIFICADO` permanecen centinelas distintos.
+
 ## Evidencia local
 
 Los artefactos no se versionan y viven en:
