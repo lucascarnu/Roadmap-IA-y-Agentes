@@ -156,6 +156,63 @@ test("stream sin usage se clasifica incompleto", async () => {
   assert.ok(result.apiEnvelope.protocol_errors.includes("USAGE_MISSING"));
 });
 
+test("DONE termina un stream válido aunque el iterador quede abierto", async () => {
+  const chunks = validChunks();
+  let nextCalls = 0;
+  const iterator = {
+    next() {
+      nextCalls += 1;
+      if (nextCalls <= chunks.length) return Promise.resolve({ value: chunks[nextCalls - 1], done: false });
+      return new Promise(() => {});
+    },
+    return() { return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+    timeouts: { connectMs: 50, firstEventMs: 50, idleMs: 5, totalMs: 100 },
+  });
+  assert.equal(result.classification, "REVIEW_VALIDA");
+  assert.equal(result.apiEnvelope.transport_error, null);
+  assert.equal(nextCalls, chunks.length);
+});
+
+test("ningún evento posterior a DONE se incorpora al estado", async () => {
+  const initial = validChunks().slice(0, 2);
+  const finalChunk = [
+    validChunks()[2],
+    sse("[DONE]"),
+    sse({ choices: [{ delta: { content: "NO_DEBE_APARECER" }, finish_reason: "length" }], usage: { total_tokens: 999 } }),
+  ].join("");
+  const { result } = await run([...initial, finalChunk]);
+  assert.equal(result.classification, "REVIEW_VALIDA");
+  assert.equal(result.content, JSON.stringify(REVIEW));
+  assert.equal(result.apiEnvelope.usage.total_tokens, 23);
+  assert.equal(result.telemetry.sse_events, 4);
+});
+
+test("iterator.return se invoca exactamente una vez al observar DONE", async () => {
+  const chunks = validChunks();
+  let position = 0;
+  let returnCalls = 0;
+  const iterator = {
+    next() { return Promise.resolve({ value: chunks[position++], done: false }); },
+    return() { returnCalls += 1; return Promise.resolve({ done: true }); },
+  };
+  const fake = { status: 200, headers: { "content-type": "text/event-stream" }, body: { [Symbol.asyncIterator]: () => iterator } };
+  const { result } = await run([], {
+    requestFactory: () => ({ connected: Promise.resolve(), response: Promise.resolve(fake), abort() {} }),
+  });
+  assert.equal(result.classification, "REVIEW_VALIDA");
+  assert.equal(returnCalls, 1);
+});
+
+test("cierre natural sin DONE conserva la clasificación DONE_MISSING", async () => {
+  const { result } = await run(validChunks().slice(0, -1));
+  assert.equal(result.classification, "REVIEW_INVALIDA");
+  assert.ok(result.apiEnvelope.protocol_errors.includes("DONE_MISSING"));
+});
+
 test("timeout de conexión tiene código propio", async () => {
   const { result } = await run([], {
     requestFactory: () => ({ connected: new Promise(() => {}), response: new Promise(() => {}), abort() {} }),

@@ -283,20 +283,31 @@ export async function runStreamingReview(options) {
     const parser = createSseParser();
     const iterator = response.body[Symbol.asyncIterator]();
     let firstEvent = true;
+    let endedByDone = false;
 
-    while (true) {
+    streamLoop: while (true) {
       const phaseMs = firstEvent ? Math.max(0, firstEventDeadline - scheduler.now()) : timeouts.idleMs;
       const phaseCode = firstEvent ? STREAM_TIMEOUT_CODES.firstEvent : STREAM_TIMEOUT_CODES.idle;
       const next = await raceTimeout(iterator.next(), phaseMs, phaseCode, totalDeadline, scheduler);
       if (next.done) {
-        for (const event of parser.end()) processEvent(event, state);
+        for (const event of parser.end()) {
+          processEvent(event, state);
+          if (state.done) break;
+        }
         break;
       }
       const events = parser.push(next.value);
       for (const event of events) {
         processEvent(event, state);
+        if (state.done) {
+          endedByDone = true;
+          break streamLoop;
+        }
         firstEvent = false;
       }
+    }
+    if (endedByDone && typeof iterator.return === "function") {
+      try { await iterator.return(); } catch { /* normal release must not become a transport error */ }
     }
   } catch (error) {
     transportError = sanitize(error);
