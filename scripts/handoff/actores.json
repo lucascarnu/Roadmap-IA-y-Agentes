@@ -3,39 +3,33 @@
   "roles": {
     "DIRECTOR_PRODUCT_OWNER": {
       "actor": "Lucas",
-      "agent": null,
       "adapter": "reglas.md",
-      "capacidades": ["arbitraje_producto", "autorizacion_economica", "accion_fisica"]
+      "capacidades": ["arbitraje_producto", "autorizacion_economica", "accion_fisica"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },
     "ARQUITECTO_LEAD": {
       "actor": "Claude",
-      "agent": "claude",
       "adapter": "CLAUDE.md",
-      "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"]
+      "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },
     "EJECUTOR_PRINCIPAL": {
       "actor": "Codex",
-      "agent": "codex",
       "adapter": "AGENTS.md",
-      "capacidades": ["filesystem", "git", "github", "red", "ejecucion"]
+      "capacidades": ["filesystem", "git", "github", "red", "ejecucion"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },
     "CONSULTOR_AUDITOR": {
       "actor": "Codex Consultor",
-      "agent": "codex",
       "adapter": "CONSULTOR.md",
-      "capacidades": ["auditoria_continuidad", "reconciliacion"]
+      "capacidades": ["auditoria_continuidad", "reconciliacion"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },
     "REVIEWER_INDEPENDIENTE": {
       "actor": "Kimi",
-      "agent": "kimi",
       "adapter": "reviewer-policy.md",
-      "capacidades": ["review_independiente"]
-    },
-    "ORQUESTADOR_HANDOFF": {
-      "actor": "handoff.mjs",
-      "agent": null,
-      "adapter": "scripts/handoff/README.md",
-      "capacidades": ["orquestacion"]
+      "capacidades": ["review_independiente"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     }
   }
 }

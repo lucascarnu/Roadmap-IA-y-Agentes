@@ -3,30 +3,20 @@
   "title": "Handoff contract v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "resultado_previo", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos", "profundidad_cadena"],
+  "required": ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario", "modo", "objeto_entrada", "objeto_producido", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"],
   "properties": {
     "handoff_version": { "const": "2" },
     "tarea": { "type": "string", "minLength": 1 },
     "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "contexto_autorizado": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
-    "resultado_previo": {
-      "oneOf": [
-        { "type": "null" },
-        {
-          "type": "object", "additionalProperties": false, "required": ["issue", "marker", "result_sha256"],
-          "properties": {
-            "issue": { "type": "integer", "minimum": 1 }, "marker": { "type": "string", "minLength": 1 },
-            "result_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-          }
-        }
-      ]
-    },
     "origen": {
       "type": "object", "additionalProperties": false, "required": ["ejecutor", "rol"],
       "properties": { "ejecutor": { "type": "string" }, "rol": { "type": "string" } }
     },
     "destinatario": { "$ref": "#/$defs/actorDescriptor" },
     "modo": { "enum": ["solo_lectura", "ejecucion"] },
+    "objeto_entrada": { "$ref": "#/$defs/objectDescriptor" },
+    "objeto_producido": { "$ref": "#/$defs/objectDescriptor" },
     "mutaciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
     "operaciones_permitidas": {
       "type": "array", "items": {
@@ -39,11 +29,10 @@
         { "type": "object", "additionalProperties": false, "required": ["tipo"], "properties": { "tipo": { "const": "no_aplica" } } },
         {
           "type": "object", "additionalProperties": false,
-          "required": ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "acumulado_observable", "remanente", "politica_costo_indeterminado"],
+          "required": ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "politica_costo_indeterminado"],
           "properties": {
             "tipo": { "const": "aplica" }, "objetivo_economico": { "type": "string" }, "moneda": { "type": "string" },
             "cap_acumulado": { "type": "number", "minimum": 0 }, "maximo_intento": { "type": "number", "minimum": 0 },
-            "acumulado_observable": { "type": "number", "minimum": 0 }, "remanente": { "type": "number", "minimum": 0 },
             "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" }
           }
         }
@@ -51,7 +40,7 @@
     },
     "reintentos": {
       "type": "object", "additionalProperties": false, "required": ["maximos", "politica_costo_indeterminado"],
-      "properties": { "maximos": { "type": "integer", "minimum": 0 }, "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" } }
+      "properties": { "maximos": { "const": 0 }, "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" } }
     },
     "transiciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
     "estado_canonico": {
@@ -67,8 +56,7 @@
           }
         },
         "proxima_accion": { "$ref": "#/$defs/actionIdentity" },
-        "head_reconciliacion": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "paths_senal": { "type": "array", "items": { "type": "string" } }
+        "head_reconciliacion": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
       }
     },
     "operaciones_delegadas_a_humanos": {
@@ -83,8 +71,7 @@
           "explicacion": { "type": "string" }
         }
       }
-    },
-    "profundidad_cadena": { "type": "integer", "minimum": 1 }
+    }
   },
   "allOf": [
     {
@@ -98,6 +85,10 @@
       "properties": { "rol": { "type": "string" }, "capacidades_requeridas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } } }
     },
     "actionIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["id", "descripcion"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "descripcion": { "type": "string", "minLength": 1 } }
+    },
+    "objectDescriptor": {
       "type": "object", "additionalProperties": false, "required": ["id", "descripcion"],
       "properties": { "id": { "type": "string", "minLength": 1 }, "descripcion": { "type": "string", "minLength": 1 } }
     }

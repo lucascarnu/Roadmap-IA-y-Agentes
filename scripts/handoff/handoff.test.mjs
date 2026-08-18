@@ -1,24 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import childProcess from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 import {
   CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
   parseContractBody, poll, prepareInput, sha256, tick,
-  validateContract, validateResult, validateContractV2, validateResultV2, executeDeclaredOperation,
-  executeV2Unit, snapshotVersionedPaths, detectPostMutations, acquireLeaseLock, releaseLeaseLock,
-  heartbeatLeaseLock, HANDOFF_V2_RUNTIME_OPERATIONS, processIssue, reserveEconomicBudget,
-  reconcileEconomicBudget, startLeaseHeartbeat,
+  validateContract, validateResult,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
+import {
+  GOVERNING_CONTEXT_V2, HANDOFF_V2_DECISIONS, HandoffContractV2Error,
+  validateContractV2, validateResultV2,
+} from "./handoff-contract-v2.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
-const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const HEAD = "a".repeat(40);
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const RESULT_SCHEMA_RAW = readFileSync(join(HERE, "handoff-result.schema.json"), "utf8");
@@ -161,6 +165,12 @@ function fixture(backend, overrides = {}) {
       runtimeDir: join(root, ".handoff"),
       artifactsDir: join(root, "artifacts"),
       ensureLabels: false,
+      run: (command, args) => {
+        assert.equal(command, "git");
+        if (args.includes("show")) return { status: 0, stdout: `contenido sintético de ${args.at(-1)}`, stderr: "" };
+        if (args.includes("diff")) return { status: 0, stdout: "diff sintético\n", stderr: "" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
       authObserver: (agent, adapter) => ({ authorized_via: adapter.authorized_via, observed_via: adapter.authorized_via, evidence: { fixture: true }, valid: true }),
       invoke: ({ contract: current }) => ({ result: validResult(current), telemetry: { fixture: true }, duration_ms: 1 }),
       notify: async () => ({ sent: false, reason: "fixture" }),
@@ -357,73 +367,6 @@ function schemaTokens(schema) {
   };
   visit(schema);
   return { keys, enumValues };
-}
-
-const V2_ACTORS = {
-  roles: {
-    DIRECTOR_PRODUCT_OWNER: { actor: "Lucas", agent: null, adapter: "reglas.md", capacidades: ["accion_fisica", "autorizacion_economica"] },
-    ARQUITECTO_LEAD: { actor: "Claude", agent: "claude", adapter: "CLAUDE.md", capacidades: ["arbitraje", "arquitectura"] },
-    EJECUTOR_PRINCIPAL: { actor: "Codex", agent: "codex", adapter: "AGENTS.md", capacidades: ["git", "github", "red", "filesystem"] },
-    ORQUESTADOR_HANDOFF: { actor: "handoff.mjs", agent: null, adapter: "scripts/handoff/README.md", capacidades: ["orquestacion"] },
-  },
-};
-
-function v2Context(overrides = {}) {
-  return {
-    actors: V2_ACTORS,
-    resolveCanonicalReference: (reference) => [
-      "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director",
-      "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo",
-    ].includes(reference),
-    resolveEvidence: (evidence) => evidence.referencia === "PR #97 / 5b7aeb7",
-    ...overrides,
-  };
-}
-
-function v2Contract(overrides = {}) {
-  return {
-    handoff_version: "2",
-    tarea: "Construir una unidad de ejecución sintética.",
-    head_sha: HEAD,
-    contexto_autorizado: [...GOVERNING_CONTEXT.common, "CLAUDE.md", "AGENTS.md"],
-    resultado_previo: null,
-    origen: { ejecutor: "Claude", rol: "ARQUITECTO_LEAD" },
-    destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["git"] },
-    modo: "ejecucion",
-    mutaciones_permitidas: ["fixture/output.txt"],
-    operaciones_permitidas: [...HANDOFF_V2_RUNTIME_OPERATIONS.map((item) => ({ ...item })), { tipo: "git", objetivo: "commit" }],
-    impacto_economico: { tipo: "no_aplica" },
-    reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
-    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
-    estado_canonico: {
-      accion_anterior: { id: "construir-lector", descripcion: "Construir el lector" },
-      evidencia_cierre: { tipo: "PR_INTEGRADA", referencia: "PR #97 / 5b7aeb7", head_o_historial: "5b7aeb7" },
-      proxima_accion: { id: "construir-listados", descripcion: "Construir listados y vistas" },
-      head_reconciliacion: HEAD,
-    },
-    operaciones_delegadas_a_humanos: [],
-    profundidad_cadena: 1,
-    ...overrides,
-  };
-}
-
-function v2Result(overrides = {}) {
-  return {
-    handoff_version: "2",
-    estado: "COMPLETADO",
-    decision: "SIN_OBJECIONES",
-    resumen: "Unidad completada.",
-    evidencia: [],
-    archivos_leidos: ["AGENTS.md"],
-    siguiente: null,
-    firma: {
-      ejecutor_real: "Codex", entorno: "Windows / PowerShell",
-      modelo_configurado: "gpt-5.6-sol", modelo_efectivo: "NO_VERIFICADO",
-      esfuerzo_o_modo_configurado: "high", esfuerzo_o_modo_efectivo: "NO_OBSERVABLE",
-      sujeto_evaluado: "fixture U1", via_evaluada: "pruebas locales", fecha: "2026-08-18",
-    },
-    ...overrides,
-  };
 }
 
 test("runProcess no reintenta si el primer intento funciona en win32", () => {
@@ -1275,14 +1218,11 @@ test("F1: caída después de running se recupera una vez sin duplicar publicaci�
       afterClaim: () => { throw new CrashSimulation(); },
     },
     preserveGlobalLock: true,
-    lockLeaseMs: 10,
-    lockNow: 1,
   });
   await assert.rejects(() => poll(fx.options), CrashSimulation);
   assert(backend.issues[0].labels.has("handoff:running"));
   delete fx.options.hooks;
   delete fx.options.preserveGlobalLock;
-  fx.options.lockNow = 12;
   try {
     const recovered = await poll(fx.options);
     assert.equal(recovered.processed[0].status, "done");
@@ -1297,13 +1237,11 @@ test("F1: una segunda caída consecutiva agota el reintento y bloquea", async ()
     preserveLockOnCrash: true,
     afterClaim: () => { throw new CrashSimulation(); },
   };
-  const fx = fixture(backend, { hooks: crashHooks, preserveGlobalLock: true, lockLeaseMs: 10, lockNow: 1 });
+  const fx = fixture(backend, { hooks: crashHooks, preserveGlobalLock: true });
   await assert.rejects(() => poll(fx.options), CrashSimulation);
-  fx.options.lockNow = 12;
   await assert.rejects(() => poll(fx.options), CrashSimulation);
   delete fx.options.hooks;
   delete fx.options.preserveGlobalLock;
-  fx.options.lockNow = 23;
   try {
     const blocked = await poll(fx.options);
     assert.equal(blocked.processed.length, 0);
@@ -1312,17 +1250,15 @@ test("F1: una segunda caída consecutiva agota el reintento y bloquea", async ()
   } finally { clean(fx); }
 });
 
-test("F2: dos procesos casi simultáneos sólo permiten un lock", async () => {
+test("F2: dos workers casi simultáneos sólo permiten un lock sin crear procesos", async () => {
   const root = mkdtempSync(join(tmpdir(), "handoff-lock-"));
   const lock = join(root, "issue.lock");
-  const start = Date.now() + 700;
-  const source = `import { acquireLock } from ${JSON.stringify(MODULE_URL)}; const wait=${start}-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); const ok=acquireLock(${JSON.stringify(lock)}); console.log(ok?'CLAIMED':'REJECTED'); if(ok) await new Promise(r=>setTimeout(r,500));`;
+  const start = Date.now() + 300;
+  const source = `import { parentPort } from "node:worker_threads"; import { acquireLock } from ${JSON.stringify(MODULE_URL)}; const wait=${start}-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); parentPort.postMessage(acquireLock(${JSON.stringify(lock)})?'CLAIMED':'REJECTED');`;
   const launch = () => new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", source], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = ""; let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("exit", (code) => code === 0 ? resolvePromise(stdout.trim()) : rejectPromise(new Error(stderr)));
+    const worker = new Worker(source, { eval: true, type: "module" });
+    worker.once("message", resolvePromise);
+    worker.once("error", rejectPromise);
   });
   try {
     const outcomes = await Promise.all([launch(), launch()]);
@@ -1796,7 +1732,7 @@ test("tick bloquea un descriptor ambiguo con múltiples marcadores", async () =>
 });
 
 test("tick bloquea si el HEAD del marcador no coincide con el contrato", async () => {
-  const comments = [{ body: waitDescriptor(1, {}, "a".repeat(40)) }];
+  const comments = [{ body: waitDescriptor(1, {}, "b".repeat(40)) }];
   const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
   const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
   try {
@@ -1877,24 +1813,17 @@ test("tick no toca una unidad que también tiene label terminal", async () => {
   } finally { clean(fx); }
 });
 
-test("tick respeta lease activo y recupera lease expirado", async () => {
+test("tick respeta lock vivo y recupera lock de proceso muerto", async () => {
   const lockedFx = fixture(new FakeBackend());
   const liveLock = join(lockedFx.options.runtimeDir, "poll.lock");
-  const now = Date.now();
-  assert.equal(acquireLock(liveLock, {
-    lease_id: "live", owner_instance_id: "live-owner", acquired_at_ms: now,
-    heartbeat_at_ms: now, expires_at_ms: now + 60_000,
-  }), true);
+  assert.equal(acquireLock(liveLock), true);
   try {
     assert.deepEqual(await tick(lockedFx.options), { status: "locked", promovidas: [], poll: null });
   } finally { clean(lockedFx); }
 
   const recoveredFx = fixture(new FakeBackend());
   const deadLock = join(recoveredFx.options.runtimeDir, "poll.lock");
-  assert.equal(acquireLock(deadLock, {
-    lease_id: "expired", owner_instance_id: "ended-process", acquired_at_ms: 1,
-    heartbeat_at_ms: 1, expires_at_ms: 2,
-  }), true);
+  assert.equal(acquireLock(deadLock, { pid: 999999, created_at: "2026-08-13T00:00:00.000Z" }), true);
   try {
     assert.deepEqual(await tick(recoveredFx.options), { status: "complete", promovidas: [], poll: null });
     assert.equal(existsSync(deadLock), false);
@@ -2151,382 +2080,212 @@ test("fallos de ntfy no alteran el resultado de poll", async () => {
   assert.match(httpLogs.join("\n"), /HTTP 500/);
 });
 
-test("v2: unidad de ejecución se representa, ejecuta y valida", async () => {
-  assert.equal(validateContractV2(v2Contract(), v2Context()).handoff_version, "2");
-  let snapshots = 0;
-  const result = await executeV2Unit(v2Contract(), {
-    validationContext: v2Context(),
-    operations: [{ tipo: "git", objetivo: "commit", paga: false }],
-    handlers: { git: () => ({ status: 0 }) },
-    snapshotVersioned: async () => { snapshots += 1; return { "fixture/output.txt": "igual" }; },
-    invoke: async () => v2Result(),
-  });
-  assert.equal(result.decision, "SIN_OBJECIONES");
-  assert.equal(snapshots, 2);
-});
+const V2_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-v2.schema.json"), "utf8"));
+const V2_RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result-v2.schema.json"), "utf8"));
+const V2_ACTORS_FILE = JSON.parse(readFileSync(join(HERE, "actores.json"), "utf8"));
+const V2_DIRECTOR_REF = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
+const V2_PHYSICAL_REF = "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo";
 
-test("v2: unidad de solo lectura sigue validando", () => {
-  const value = v2Contract({
-    modo: "solo_lectura", mutaciones_permitidas: [],
-    operaciones_permitidas: HANDOFF_V2_RUNTIME_OPERATIONS.map((item) => ({ ...item })),
-  });
-  assert.equal(validateContractV2(value, v2Context()).modo, "solo_lectura");
-});
+function v2Actors(provenRoles = []) {
+  const roles = structuredClone(V2_ACTORS_FILE.roles);
+  for (const role of provenRoles) roles[role].confinamiento = { mecanismo: "SANDBOX_SINTETICO", evidencia: "PROBADO_LOCALMENTE" };
+  return { version: "1", roles };
+}
 
-test("v2: firma incompleta se rechaza por vía, sujeto y fecha", () => {
-  for (const key of ["via_evaluada", "sujeto_evaluado", "fecha"]) {
-    const result = v2Result();
-    delete result.firma[key];
-    assert.throws(() => validateResultV2(result, v2Contract(), v2Context()), (error) => error.code === "CAMPO_REQUERIDO_AUSENTE");
-  }
-});
+function v2Deps(overrides = {}) {
+  return { actors: v2Actors(), resolveCanonicalReference: () => true, resolveEvidence: () => true, ...overrides };
+}
 
-test("v2: unidad local sin costo valida con no_aplica", () => {
-  assert.deepEqual(validateContractV2(v2Contract(), v2Context()).impacto_economico, { tipo: "no_aplica" });
-});
-
-test("v2: llamada paga sin sobre económico se rechaza antes de red", async () => {
-  let calls = 0;
-  await assert.rejects(
-    executeDeclaredOperation(v2Contract({ operaciones_permitidas: [{ tipo: "red", objetivo: "completion" }] }), { tipo: "red", objetivo: "completion", paga: true }, { red: () => { calls += 1; } }),
-    (error) => error.code === "OPERACION_PAGA_NO_AUTORIZADA",
-  );
-  assert.equal(calls, 0);
-});
-
-test("v2: segundo intento que excede remanente se rechaza antes de gasto", () => {
-  const impact = { tipo: "aplica", objetivo_economico: "review", moneda: "USD", cap_acumulado: 0.4, maximo_intento: 0.21, acumulado_observable: 0.2, remanente: 0.2, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" };
-  assert.throws(() => validateContractV2(v2Contract({ impacto_economico: impact }), v2Context()), (error) => error.code === "CAP_ECONOMICO_EXCEDIDO");
-});
-
-test("v2: no_aplica detiene una operación paga antes de red", async () => {
-  let network = 0;
-  await assert.rejects(executeDeclaredOperation(
-    v2Contract({ operaciones_permitidas: [{ tipo: "red", objetivo: "api" }] }),
-    { tipo: "red", objetivo: "api", paga: true }, { red: () => { network += 1; } },
-  ), (error) => error.code === "OPERACION_PAGA_NO_AUTORIZADA");
-  assert.equal(network, 0);
-});
-
-test("v2: decision incompatible con estado se rechaza en ambas direcciones", () => {
-  assert.throws(() => validateResultV2(v2Result({ estado: "BLOQUEADO" }), v2Contract(), v2Context()), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
-  assert.throws(() => validateResultV2(v2Result({ decision: "BLOQUEADO_POR_LIMITE" }), v2Contract(), v2Context()), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
-});
-
-test("v2: decision distinta de SIN_OBJECIONES exige siguiente", () => {
-  assert.throws(() => validateResultV2(v2Result({ decision: "OBJECION_MATERIAL" }), v2Contract(), v2Context()), (error) => error.code === "SIGUIENTE_REQUERIDO");
-});
-
-test("v2: fundamento inventado o referencia canónica inexistente se rechaza", () => {
-  const entry = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: "inventado.md#nada", condicion_observable: "cambió el producto", actor_o_capacidad_requerida: "arbitraje_producto", naturaleza: "DECISION_MATERIAL" };
-  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "REFERENCIA_CANONICA_NO_RESUELTA");
-});
-
-test("v2: categoría real incompatible con operación se rechaza", () => {
-  const entry = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo", condicion_observable: "decisión de producto", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "DECISION_MATERIAL" };
-  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "CATEGORIA_INCOMPATIBLE_CON_OPERACION");
-});
-
-test("v2: operación rutinaria delegada con actor capaz se rechaza", () => {
-  const entry = { categoria: "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO", referencia_canonica: "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director", condicion_observable: "hacer push", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
-  assert.throws(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()), (error) => error.code === "DELEGACION_RUTINARIA_PROHIBIDA");
-});
-
-test("v2: acción física con categoría canónica válida se acepta", () => {
-  const entry = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo", condicion_observable: "insertar dispositivo físico", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
-  assert.equal(validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [entry] }), v2Context()).operaciones_delegadas_a_humanos.length, 1);
-});
-
-test("v2: actor se resuelve por rol, capacidad y adapter obligatorio", () => {
-  assert.equal(validateContractV2(v2Contract(), v2Context()).destinatario.rol, "EJECUTOR_PRINCIPAL");
-  const value = v2Contract({ contexto_autorizado: [...GOVERNING_CONTEXT.common, "CLAUDE.md"] });
-  assert.throws(() => validateContractV2(value, v2Context()), (error) => error.code === "ADAPTER_FUERA_DE_CONTEXTO");
-});
-
-test("v2: mutación Git no declarada se bloquea preventivamente", async () => {
-  let effects = 0;
-  await assert.rejects(executeDeclaredOperation(v2Contract(), { tipo: "github", objetivo: "merge", paga: false }, { github: () => { effects += 1; } }), (error) => error.code === "MUTACION_BLOQUEADA_PREVENTIVAMENTE");
-  assert.equal(effects, 0);
-});
-
-test("v2: mutación versionada fuera del alcance se detecta posteriormente y falla cerrada", () => {
-  const before = snapshotVersionedPaths({ "permitido.md": "a", "fuera.md": "a" });
-  const after = snapshotVersionedPaths({ "permitido.md": "b", "fuera.md": "b" });
-  const result = detectPostMutations(before, after, v2Contract({ mutaciones_permitidas: ["permitido.md"] }));
-  assert.deepEqual(result, { valid: false, code: "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE", paths: ["fuera.md"] });
-});
-
-test("v2: solo_lectura clasifica cualquier mutación versionada fuera del sobre", () => {
-  const result = detectPostMutations(snapshotVersionedPaths({ "a.md": "1" }), snapshotVersionedPaths({ "a.md": "2" }), v2Contract({ modo: "solo_lectura", mutaciones_permitidas: [] }));
-  assert.equal(result.code, "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
-});
-
-test("v2: lease expirado se recupera sin depender del PID reutilizado", () => {
-  const root = mkdtempSync(join(tmpdir(), "handoff-v2-lease-"));
-  const lock = join(root, "lock");
-  mkdirSync(lock);
-  writeFileSync(join(lock, "owner.json"), JSON.stringify({ lease_id: "old", owner_instance_id: "ended-process", pid: process.pid, expires_at_ms: 100 }), "utf8");
-  const result = acquireLeaseLock(lock, { now: 101, leaseMs: 50, leaseId: "new", ownerInstanceId: "new-process-same-pid" });
-  assert.equal(result.acquired, true);
-  assert.equal(result.owner.owner_instance_id, "new-process-same-pid");
-  assert.equal(releaseLeaseLock(lock, result.owner), true);
-  rmSync(root, { recursive: true, force: true });
-});
-
-test("v2: reconciliación detecta construir-lector ya cerrado sin depender de loader.py", () => {
-  const state = { ...v2Contract().estado_canonico, proxima_accion: { id: "construir-lector", descripcion: "Construir nuevamente el lector" } };
-  assert.throws(() => validateContractV2(v2Contract({ estado_canonico: state }), v2Context()), (error) => error.code === "ESTADO_CANONICO_DIVERGENTE");
-});
-
-test("v2: evidencia de cierre cuya referencia no resuelve invalida el contrato", () => {
-  assert.throws(() => validateContractV2(v2Contract(), v2Context({ resolveEvidence: () => false })), (error) => error.code === "EVIDENCIA_CIERRE_NO_RESUELTA");
-});
-
-test("v2: ninguna ruta fallida ejecuta red, gasto ni mutación", async () => {
-  const effects = { red: 0, git: 0, github: 0 };
-  const handlers = Object.fromEntries(Object.keys(effects).map((key) => [key, () => { effects[key] += 1; }]));
-  const attempts = [
-    executeDeclaredOperation(v2Contract(), { tipo: "red", objetivo: "no-declarada", paga: true }, handlers),
-    executeDeclaredOperation(v2Contract(), { tipo: "git", objetivo: "no-declarada", paga: false }, handlers),
-    executeDeclaredOperation(v2Contract(), { tipo: "github", objetivo: "no-declarada", paga: false }, handlers),
-  ];
-  for (const attempt of attempts) await assert.rejects(attempt);
-  await assert.rejects(executeV2Unit(v2Contract(), {
-    validationContext: v2Context(),
-    operations: [{ tipo: "git", objetivo: "commit", paga: false }],
-    handlers,
-    snapshotVersioned: async () => ({ "fixture/output.txt": "igual" }),
-    invoke: async () => v2Result({ estado: "BLOQUEADO" }),
-  }), (error) => error.code === "DECISION_ESTADO_INCOMPATIBLE");
-  assert.deepEqual(effects, { red: 0, git: 0, github: 0 });
-});
-
-test("v2: contrato handoff_version 1 se rechaza con código propio sin reinterpretación", () => {
-  assert.throws(() => validateContractV2(contract(), v2Context()), (error) => error.code === "CONTRATO_VERSION_NO_SOPORTADA");
-});
-
-test("v2: el entrypoint operativo processIssue persiste un resultado v2 validado", async () => {
-  const backend = new FakeBackend([{
-    number: 109, title: "unidad v2", body: issueBody(v2Contract()),
-    createdAt: "2026-08-18T00:00:00Z",
-  }]);
-  const fx = fixture(backend);
-  mkdirSync(fx.options.runtimeDir, { recursive: true });
-  mkdirSync(fx.options.artifactsDir, { recursive: true });
-  let invocations = 0;
-  try {
-    const result = await processIssue({
-      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
-      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
-      actors: V2_ACTORS,
-      invoke: async () => {
-        invocations += 1;
-        return { result: v2Result(), telemetry: { fixture: true }, duration_ms: 1 };
-      },
-      authObserver: fx.options.authObserver,
-      run: runProcess,
-      issueLeaseMs: 1_000,
-      issueHeartbeatMs: 20,
-    }, backend.issues[0]);
-    assert.equal(result.status, "done", JSON.stringify(result));
-    assert.equal(invocations, 1);
-    const state = JSON.parse(readFileSync(waitStatePath(fx, 109), "utf8"));
-    assert.equal(state.phase, "done");
-    const persisted = JSON.parse(readFileSync(join(state.run_dir, "result.validated.json"), "utf8"));
-    assert.equal(persisted.handoff_version, "2");
-    assert.equal(persisted.decision, "SIN_OBJECIONES");
-    assert(backend.issues[0].labels.has("handoff:done"));
-  } finally { clean(fx); }
-});
-
-test("v2: una excepción del agente no oculta una mutación posterior fuera del sobre", async () => {
-  let snapshots = 0;
-  await assert.rejects(executeV2Unit(v2Contract(), {
-    validationContext: v2Context(),
-    snapshotVersioned: async () => (++snapshots === 1 ? { "fuera.md": "antes" } : { "fuera.md": "después" }),
-    invoke: async () => { throw new Error("fallo del agente después de escribir"); },
-  }), (error) => error.code === "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
-  assert.equal(snapshots, 2);
-});
-
-test("v2: el entrypoint real detecta en finally una mutación aunque invoke lance", async () => {
-  const backend = new FakeBackend([{
-    number: 111, title: "mutación posterior", body: issueBody(v2Contract()),
-    createdAt: "2026-08-18T00:00:00Z",
-  }]);
-  const fx = fixture(backend);
-  let snapshots = 0;
-  try {
-    const result = await processIssue({
-      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
-      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
-      actors: V2_ACTORS, authObserver: fx.options.authObserver,
-      snapshotVersioned: async () => (++snapshots === 1 ? { "fuera.md": "antes" } : { "fuera.md": "después" }),
-      invoke: async () => { throw new Error("el agente falló después de escribir"); },
-    }, backend.issues[0]);
-    assert.equal(result.status, "failed");
-    assert.equal(result.error_code, "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
-    assert.equal(snapshots, 2);
-    assert(backend.issues[0].labels.has("handoff:failed"));
-  } finally { clean(fx); }
-});
-
-test("v2: cada documento común ausente bloquea el entrypoint antes de invocar", async () => {
-  for (const missing of GOVERNING_CONTEXT.common) {
-    const value = v2Contract({ contexto_autorizado: v2Contract().contexto_autorizado.filter((path) => path !== missing) });
-    const backend = new FakeBackend([{
-      number: 110, title: `sin ${missing}`, body: issueBody(value), createdAt: "2026-08-18T00:00:00Z",
-    }]);
-    const fx = fixture(backend);
-    let invocations = 0;
-    try {
-      const result = await processIssue({
-        backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
-        artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
-        actors: V2_ACTORS, invoke: async () => { invocations += 1; }, authObserver: fx.options.authObserver,
-      }, backend.issues[0]);
-      assert.equal(result.error_code, "CANON_GOBERNANTE_AUSENTE", missing);
-      assert.equal(invocations, 0, missing);
-      assert(backend.issues[0].labels.has("handoff:blocked"), missing);
-    } finally { clean(fx); }
-  }
-});
-
-test("v2: dos recuperadores concurrentes de un lease expirado producen un solo ganador", async () => {
-  const root = mkdtempSync(join(tmpdir(), "handoff-v2-race-"));
-  const lock = join(root, "lock");
-  mkdirSync(lock);
-  writeFileSync(join(lock, "owner.json"), JSON.stringify({
-    lease_id: "old", owner_instance_id: "ended", acquired_at_ms: 1, heartbeat_at_ms: 1, expires_at_ms: 2,
-  }), "utf8");
-  const child = (candidate) => new Promise((resolveChild, rejectChild) => {
-    const code = `import(${JSON.stringify(MODULE_URL)}).then(({acquireLeaseLock})=>{const r=acquireLeaseLock(${JSON.stringify(lock)},{now:100,leaseMs:60000,candidateId:${JSON.stringify(candidate)},leaseId:${JSON.stringify(candidate)},ownerInstanceId:${JSON.stringify(candidate)}});process.stdout.write(JSON.stringify(r));}).catch(e=>{console.error(e);process.exit(1);});`;
-    const processChild = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = ""; let stderr = "";
-    processChild.stdout.on("data", (chunk) => { stdout += chunk; });
-    processChild.stderr.on("data", (chunk) => { stderr += chunk; });
-    processChild.on("error", rejectChild);
-    processChild.on("close", (status) => status === 0 ? resolveChild(JSON.parse(stdout)) : rejectChild(new Error(stderr)));
-  });
-  try {
-    const results = await Promise.all([child("candidate-a"), child("candidate-b")]);
-    assert.equal(results.filter((item) => item.acquired).length, 1);
-    const winner = results.find((item) => item.acquired).owner;
-    const loser = results.find((item) => !item.acquired);
-    assert(["LEASE_ACTIVE", "LEASE_RECOVERY_RACE", "LEASE_CREATE_RACE"].includes(loser.reason));
-    const impostor = { lease_id: "loser", owner_instance_id: "loser" };
-    assert.equal(heartbeatLeaseLock(lock, impostor, { now: 200, leaseMs: 60_000 }), false);
-    assert.equal(releaseLeaseLock(lock, impostor), false);
-    assert.deepEqual(JSON.parse(readFileSync(join(lock, "owner.json"), "utf8")).lease_id, winner.lease_id);
-    assert.equal(releaseLeaseLock(lock, winner), true);
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test("v2: EPERM o EBUSY al renombrar un lease vencido pierde la carrera sin borrar el activo", () => {
-  for (const code of ["EPERM", "EBUSY"]) {
-    const root = mkdtempSync(join(tmpdir(), "handoff-v2-rename-"));
-    const lock = join(root, "lock");
-    mkdirSync(lock);
-    const old = { lease_id: "old", owner_instance_id: "old", expires_at_ms: 1 };
-    writeFileSync(join(lock, "owner.json"), JSON.stringify(old), "utf8");
-    let removed = 0;
-    try {
-      const result = acquireLeaseLock(lock, {
-        now: 2, acquire: () => false,
-        rename: () => { throw Object.assign(new Error(code), { code }); },
-        remove: () => { removed += 1; },
-      });
-      assert.equal(result.reason, "LEASE_RECOVERY_RACE");
-      assert.equal(result.observed_error, code);
-      assert.equal(removed, 0);
-      assert.deepEqual(JSON.parse(readFileSync(join(lock, "owner.json"), "utf8")), old);
-    } finally { rmSync(root, { recursive: true, force: true }); }
-  }
-});
-
-test("v2: el heartbeat renueva el lease mientras la unidad conserva su identidad", async () => {
-  const root = mkdtempSync(join(tmpdir(), "handoff-v2-heartbeat-"));
-  const lock = join(root, "lock");
-  const acquired = acquireLeaseLock(lock, { now: 10, leaseMs: 20, leaseId: "lease", ownerInstanceId: "unit" });
-  let clock = 10;
-  const stop = startLeaseHeartbeat(lock, acquired.owner, { leaseMs: 20, intervalMs: 5, now: () => (clock += 5) });
-  try {
-    await new Promise((resolveWait) => setTimeout(resolveWait, 18));
-    const renewed = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
-    assert(renewed.heartbeat_at_ms >= 15);
-    assert.equal(renewed.lease_id, "lease");
-  } finally {
-    stop();
-    assert.equal(releaseLeaseLock(lock, acquired.owner), true);
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("v2: ledger durable ignora acumulados autodeclarados y reserva el máximo atómicamente", () => {
-  const root = mkdtempSync(join(tmpdir(), "handoff-v2-ledger-"));
-  const economic = (maximo, declaredAccumulated = 0) => v2Contract({
-    impacto_economico: {
-      tipo: "aplica", objetivo_economico: "review-pr-109", moneda: "USD", cap_acumulado: 0.4,
-      maximo_intento: maximo, acumulado_observable: declaredAccumulated,
-      remanente: 0.4 - declaredAccumulated, politica_costo_indeterminado: "DETENER_SIN_REINTENTO",
+function v2Contract(overrides = {}) {
+  return {
+    handoff_version: "2", tarea: "Validar contrato sintético.", head_sha: HEAD,
+    contexto_autorizado: [...GOVERNING_CONTEXT_V2, "CLAUDE.md", "AGENTS.md"],
+    origen: { ejecutor: "Claude", rol: "ARQUITECTO_LEAD" },
+    destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] },
+    modo: "solo_lectura",
+    objeto_entrada: { id: "entrada-u1a", descripcion: "Contrato sintético" },
+    objeto_producido: { id: "salida-u1a", descripcion: "Validación pura" },
+    mutaciones_permitidas: [], operaciones_permitidas: [],
+    impacto_economico: { tipo: "no_aplica" },
+    reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
+    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
+    estado_canonico: {
+      accion_anterior: { id: "accion-cerrada", descripcion: "Acción anterior" },
+      evidencia_cierre: { tipo: "COMMIT", referencia: "commit-sintetico", head_o_historial: HEAD },
+      proxima_accion: { id: "accion-siguiente", descripcion: "Acción siguiente" }, head_reconciliacion: HEAD,
     },
-  });
-  try {
-    const first = reserveEconomicBudget(economic(0.25), root, { attemptId: "first" });
-    assert(Math.abs(first.remanente_despues - 0.15) < 1e-9);
-    assert.throws(
-      () => reserveEconomicBudget(economic(0.2, 0), root, { attemptId: "self-declared-reset" }),
-      (error) => error.code === "CAP_ECONOMICO_ACUMULADO_EXCEDIDO",
-    );
-    const reconciled = reconcileEconomicBudget(root, first, { atribuible: true, costo: 0.1 });
-    assert.equal(reconciled.comprometido, 0.1);
-    const second = reserveEconomicBudget(economic(0.3, 0), root, { attemptId: "second" });
-    assert.equal(Math.round(second.remanente_despues * 1e9) / 1e9, 0);
-    reconcileEconomicBudget(root, second, { atribuible: false, costo: null });
-    assert.throws(
-      () => reserveEconomicBudget(economic(0.01, 0), root, { attemptId: "third" }),
-      (error) => error.code === "CAP_ECONOMICO_ACUMULADO_EXCEDIDO",
-    );
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test("v2: el entrypoint reserva antes de la operación paga y concilia su costo atribuible", async () => {
-  const impact = {
-    tipo: "aplica", objetivo_economico: "review-entrypoint", moneda: "USD", cap_acumulado: 0.4,
-    maximo_intento: 0.2, acumulado_observable: 0, remanente: 0.4,
-    politica_costo_indeterminado: "DETENER_SIN_REINTENTO",
+    operaciones_delegadas_a_humanos: [], ...overrides,
   };
-  const backend = new FakeBackend([{
-    number: 112, title: "económica", body: issueBody(v2Contract({ impacto_economico: impact })),
-    createdAt: "2026-08-18T00:00:00Z",
-  }]);
-  const fx = fixture(backend);
-  try {
-    const result = await processIssue({
-      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
-      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
-      actors: V2_ACTORS, authObserver: fx.options.authObserver, snapshotVersioned: async () => ({}),
-      invoke: async () => {
-        const ledger = JSON.parse(readFileSync(join(fx.options.runtimeDir, "economy", "ledger.json"), "utf8"));
-        const attempt = ledger.objetivos["review-entrypoint"].intentos[0];
-        assert.equal(attempt.estado_costo, "RESERVADO");
-        assert.equal(attempt.comprometido, 0.2);
-        return { result: v2Result(), telemetry: { cost_calculated_usd: 0.08 }, duration_ms: 1 };
-      },
-    }, backend.issues[0]);
-    assert.equal(result.status, "done");
-    const ledger = JSON.parse(readFileSync(join(fx.options.runtimeDir, "economy", "ledger.json"), "utf8"));
-    const attempt = ledger.objetivos["review-entrypoint"].intentos[0];
-    assert.equal(attempt.estado_costo, "CONCILIADO_ATRIBUIBLE");
-    assert.equal(attempt.comprometido, 0.08);
-  } finally { clean(fx); }
+}
+
+function v2Result(overrides = {}) {
+  return {
+    handoff_version: "2", estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Contrato válido.",
+    evidencia: [{ archivo: "reglas.md", detalle: "Fixture sintético." }], archivos_leidos: ["reglas.md"], siguiente: null,
+    firma: {
+      ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "modelo-fixture", modelo_efectivo: "NO_OBSERVABLE",
+      esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "contrato v2",
+      via_evaluada: "validación pura", fecha: "2026-08-18",
+    }, ...overrides,
+  };
+}
+
+function v2Error(fn, code) {
+  assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code);
+}
+
+test("U1A representabilidad, versión y confinamiento", async (t) => {
+  await t.test("contrato de ejecución representable", () => {
+    const value = v2Contract({ modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
+    assert.equal(validateContractV2(value, v2Deps({ actors: v2Actors(["EJECUTOR_PRINCIPAL"]) })), value);
+  });
+  await t.test("contrato de solo lectura representable", () => {
+    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
+  });
+  await t.test("handoff_version 1 rechazado con código propio", () => {
+    v2Error(() => validateContractV2({ ...v2Contract(), handoff_version: "1" }, v2Deps()), "CONTRATO_VERSION_NO_SOPORTADA");
+  });
+  for (const [role, actor] of Object.entries(V2_ACTORS_FILE.roles)) {
+    await t.test(`ejecución rechazada para ${role} sin confinamiento probado`, () => {
+      const value = v2Contract({ destinatario: { rol: role, capacidades_requeridas: [] }, modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
+      value.contexto_autorizado = [...new Set([...value.contexto_autorizado, actor.adapter])];
+      v2Error(() => validateContractV2(value, v2Deps()), "CONFINAMIENTO_NO_PROBADO");
+    });
+  }
+  await t.test("solo lectura rechaza mutaciones", () => {
+    v2Error(() => validateContractV2(v2Contract({ mutaciones_permitidas: ["x.md"] }), v2Deps()), "SOLO_LECTURA_CON_MUTACIONES");
+  });
 });
 
-test("v2: callbacks durables de evidencia y snapshot son obligatorios", async () => {
-  await assert.rejects(executeV2Unit(v2Contract(), {
-    validationContext: v2Context({ resolveEvidence: undefined }), snapshotVersioned: async () => ({}), invoke: async () => v2Result(),
-  }), (error) => error.code === "RESOLVER_EVIDENCIA_REQUERIDO");
-  await assert.rejects(executeV2Unit(v2Contract(), {
-    validationContext: v2Context(), invoke: async () => v2Result(),
-  }), (error) => error.code === "SNAPSHOT_VERSIONADO_REQUERIDO");
+test("U1A firma, decisión, estado y siguiente", async (t) => {
+  for (const key of V2_RESULT_SCHEMA.properties.firma.required) {
+    await t.test(`firma incompleta sin ${key}`, () => {
+      const result = v2Result(); delete result.firma[key];
+      v2Error(() => validateResultV2(result, v2Contract(), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
+    });
+  }
+  await t.test("decision completada con estado bloqueado", () => {
+    v2Error(() => validateResultV2(v2Result({ estado: "BLOQUEADO" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
+  });
+  await t.test("decision bloqueada con estado completado", () => {
+    v2Error(() => validateResultV2(v2Result({ decision: "BLOQUEADO_POR_GATE" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
+  });
+  for (const decision of HANDOFF_V2_DECISIONS.filter((item) => item !== "SIN_OBJECIONES")) {
+    await t.test(`${decision} exige siguiente`, () => {
+      const estado = decision.startsWith("BLOQUEADO") ? "BLOQUEADO" : "COMPLETADO";
+      v2Error(() => validateResultV2(v2Result({ decision, estado }), v2Contract(), v2Deps()), "SIGUIENTE_REQUERIDO");
+    });
+  }
+  await t.test("REQUIERE_ARBITRAJE exige capacidad de arbitraje", () => {
+    const siguiente = { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] };
+    v2Error(() => validateResultV2(v2Result({ decision: "REQUIERE_ARBITRAJE", siguiente }), v2Contract(), v2Deps()), "SIGUIENTE_SIN_AUTORIDAD");
+  });
+});
+
+test("U1A economía contractual sin ledger autodeclarado", async (t) => {
+  await t.test("no_aplica rechaza valores contradictorios", () => {
+    v2Error(() => validateContractV2(v2Contract({ impacto_economico: { tipo: "no_aplica", cap_acumulado: 1 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
+  });
+  const base = { tipo: "aplica", objetivo_economico: "review", moneda: "USD", cap_acumulado: 0.25, maximo_intento: 0.2, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" };
+  for (const key of ["objetivo_economico", "moneda", "cap_acumulado", "maximo_intento"]) {
+    await t.test(`aplica sin ${key}`, () => {
+      const impact = structuredClone(base); delete impact[key];
+      v2Error(() => validateContractV2(v2Contract({ impacto_economico: impact }), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
+    });
+  }
+  for (const key of ["acumulado_observable", "remanente"]) {
+    await t.test(`${key} no es autoritativo`, () => {
+      v2Error(() => validateContractV2(v2Contract({ impacto_economico: { ...base, [key]: 0.05 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
+    });
+  }
+});
+
+test("U1A actores, canon, delegación y estado canónico", async (t) => {
+  await t.test("actor resuelto por rol", () => {
+    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
+  });
+  await t.test("adapter del actor obligatorio en contexto", () => {
+    const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((path) => path !== "AGENTS.md");
+    v2Error(() => validateContractV2(value, v2Deps()), "ADAPTER_FUERA_DE_CONTEXTO");
+  });
+  for (const path of GOVERNING_CONTEXT_V2) {
+    await t.test(`GOVERNING_CONTEXT exige ${path}`, () => {
+      const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((item) => item !== path);
+      v2Error(() => validateContractV2(value, v2Deps()), "CANON_GOBERNANTE_AUSENTE");
+    });
+  }
+  await t.test("operación rutinaria sin fundamento resoluble rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({ resolveCanonicalReference: () => false })), "REFERENCIA_CANONICA_NO_RESUELTA");
+  });
+  await t.test("operación rutinaria delegada aunque exista capacidad estática rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "DELEGACION_RUTINARIA_PROHIBIDA");
+  });
+  await t.test("capacidad estática inexistente se rechaza", () => {
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "capacidad-inventada", naturaleza: "ACCION_FISICA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CAPACIDAD_ESTATICA_AUSENTE");
+  });
+  await t.test("categoría incompatible con operación rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Física", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CATEGORIA_INCOMPATIBLE_CON_OPERACION");
+  });
+  await t.test("acción física con categoría válida aceptada", () => {
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    assert.doesNotThrow(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()));
+  });
+  await t.test("identidad repetida produce ESTADO_CANONICO_DIVERGENTE", () => {
+    const value = v2Contract(); value.estado_canonico.proxima_accion.id = value.estado_canonico.accion_anterior.id;
+    v2Error(() => validateContractV2(value, v2Deps()), "ESTADO_CANONICO_DIVERGENTE");
+  });
+  await t.test("evidencia no resuelta invalida contrato", () => {
+    v2Error(() => validateContractV2(v2Contract(), v2Deps({ resolveEvidence: () => false })), "EVIDENCIA_CIERRE_NO_RESUELTA");
+  });
+  await t.test("resolvers son fakes inyectados", () => {
+    const calls = { ref: 0, evidence: 0 };
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({
+      resolveCanonicalReference: () => { calls.ref += 1; return true; }, resolveEvidence: () => { calls.evidence += 1; return true; },
+    }));
+    assert.deepEqual(calls, { ref: 1, evidence: 1 });
+  });
+});
+
+test("U1A schemas, pureza y desconexión operativa", async (t) => {
+  await t.test("schemas y validadores comparten vocabulario", () => {
+    assert.deepEqual(V2_RESULT_SCHEMA.properties.decision.enum, [...HANDOFF_V2_DECISIONS]);
+    assert.deepEqual(V2_SCHEMA.properties.modo.enum, ["solo_lectura", "ejecucion"]);
+    const economic = V2_SCHEMA.properties.impacto_economico.oneOf[1].properties;
+    assert.equal(Object.hasOwn(economic, "acumulado_observable"), false);
+    assert.equal(Object.hasOwn(economic, "remanente"), false);
+    assert.equal(V2_SCHEMA.properties.reintentos.properties.maximos.const, 0);
+  });
+  await t.test("módulo v2 sin imports effectful", () => {
+    const source = readFileSync(join(HERE, "handoff-contract-v2.mjs"), "utf8");
+    for (const forbidden of [/node:fs/, /node:child_process/, /env\.mjs/, /notify\.mjs/, /node:http/, /node:https/, /\bfetch\s*\(/, /Date\.now\s*\(/, /new Date\s*\(/]) assert.doesNotMatch(source, forbidden);
+  });
+  await t.test("poll no referencia v2", () => assert.doesNotMatch(poll.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("tick no referencia v2", () => assert.doesNotMatch(tick.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("invokeAgent no referencia v2", () => assert.doesNotMatch(invokeAgent.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("processIssue no referencia v2", () => {
+    const source = readFileSync(join(HERE, "handoff.mjs"), "utf8");
+    const start = source.indexOf("async function processIssue"); assert.notEqual(start, -1);
+    assert.doesNotMatch(source.slice(start, start + 7000), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/);
+    assert.doesNotMatch(source, /processIssueV2|executeV2Unit|acquireLeaseLock|heartbeatLeaseLock/);
+  });
+});
+
+test("U1A guardas observables: cero red, procesos y mutaciones compartidas", (t) => {
+  const effects = { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { effects.fetch += 1; throw new Error("fetch prohibido"); };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  for (const [target, key, counter] of [[http, "request", "http"], [https, "request", "https"], [childProcess, "spawn", "spawn"], [childProcess, "spawnSync", "spawnSync"], [childProcess, "execFile", "execFile"], [childProcess, "execFileSync", "execFileSync"]]) {
+    t.mock.method(target, key, () => { effects[counter] += 1; throw new Error(`${key} prohibido`); });
+  }
+  validateContractV2(v2Contract(), v2Deps()); validateResultV2(v2Result(), v2Contract(), v2Deps());
+  assert.deepEqual(effects, { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 });
+  const source = readFileSync(join(HERE, "handoff.test.mjs"), "utf8");
+  assert.match(source, /mkdtempSync\(join\(tmpdir\(\), "handoff-test-"\)\)/);
+  assert.doesNotMatch(source, /writeFileSync\((?:ROOT|HERE)/);
 });
