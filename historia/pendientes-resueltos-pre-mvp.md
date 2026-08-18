@@ -346,5 +346,7 @@ autorización, una de edición y otra de shell, descritas abajo.
 **Estado: RESUELTO.** [0014](../decisiones/0014-clases-de-cambio-y-verificaciones-exigidas.md)
 define las clases que reconoce el gate de `0013`, su piso de verificaciones, los
 casos de QA obligatorio y la regla específica para las pull requests de código
-del MVP. Las viñetas siguientes permanecen como mediciones durante las primeras
-pull requests; no son gates salvo que declaren expresamente ese alcance.
+del MVP. Las viñetas de aquellas mediciones se conservan como trabajo vivo en
+[Mediciones de las primeras pull requests del
+MVP](../pendientes.md#mediciones-de-las-primeras-pull-requests-del-mvp); no son
+gates salvo que declaren expresamente ese alcance.

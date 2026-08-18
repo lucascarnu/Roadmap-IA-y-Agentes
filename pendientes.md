@@ -430,10 +430,12 @@ prompts de permisos.
 
 #### Permisos de edición
 
-Hecho observado: en esa misma sesión nueva, después de que los cuatro comandos de
-lectura reutilizaran sus permisos persistidos sin pedir nada, el primer intento
-de modificar `pendientes.md` **volvió a pedir autorización de edición**. El
-usuario eligió permitir ediciones durante la sesión.
+Hecho observado: en la sesión de la [verificación histórica de
+permisos](historia/pendientes-resueltos-pre-mvp.md#permisos-y-ejecución-no-interactiva--evidencia-histórica),
+después de que los cuatro comandos de lectura reutilizaran sus permisos
+persistidos sin pedir nada, el primer intento de modificar `pendientes.md`
+**volvió a pedir autorización de edición**. El usuario eligió permitir ediciones
+durante la sesión.
 
 Conclusión: los **permisos shell persistidos** y la **autorización interactiva
 para editar archivos** son problemas distintos y se resuelven por separado. Una
@@ -445,8 +447,8 @@ aplica ninguna configuración.
 #### Diferencia entre Bash y PowerShell
 
 Hecho observado: existe una regla persistida `PowerShell(git push *)`, pero el
-push de esta rama se ejecutó **mediante Bash**. `Bash(git push *)` no estaba
-autorizado y apareció un prompt de permiso.
+push de la rama de aquella investigación se ejecutó **mediante Bash**.
+`Bash(git push *)` no estaba autorizado y apareció un prompt de permiso.
 
 Conclusión: autorizar una operación en PowerShell **no garantiza** que quede
 autorizada si el agente decide ejecutarla mediante Bash. El permiso está atado al
