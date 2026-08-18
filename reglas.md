@@ -135,6 +135,10 @@ artefacto no contiene instrucciones para convertirlo en operador. Si la
 continuación segura y su actor ya están definidos, la misma respuesta incluye el
 artefacto completo.
 
+Para garantizar que ese bloque no se corte por un cerco interior, el contenido final y definitivo se compone primero, incluidos todos los ejemplos, fragmentos de JSON o Markdown que vaya a contener. Sobre ese contenido ya terminado se calcula la mayor secuencia consecutiva de acentos graves que aparezca en cualquier punto, llamada N. El cerco exterior usa una secuencia de acentos graves estrictamente mayor que N, como mínimo N más uno, y la apertura y el cierre usan exactamente la misma longitud. Antes de entregar el artefacto se revisa de la primera a la última línea que exista un solo contenedor exterior, sin que ningún cerco interior lo haya cerrado antes de tiempo.
+
+Cuando sea razonable, se prefieren ejemplos indentados, texto descriptivo o un delimitador interior distinto al usado por fuera, porque reducen el riesgo de contar mal. Esto no prohíbe un cerco interior literal si el exterior queda estrictamente más largo: la condición es matemática, no una preferencia de estilo. Esta exigencia rige para los artefactos que el Director transporta manualmente; no se exige a los handoffs automáticos entre agentes salvo que su propio contrato técnico la requiera.
+
 ### Encabezado de destinatario
 
 Todo prompt dirigido a un rol concreto empieza con `DESTINATARIO: <ROL>` y una
