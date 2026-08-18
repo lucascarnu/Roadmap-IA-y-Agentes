@@ -29,8 +29,10 @@ La documentación oficial que respalda el diseño está registrada en
 con PowerShell; `Bash(git *)`, `Bash(gh *)`, `gh api` y `gh pr merge` siguen
 fuera de la superficie compartida. Los comentarios inline se leen mediante
 `scripts/get-pr-comments.ps1`; responder o resolver conversaciones no está
-autorizado. Las escrituras en `scripts/` y `.claude/` permanecen protegidas, y
-las reglas locales pueden ampliar accidentalmente la política candidata, por lo
+autorizado. Las escrituras en `scripts/` y `.claude/` permanecen protegidas; el
+ruleset server-side de `main` no cubre las ramas `claude/*` de `origin` — alcance
+completo en [0008](decisiones/0008-proteccion-server-side-de-main.md#costos-conocidos).
+Las reglas locales pueden ampliar accidentalmente la política candidata, por lo
 que no cuentan como evidencia de su autonomía. Las preguntas y pruebas todavía
 abiertas viven en
 [Permisos y ejecución no interactiva](pendientes.md#permisos-y-ejecución-no-interactiva).

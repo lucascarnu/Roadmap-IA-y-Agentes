@@ -15,9 +15,10 @@ Cada asunto activo declara su **estado**: `ABIERTO`, `PARCIAL` o
 separado su **evidencia**, según los estados definidos en
 [`reglas.md`](reglas.md#estados-de-evidencia).
 
-Los asuntos cerrados y su evidencia se conservan en
-[Pendientes resueltos PRE-MVP](historia/pendientes-resueltos-pre-mvp.md). Ese
-archivo es historia y no forma parte del trabajo vivo.
+Los asuntos ya cerrados de esta fase y su evidencia se conservan en [Pendientes
+resueltos PRE-MVP](historia/pendientes-resueltos-pre-mvp.md). Un cierre de una
+fase posterior usa su propio archivo histórico, con el mismo criterio de
+separación.
 
 ## Automatización del workflow de desarrollo asistido
 
@@ -26,7 +27,8 @@ handoff y review pipeline pasan 126/126. El puente y el pipeline todavía no est
 validados como circuito autónomo completo: la PR #97 utilizó transporte humano y
 runners ad hoc. Autorización, presupuesto, reintentos y siguiente estado no
 están representados completamente por los schemas principales. Handoff v2 queda
-diferido hasta retomar la automatización.
+diferido hasta retomar la automatización. Lo que no cabe acá es la argumentación:
+esa vive en las decisiones.
 
 Las decisiones del workflow viven en
 [0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md),
