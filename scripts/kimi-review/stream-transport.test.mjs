@@ -7,7 +7,13 @@ import {
   buildIdempotencyMarker,
   createSseParser,
   DEFAULT_MAX_COMPLETION_TOKENS,
+  FINDING_EVIDENCE_STATUSES,
+  FINDING_IMPACTS,
+  FINDING_ORIGINS,
   OUTPUT_TOKEN_PARAMETER,
+  REVIEW_JSON_SCHEMA,
+  REVIEW_RESPONSE_FORMAT,
+  REVIEW_VERDICTS,
   runStreamingReview,
   STREAM_TIMEOUT_CODES,
   validateReviewContract,
@@ -100,6 +106,7 @@ async function run(chunks = validChunks(), overrides = {}) {
     idFactory: () => "attempt-synthetic",
     timeouts: overrides.timeouts,
     scheduler: overrides.scheduler,
+    responseFormat: overrides.responseFormat,
   });
   return { result, capture, order };
 }
@@ -224,6 +231,25 @@ test("line conserva contrato estricto de entero o null", () => {
   assert.equal(
     validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [{ ...baseFinding, line: "190" }] }, HEAD).valid,
     false,
+  );
+});
+
+test("validación local rechaza propiedades adicionales en raíz y findings", () => {
+  const finding = {
+    impact: "M3",
+    evidence_status: "SETTLED",
+    origin: "DIFF",
+    file: "probe.js",
+    line: 190,
+    issue: "probe",
+  };
+  assert.deepEqual(
+    validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [finding], extra: true }, HEAD).errors,
+    ["REVIEW_PROPERTIES_INVALID"],
+  );
+  assert.deepEqual(
+    validateReviewContract({ head: HEAD, verdict: "CAMBIOS_REQUERIDOS", findings: [{ ...finding, extra: true }] }, HEAD).errors,
+    ["FINDING_INVALID"],
   );
 });
 
@@ -520,6 +546,67 @@ test("max_completion_tokens llega intacto a la fábrica inyectada", async () => 
   assert.equal(Object.hasOwn(body, "max_tokens"), false);
   assert.equal(body.stream, true);
   assert.deepEqual(body.stream_options, { include_usage: true });
+});
+
+test("payload siempre contiene response_format json_schema estricto exacto", async () => {
+  const capture = {};
+  await run(validChunks(), { capture });
+  const body = JSON.parse(capture.request.body);
+  assert.deepEqual(body.response_format, REVIEW_RESPONSE_FORMAT);
+  assert.equal(body.response_format.type, "json_schema");
+  assert.equal(body.response_format.json_schema.strict, true);
+  assert.deepEqual(body.response_format.json_schema.schema, REVIEW_JSON_SCHEMA);
+});
+
+test("ninguna opción del llamador puede desactivar el esquema estricto", async () => {
+  const capture = {};
+  await run(validChunks(), { capture, responseFormat: null });
+  const body = JSON.parse(capture.request.body);
+  assert.deepEqual(body.response_format, REVIEW_RESPONSE_FORMAT);
+});
+
+test("schema declara anulables, required y objetos cerrados", () => {
+  const finding = REVIEW_JSON_SCHEMA.properties.findings.items;
+  assert.deepEqual(REVIEW_JSON_SCHEMA.required, ["head", "verdict", "findings"]);
+  assert.deepEqual(finding.required, ["impact", "evidence_status", "origin", "file", "line", "issue"]);
+  assert.deepEqual(finding.properties.file.type, ["string", "null"]);
+  assert.deepEqual(finding.properties.line.type, ["integer", "null"]);
+  assert.equal(REVIEW_JSON_SCHEMA.additionalProperties, false);
+  assert.equal(finding.additionalProperties, false);
+});
+
+test("schema y validador comparten los arrays canónicos de enums", () => {
+  const properties = REVIEW_JSON_SCHEMA.properties;
+  const findingProperties = properties.findings.items.properties;
+  assert.strictEqual(properties.verdict.enum, REVIEW_VERDICTS);
+  assert.strictEqual(findingProperties.impact.enum, FINDING_IMPACTS);
+  assert.strictEqual(findingProperties.evidence_status.enum, FINDING_EVIDENCE_STATUSES);
+  assert.strictEqual(findingProperties.origin.enum, FINDING_ORIGINS);
+  for (const verdict of REVIEW_VERDICTS) {
+    assert.equal(validateReviewContract({ head: HEAD, verdict, findings: [] }, HEAD).valid, true);
+  }
+  const finding = { impact: "M1", evidence_status: "SETTLED", origin: "DIFF", file: null, line: null, issue: "probe" };
+  for (const impact of FINDING_IMPACTS) {
+    assert.equal(validateReviewContract({ head: HEAD, verdict: "APROBADO", findings: [{ ...finding, impact }] }, HEAD).valid, true);
+  }
+  for (const evidence_status of FINDING_EVIDENCE_STATUSES) {
+    assert.equal(validateReviewContract({ head: HEAD, verdict: "APROBADO", findings: [{ ...finding, evidence_status }] }, HEAD).valid, true);
+  }
+  for (const origin of FINDING_ORIGINS) {
+    assert.equal(validateReviewContract({ head: HEAD, verdict: "APROBADO", findings: [{ ...finding, origin }] }, HEAD).valid, true);
+  }
+});
+
+test("arrays canónicos están congelados y no admiten mutación", () => {
+  const domains = [REVIEW_VERDICTS, FINDING_IMPACTS, FINDING_EVIDENCE_STATUSES, FINDING_ORIGINS];
+  const snapshots = domains.map((domain) => [...domain]);
+  for (const domain of domains) {
+    assert.equal(Object.isFrozen(domain), true);
+    assert.throws(() => domain.push("MUTATION_FORBIDDEN"), TypeError);
+  }
+  assert.deepEqual(domains.map((domain) => [...domain]), snapshots);
+  assert.equal(REVIEW_JSON_SCHEMA.properties.verdict.enum.includes("MUTATION_FORBIDDEN"), false);
+  assert.equal(validateReviewContract({ head: HEAD, verdict: "MUTATION_FORBIDDEN", findings: [] }, HEAD).valid, false);
 });
 
 test("transporte ensambla un informe durable válido", async () => {

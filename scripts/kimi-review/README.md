@@ -24,10 +24,11 @@ pueden traer `usage: null`, y `finish_reason` sólo se acepta cuando el chunk fi
 lo informa como `stop`.
 
 El transporte reconstruye `content`, captura `reasoning_content` cuando aparece
-y valida el JSON localmente. Su forma en streaming y la compatibilidad de
-structured output estricto con streaming permanecen no documentadas; ninguna de
-las dos se presupone. Un stream sin `[DONE]`, `finish_reason: stop` o usage final
-se clasifica incompleto.
+y valida el JSON localmente. La forma de `reasoning_content` en streaming sigue
+no documentada. Structured Output estricto es obligatorio: cada request incluye
+un `response_format` cerrado y no existe una opción para desactivarlo o degradarlo.
+Una vía que lo rechace detiene el circuito para arbitraje. Un stream sin `[DONE]`,
+`finish_reason: stop` o usage final se clasifica incompleto.
 
 Los generadores de paquetes deben exigir que `findings[].line` sea un número
 entero JSON sin comillas o `null`; un string numérico no es válido y no se
@@ -99,9 +100,26 @@ traza interna del proveedor. Esta evidencia tampoco demuestra que reducir el
 paquete hubiera sido irrelevante.
 
 Una latencia de 15 minutos 23 segundos no satisface el tiempo operativo aceptable
-para un reviewer cotidiano de varias rondas. Mientras esa latencia no se
-resuelva, Kimi no se considera reviewer principal del camino crítico: queda como
-contingencia o segunda opinión, pendiente de una decisión durable posterior.
+para un reviewer cotidiano de varias rondas. La asignación vigente del rol vive
+en `equipo.md`: este README no la fija ni la modifica, y la evidencia de latencia
+no cambia por sí sola el rol vigente. El dato queda disponible para una decisión
+posterior de asignación.
+
+### Structured Output estricto — PROBADO LOCALMENTE
+
+La combinación de streaming y Structured Output estricto se probó localmente
+con `kimi-k2.7-code-highspeed`: HTTP 200, Content-Type `text/event-stream`, 324
+eventos SSE, `finish_reason: stop`, usage presente, `[DONE]` presente y JSON
+contractual completo y parseable. `line` llegó como integer y el costo calculado
+fue USD 0,0031669.
+
+El esquema estricto previene el defecto de tipo observado en la corrida anterior,
+donde `line` llegó como string. La validación local permanece obligatoria como
+segunda barrera y el esquema estricto no puede desactivarse. Una vía incompatible
+detiene el circuito para arbitraje. La latencia de una review real con HighSpeed
+todavía no está medida: esta sonda funcional no permite extrapolar la latencia de
+una review completa. La combinación tampoco se declara probada en
+`kimi-k2.7-code` estándar.
 
 ## Verificación
 

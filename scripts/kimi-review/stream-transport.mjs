@@ -7,6 +7,52 @@ import { assembleReport } from "./report.mjs";
 export const OUTPUT_TOKEN_PARAMETER = "max_completion_tokens";
 export const DEFAULT_MAX_COMPLETION_TOKENS = 32768;
 
+export const REVIEW_VERDICTS = Object.freeze(["APROBADO", "CAMBIOS_REQUERIDOS"]);
+export const FINDING_IMPACTS = Object.freeze(["M1", "M2", "M3", "O"]);
+export const FINDING_EVIDENCE_STATUSES = Object.freeze(["SETTLED", "NEEDS_EVIDENCE", "UNVERIFIABLE"]);
+export const FINDING_ORIGINS = Object.freeze(["DIFF", "REPOSITORY_FILE", "GITHUB_STATE", "ACTIONS_RUN", "NONE"]);
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+export const REVIEW_JSON_SCHEMA = deepFreeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["head", "verdict", "findings"],
+  properties: {
+    head: { type: "string" },
+    verdict: { type: "string", enum: REVIEW_VERDICTS },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["impact", "evidence_status", "origin", "file", "line", "issue"],
+        properties: {
+          impact: { type: "string", enum: FINDING_IMPACTS },
+          evidence_status: { type: "string", enum: FINDING_EVIDENCE_STATUSES },
+          origin: { type: "string", enum: FINDING_ORIGINS },
+          file: { type: ["string", "null"] },
+          line: { type: ["integer", "null"] },
+          issue: { type: "string" },
+        },
+      },
+    },
+  },
+});
+
+export const REVIEW_RESPONSE_FORMAT = deepFreeze({
+  type: "json_schema",
+  json_schema: {
+    name: "kimi_review",
+    strict: true,
+    schema: REVIEW_JSON_SCHEMA,
+  },
+});
+
 export const STREAM_TIMEOUTS = Object.freeze({
   connectMs: 10_000,
   firstEventMs: 180_000,
@@ -166,14 +212,20 @@ export function createHttpsRequestFactory() {
   };
 }
 
+const REVIEW_KEYS = Object.freeze(["head", "verdict", "findings"]);
+const FINDING_KEYS = Object.freeze(["impact", "evidence_status", "origin", "file", "line", "issue"]);
+
+function hasExactKeys(value, expected) {
+  const actual = Object.keys(value);
+  return actual.length === expected.length && expected.every((key) => Object.hasOwn(value, key));
+}
+
 function validateFinding(finding) {
-  const impacts = new Set(["M1", "M2", "M3", "O"]);
-  const evidence = new Set(["SETTLED", "NEEDS_EVIDENCE", "UNVERIFIABLE"]);
-  const origins = new Set(["DIFF", "REPOSITORY_FILE", "GITHUB_STATE", "ACTIONS_RUN", "NONE"]);
   return finding && typeof finding === "object" && !Array.isArray(finding)
-    && impacts.has(finding.impact)
-    && evidence.has(finding.evidence_status)
-    && origins.has(finding.origin)
+    && hasExactKeys(finding, FINDING_KEYS)
+    && FINDING_IMPACTS.includes(finding.impact)
+    && FINDING_EVIDENCE_STATUSES.includes(finding.evidence_status)
+    && FINDING_ORIGINS.includes(finding.origin)
     && (finding.file === null || typeof finding.file === "string")
     && (finding.line === null || Number.isInteger(finding.line))
     && typeof finding.issue === "string";
@@ -183,8 +235,9 @@ export function validateReviewContract(review, expectedHead) {
   const errors = [];
   if (!review || typeof review !== "object" || Array.isArray(review)) errors.push("REVIEW_NOT_OBJECT");
   else {
+    if (!hasExactKeys(review, REVIEW_KEYS)) errors.push("REVIEW_PROPERTIES_INVALID");
     if (review.head !== expectedHead) errors.push("HEAD_MISMATCH");
-    if (!["APROBADO", "CAMBIOS_REQUERIDOS"].includes(review.verdict)) errors.push("VERDICT_INVALID");
+    if (!REVIEW_VERDICTS.includes(review.verdict)) errors.push("VERDICT_INVALID");
     if (!Array.isArray(review.findings)) errors.push("FINDINGS_NOT_ARRAY");
     else if (!review.findings.every(validateFinding)) errors.push("FINDING_INVALID");
   }
@@ -268,6 +321,7 @@ export async function runStreamingReview(options) {
     stream_options: { include_usage: true },
     thinking,
     max_completion_tokens: maxCompletionTokens,
+    response_format: REVIEW_RESPONSE_FORMAT,
   };
   const state = {
     attemptId,
