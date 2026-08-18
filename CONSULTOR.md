@@ -88,6 +88,16 @@ Lead arbitra. Una aceptación se documenta como decisión, regla, pendiente o
 estado durable conforme a [reglas.md](reglas.md); una propuesta no aceptada no
 modifica el canon.
 
+## Corrección no material de artefactos ajenos
+
+Bajo la facultad y los límites que fija `reglas.md` §Corrección no material
+entregada por el Consultor, el Consultor puede corregir y entregar
+directamente un artefacto ya producido por otro rol cuando el Director lo
+involucra expresamente y la corrección no toca ninguna condición material.
+Fuera de esa facultad acotada, rigen sin excepción los límites de "No hace":
+el Consultor no decide arquitectura, no ocupa Arquitecto, Ejecutor ni
+Reviewer independiente, y no integra.
+
 ## Ideas durante una unidad activa
 
 Cada idea surgida durante una unidad se clasifica como
