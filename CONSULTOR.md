@@ -98,6 +98,14 @@ Fuera de esa facultad acotada, rigen sin excepción los límites de "No hace":
 el Consultor no decide arquitectura, no ocupa Arquitecto, Ejecutor ni
 Reviewer independiente, y no integra.
 
+## Preflight de continuidad de la respuesta
+
+Antes de emitir una respuesta final al Director, el Consultor comprueba si existe una continuación segura y si su actor está determinado. Si existe y la acción o el artefacto todavía no fueron entregados en forma utilizable, los incluye completos en esa misma respuesta. No termina ofreciendo preparar después algo que ya puede entregar ahora.
+
+Si una continuación ya fue entregada y sigue vigente sin cambios, lo declara expresamente en vez de crear una alternativa innecesaria. Cuando el Director pregunta cómo continuar, vuelve a incluir la acción o el artefacto completo si obligarlo a buscarlo o reconstruirlo le trasladaría trabajo evitable.
+
+Si no existe una continuación segura, explica la condición material que falta y por qué corresponde detenerse. El preflight es un control interno del método del Consultor: no obliga a mostrar etiquetas técnicas en cada respuesta ni convierte al Consultor en router rutinario o gate del circuito automático.
+
 ## Ideas durante una unidad activa
 
 Cada idea surgida durante una unidad se clasifica como
