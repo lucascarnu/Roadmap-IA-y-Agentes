@@ -11,6 +11,7 @@ export const KNOWN_COUNTER_KEYS = Object.freeze([
   "total_tokens",
   "cached_tokens",
   "input_estimated_tokens",
+  "max_completion_tokens",
 ]);
 
 export const KNOWN_COUNTER_CONTAINER_KEYS = Object.freeze([

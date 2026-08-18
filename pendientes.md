@@ -234,6 +234,28 @@ política permanente.
 de una review. No reemplazan la clase de cambio de `0014`, no permiten reducir el
 rigor por costo y requieren más benchmarks antes de canonizarse.
 
+**Descubrimiento de modelos y variantes. Estado: ABIERTO. Clasificación:
+DURANTE_MVP; no bloqueante.** Antes de fijar un modelo o una vía para una función
+durable, y nuevamente cuando la vía incumpla su objetivo de latencia, costo,
+disponibilidad o formato, se consulta el catálogo oficial vigente del proveedor
+y su documentación oficial de precios y capacidades. La comparación registra
+como mínimo identificador exacto, disponibilidad para la cuenta, contexto,
+throughput o latencia declarada, precio, streaming, Structured Output y
+restricciones relevantes.
+
+No se realiza esta consulta en cada review. Sus disparadores son la calibración
+inicial, un cambio anunciado por el proveedor o un incumplimiento operativo
+observado. La existencia de una variante no determina automáticamente que sea
+mejor ni modifica asignaciones de roles: sólo produce candidatos verificables
+para la calibración.
+
+Como evidencia, `kimi-k2.7-code-highspeed` estaba disponible en el catálogo
+oficial y sólo fue descubierto después de observar una review del modelo estándar
+que demoró 15 minutos y 23 segundos. Una consulta del catálogo durante la
+recalibración provocada por esa latencia lo habría expuesto antes. El bloque
+permanece como evidencia e hipótesis operativa; no modifica el canon ni crea una
+política permanente.
+
 **Selección de modelo.** La hipótesis en prueba es preferir la vía por
 suscripción mientras tenga cuota, usar un modelo API económico como contingencia
 y reservar un modelo más caro o profundo para un escalamiento deliberado. La
