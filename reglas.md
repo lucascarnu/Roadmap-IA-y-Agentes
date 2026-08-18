@@ -17,6 +17,38 @@ cadena de roles sólo para repetir una autorización ya satisfecha. Se escala
 cuando cambia alguno de los límites del sobre, se agota o falta una decisión que
 la evidencia técnica no puede resolver.
 
+### Corrección no material entregada por el Consultor
+
+Cuando el Director involucra expresamente al Consultor sobre un objetivo o
+sobre ya autorizado, y el Consultor detecta en un artefacto ya producido por
+otro rol una corrección que no cambia ninguna de estas condiciones — objetivo
+y alcance; objeto y HEAD; arquitectura y decisiones vigentes; presupuesto y
+vía autorizada; riesgo y credenciales; mutaciones permitidas; gates,
+veredictos y autoridad de integración; destinatario competente —, el
+Consultor puede corregirlo y entregarlo directamente al siguiente actor, sin
+devolución previa al rol que lo produjo.
+
+Ante duda razonable sobre si una corrección es material, se trata como
+material: se devuelve al rol con autoridad, no se decide por conveniencia.
+Esta facultad corrige un artefacto ya existente; no autoriza al Consultor a
+redactar uno desde cero en nombre de otro rol, y se agota en una corrección
+por artefacto — si la versión corregida todavía tiene un problema, la segunda
+vuelta va al rol con autoridad, no a una segunda corrección directa.
+
+Esta vía se activa por decisión del Director sobre una interacción concreta;
+el Consultor no se convierte en relay obligatorio del circuito automático
+entre Arquitecto y Ejecutor, que sigue sus contratos y devoluciones normales
+sin que el Director intervenga. Fuera de esta facultad, el Consultor
+conserva sus límites de siempre — no decide arquitectura, no ocupa
+Arquitecto, Ejecutor ni Reviewer, no integra — según los detalla
+`CONSULTOR.md`.
+
+Cuando el Consultor entrega un artefacto por esta vía, el mensaje declara
+`REMITENTE: DIRECTOR / PRODUCT OWNER`, `ORIGEN_DE_PROPUESTA: CODEX —
+CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA`, un único `DESTINATARIO`, y
+a qué actor debe devolverse el resultado. La firma final identifica siempre
+al actor real que ejecutó, no a quien corrigió el prompt.
+
 ## Alcance y autorización de cambios
 
 - Distinguir entre tareas de consulta y tareas de ejecución.
