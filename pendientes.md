@@ -348,7 +348,11 @@ El estado operativo se registra por vía, sin colapsar dimensiones distintas:
   Codex en los Issues
   [#72](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/72),
   [#74](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/74) y
-  [#76](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/76).
+  [#76](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/76). La API con
+  saldo preexistente produjo además una review válida sobre
+  [PR #99](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/99), conservada
+  en el [Issue #100](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/100)
+  y en los comentarios de la propia PR.
 - **PRIORIDAD.** Intentar primero suscripción o membresía cuando tenga cuota; si
   no, usar la API preautorizada dentro de sus límites; si tampoco está
   disponible, recurrir a una contingencia gratuita o detener de forma segura
@@ -370,10 +374,11 @@ El estado operativo se registra por vía, sin colapsar dimensiones distintas:
 
 - **AUTORIZACIÓN.** Participó históricamente; hoy no es una vía autorizada del
   circuito.
-- **CAPACIDAD.** Existió y el workflow sigue instalado en el repositorio.
-- **ESTADO.** **NO OPERATIVO.** La review automática falla en las pull requests;
-  el [Issue #87](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/87)
-  trata ese disparo.
+- **CAPACIDAD.** El workflow permanece instalado, pero PR #96 desactivó su
+  disparo automático. Sólo queda disponible la invocación manual
+  `@gemini-cli /review`, que no fue revalidada.
+- **ESTADO.** **NO OPERATIVO.** No se ejecuta automáticamente ni se selecciona o
+  sondea por inercia.
 - **PRIORIDAD.** No se selecciona ni se sondea.
 - **CONDICIÓN_DE_REVALIDACIÓN.** Nueva autorización del Director, crédito o
   suscripción nuevos, cambio de configuración, o una prueba controlada pedida
@@ -385,10 +390,10 @@ transcurrido, cambio de plan o cuota renovada; no como primer paso automático d
 cada pull request. Esto registra estado durable y no implementa backoff, máquina
 de estados ni telemetría nueva.
 
-El último balance observado conocido antes de que se reflejara un eventual cargo
-de K2.7 fue: `available_balance = USD 9.2436695`, `voucher_balance = USD
-4.24367`, `cash_balance = USD 5.00`. Es información operacional temporal, no un
-valor permanente, y puede actualizarse cuando exista nueva evidencia observada.
+El saldo exacto no se conserva como estado durable: cambia con cada llamada y
+puede reflejar cargos de forma diferida. Cada preflight consulta el balance
+observable de ese momento y conserva la medición en la telemetría del intento.
+Repositorio y GitHub no permiten determinar el balance actual.
 
 ### Agente investigador de soluciones externas
 
@@ -413,11 +418,13 @@ a tener evidencia de uso.
 
 #### SuperGrok como reviewer
 
-**Estado: ABIERTO. Clasificación: FUTURO / EXPERIMENTAL.** Evaluar si Grok puede
-incorporarse como reviewer usando exclusivamente la suscripción SuperGrok
-existente. Cuando se ejecute, comparar `Claude → Grok` y `Codex → Grok` sobre un
-paquete congelado equivalente y observar autenticación efectiva, capacidad,
-límites, continuidad y calidad.
+**Estado: ABIERTO. Clasificación: CONTINGENCIA EVALUADA / DURANTE_MVP.** La vía
+de suscripción SuperGrok fue instalada, autenticada y probada localmente sobre PR
+#97 mediante Grok Build CLI, sin xAI API PAYG. No produjo una review válida: los
+intentos terminaron por límites o falta de convergencia del harness. La
+autenticación y disponibilidad de modelos no alcanzan para declarar la vía
+operativa como reviewer. La evaluación fallida no demuestra incapacidad general
+del modelo, sólo que la combinación probada no fue viable.
 
 La propuesta no autoriza xAI API PAYG, compra adicional, recarga ni gasto
 variable. No es PRE-MVP y una sola prueba no modifica la asignación vigente ni
