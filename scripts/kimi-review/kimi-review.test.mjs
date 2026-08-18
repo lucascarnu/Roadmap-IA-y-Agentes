@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import http from "node:http";
+import https from "node:https";
 
 import { sanitize, SANITIZE_MARKERS } from "./sanitize.mjs";
 import { assembleReport, REPORT_MARKERS, verifyReport } from "./report.mjs";
@@ -11,6 +13,26 @@ import { assembleReport, REPORT_MARKERS, verifyReport } from "./report.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REVIEW = { head: "a".repeat(40), verdict: "APROBADO", findings: [] };
 let networkRequests = 0;
+const originalNetwork = {
+  fetch: globalThis.fetch,
+  httpRequest: http.request,
+  httpsRequest: https.request,
+};
+
+function rejectRealNetwork() {
+  networkRequests += 1;
+  throw new Error("REAL_NETWORK_FORBIDDEN_IN_TESTS");
+}
+
+globalThis.fetch = rejectRealNetwork;
+http.request = rejectRealNetwork;
+https.request = rejectRealNetwork;
+
+test.after(() => {
+  globalThis.fetch = originalNetwork.fetch;
+  http.request = originalNetwork.httpRequest;
+  https.request = originalNetwork.httpsRequest;
+});
 
 test("preserva prompt_tokens numérico", () => {
   assert.equal(sanitize({ prompt_tokens: 11 }).prompt_tokens, 11);
@@ -208,7 +230,14 @@ test("módulos durables no contienen transporte ni rutas personales", () => {
 });
 
 test("archivos versionados no contienen rutas personales", () => {
-  for (const name of ["sanitize.mjs", "report.mjs", "kimi-review.test.mjs", "README.md"]) {
+  for (const name of [
+    "sanitize.mjs",
+    "report.mjs",
+    "kimi-review.test.mjs",
+    "stream-transport.mjs",
+    "stream-transport.test.mjs",
+    "README.md",
+  ]) {
     assert.doesNotMatch(readFileSync(join(HERE, name), "utf8"), /C:\\Users\\/i);
   }
 });
