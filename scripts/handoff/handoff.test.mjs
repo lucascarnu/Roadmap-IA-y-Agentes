@@ -10,6 +10,8 @@ import {
   parseContractBody, poll, prepareInput, sha256, tick,
   validateContract, validateResult, validateContractV2, validateResultV2, executeDeclaredOperation,
   executeV2Unit, snapshotVersionedPaths, detectPostMutations, acquireLeaseLock, releaseLeaseLock,
+  heartbeatLeaseLock, HANDOFF_V2_RUNTIME_OPERATIONS, processIssue, reserveEconomicBudget,
+  reconcileEconomicBudget, startLeaseHeartbeat,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
@@ -359,9 +361,10 @@ function schemaTokens(schema) {
 
 const V2_ACTORS = {
   roles: {
-    DIRECTOR_PRODUCT_OWNER: { actor: "Lucas", adapter: "reglas.md", capacidades: ["accion_fisica", "autorizacion_economica"] },
-    ARQUITECTO_LEAD: { actor: "Claude", adapter: "CLAUDE.md", capacidades: ["arbitraje", "arquitectura"] },
-    EJECUTOR_PRINCIPAL: { actor: "Codex", adapter: "AGENTS.md", capacidades: ["git", "github", "red", "filesystem"] },
+    DIRECTOR_PRODUCT_OWNER: { actor: "Lucas", agent: null, adapter: "reglas.md", capacidades: ["accion_fisica", "autorizacion_economica"] },
+    ARQUITECTO_LEAD: { actor: "Claude", agent: "claude", adapter: "CLAUDE.md", capacidades: ["arbitraje", "arquitectura"] },
+    EJECUTOR_PRINCIPAL: { actor: "Codex", agent: "codex", adapter: "AGENTS.md", capacidades: ["git", "github", "red", "filesystem"] },
+    ORQUESTADOR_HANDOFF: { actor: "handoff.mjs", agent: null, adapter: "scripts/handoff/README.md", capacidades: ["orquestacion"] },
   },
 };
 
@@ -382,12 +385,13 @@ function v2Contract(overrides = {}) {
     handoff_version: "2",
     tarea: "Construir una unidad de ejecución sintética.",
     head_sha: HEAD,
-    contexto_autorizado: ["CLAUDE.md", "AGENTS.md", "reglas.md"],
+    contexto_autorizado: [...GOVERNING_CONTEXT.common, "CLAUDE.md", "AGENTS.md"],
+    resultado_previo: null,
     origen: { ejecutor: "Claude", rol: "ARQUITECTO_LEAD" },
     destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["git"] },
     modo: "ejecucion",
     mutaciones_permitidas: ["fixture/output.txt"],
-    operaciones_permitidas: [{ tipo: "git", objetivo: "commit" }],
+    operaciones_permitidas: [...HANDOFF_V2_RUNTIME_OPERATIONS.map((item) => ({ ...item })), { tipo: "git", objetivo: "commit" }],
     impacto_economico: { tipo: "no_aplica" },
     reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
     transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
@@ -398,6 +402,7 @@ function v2Contract(overrides = {}) {
       head_reconciliacion: HEAD,
     },
     operaciones_delegadas_a_humanos: [],
+    profundidad_cadena: 1,
     ...overrides,
   };
 }
@@ -1270,11 +1275,14 @@ test("F1: caída después de running se recupera una vez sin duplicar publicaci�
       afterClaim: () => { throw new CrashSimulation(); },
     },
     preserveGlobalLock: true,
+    lockLeaseMs: 10,
+    lockNow: 1,
   });
   await assert.rejects(() => poll(fx.options), CrashSimulation);
   assert(backend.issues[0].labels.has("handoff:running"));
   delete fx.options.hooks;
   delete fx.options.preserveGlobalLock;
+  fx.options.lockNow = 12;
   try {
     const recovered = await poll(fx.options);
     assert.equal(recovered.processed[0].status, "done");
@@ -1289,11 +1297,13 @@ test("F1: una segunda caída consecutiva agota el reintento y bloquea", async ()
     preserveLockOnCrash: true,
     afterClaim: () => { throw new CrashSimulation(); },
   };
-  const fx = fixture(backend, { hooks: crashHooks, preserveGlobalLock: true });
+  const fx = fixture(backend, { hooks: crashHooks, preserveGlobalLock: true, lockLeaseMs: 10, lockNow: 1 });
   await assert.rejects(() => poll(fx.options), CrashSimulation);
+  fx.options.lockNow = 12;
   await assert.rejects(() => poll(fx.options), CrashSimulation);
   delete fx.options.hooks;
   delete fx.options.preserveGlobalLock;
+  fx.options.lockNow = 23;
   try {
     const blocked = await poll(fx.options);
     assert.equal(blocked.processed.length, 0);
@@ -1867,17 +1877,24 @@ test("tick no toca una unidad que también tiene label terminal", async () => {
   } finally { clean(fx); }
 });
 
-test("tick respeta lock vivo y recupera lock de proceso muerto", async () => {
+test("tick respeta lease activo y recupera lease expirado", async () => {
   const lockedFx = fixture(new FakeBackend());
   const liveLock = join(lockedFx.options.runtimeDir, "poll.lock");
-  assert.equal(acquireLock(liveLock), true);
+  const now = Date.now();
+  assert.equal(acquireLock(liveLock, {
+    lease_id: "live", owner_instance_id: "live-owner", acquired_at_ms: now,
+    heartbeat_at_ms: now, expires_at_ms: now + 60_000,
+  }), true);
   try {
     assert.deepEqual(await tick(lockedFx.options), { status: "locked", promovidas: [], poll: null });
   } finally { clean(lockedFx); }
 
   const recoveredFx = fixture(new FakeBackend());
   const deadLock = join(recoveredFx.options.runtimeDir, "poll.lock");
-  assert.equal(acquireLock(deadLock, { pid: 999999, created_at: "2026-08-13T00:00:00.000Z" }), true);
+  assert.equal(acquireLock(deadLock, {
+    lease_id: "expired", owner_instance_id: "ended-process", acquired_at_ms: 1,
+    heartbeat_at_ms: 1, expires_at_ms: 2,
+  }), true);
   try {
     assert.deepEqual(await tick(recoveredFx.options), { status: "complete", promovidas: [], poll: null });
     assert.equal(existsSync(deadLock), false);
@@ -2149,7 +2166,10 @@ test("v2: unidad de ejecución se representa, ejecuta y valida", async () => {
 });
 
 test("v2: unidad de solo lectura sigue validando", () => {
-  const value = v2Contract({ modo: "solo_lectura", mutaciones_permitidas: [], operaciones_permitidas: [] });
+  const value = v2Contract({
+    modo: "solo_lectura", mutaciones_permitidas: [],
+    operaciones_permitidas: HANDOFF_V2_RUNTIME_OPERATIONS.map((item) => ({ ...item })),
+  });
   assert.equal(validateContractV2(value, v2Context()).modo, "solo_lectura");
 });
 
@@ -2219,7 +2239,7 @@ test("v2: acción física con categoría canónica válida se acepta", () => {
 
 test("v2: actor se resuelve por rol, capacidad y adapter obligatorio", () => {
   assert.equal(validateContractV2(v2Contract(), v2Context()).destinatario.rol, "EJECUTOR_PRINCIPAL");
-  const value = v2Contract({ contexto_autorizado: ["CLAUDE.md", "reglas.md"] });
+  const value = v2Contract({ contexto_autorizado: [...GOVERNING_CONTEXT.common, "CLAUDE.md"] });
   assert.throws(() => validateContractV2(value, v2Context()), (error) => error.code === "ADAPTER_FUERA_DE_CONTEXTO");
 });
 
@@ -2283,4 +2303,230 @@ test("v2: ninguna ruta fallida ejecuta red, gasto ni mutación", async () => {
 
 test("v2: contrato handoff_version 1 se rechaza con código propio sin reinterpretación", () => {
   assert.throws(() => validateContractV2(contract(), v2Context()), (error) => error.code === "CONTRATO_VERSION_NO_SOPORTADA");
+});
+
+test("v2: el entrypoint operativo processIssue persiste un resultado v2 validado", async () => {
+  const backend = new FakeBackend([{
+    number: 109, title: "unidad v2", body: issueBody(v2Contract()),
+    createdAt: "2026-08-18T00:00:00Z",
+  }]);
+  const fx = fixture(backend);
+  mkdirSync(fx.options.runtimeDir, { recursive: true });
+  mkdirSync(fx.options.artifactsDir, { recursive: true });
+  let invocations = 0;
+  try {
+    const result = await processIssue({
+      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
+      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
+      actors: V2_ACTORS,
+      invoke: async () => {
+        invocations += 1;
+        return { result: v2Result(), telemetry: { fixture: true }, duration_ms: 1 };
+      },
+      authObserver: fx.options.authObserver,
+      run: runProcess,
+      issueLeaseMs: 1_000,
+      issueHeartbeatMs: 20,
+    }, backend.issues[0]);
+    assert.equal(result.status, "done", JSON.stringify(result));
+    assert.equal(invocations, 1);
+    const state = JSON.parse(readFileSync(waitStatePath(fx, 109), "utf8"));
+    assert.equal(state.phase, "done");
+    const persisted = JSON.parse(readFileSync(join(state.run_dir, "result.validated.json"), "utf8"));
+    assert.equal(persisted.handoff_version, "2");
+    assert.equal(persisted.decision, "SIN_OBJECIONES");
+    assert(backend.issues[0].labels.has("handoff:done"));
+  } finally { clean(fx); }
+});
+
+test("v2: una excepción del agente no oculta una mutación posterior fuera del sobre", async () => {
+  let snapshots = 0;
+  await assert.rejects(executeV2Unit(v2Contract(), {
+    validationContext: v2Context(),
+    snapshotVersioned: async () => (++snapshots === 1 ? { "fuera.md": "antes" } : { "fuera.md": "después" }),
+    invoke: async () => { throw new Error("fallo del agente después de escribir"); },
+  }), (error) => error.code === "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
+  assert.equal(snapshots, 2);
+});
+
+test("v2: el entrypoint real detecta en finally una mutación aunque invoke lance", async () => {
+  const backend = new FakeBackend([{
+    number: 111, title: "mutación posterior", body: issueBody(v2Contract()),
+    createdAt: "2026-08-18T00:00:00Z",
+  }]);
+  const fx = fixture(backend);
+  let snapshots = 0;
+  try {
+    const result = await processIssue({
+      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
+      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
+      actors: V2_ACTORS, authObserver: fx.options.authObserver,
+      snapshotVersioned: async () => (++snapshots === 1 ? { "fuera.md": "antes" } : { "fuera.md": "después" }),
+      invoke: async () => { throw new Error("el agente falló después de escribir"); },
+    }, backend.issues[0]);
+    assert.equal(result.status, "failed");
+    assert.equal(result.error_code, "MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE");
+    assert.equal(snapshots, 2);
+    assert(backend.issues[0].labels.has("handoff:failed"));
+  } finally { clean(fx); }
+});
+
+test("v2: cada documento común ausente bloquea el entrypoint antes de invocar", async () => {
+  for (const missing of GOVERNING_CONTEXT.common) {
+    const value = v2Contract({ contexto_autorizado: v2Contract().contexto_autorizado.filter((path) => path !== missing) });
+    const backend = new FakeBackend([{
+      number: 110, title: `sin ${missing}`, body: issueBody(value), createdAt: "2026-08-18T00:00:00Z",
+    }]);
+    const fx = fixture(backend);
+    let invocations = 0;
+    try {
+      const result = await processIssue({
+        backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
+        artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
+        actors: V2_ACTORS, invoke: async () => { invocations += 1; }, authObserver: fx.options.authObserver,
+      }, backend.issues[0]);
+      assert.equal(result.error_code, "CANON_GOBERNANTE_AUSENTE", missing);
+      assert.equal(invocations, 0, missing);
+      assert(backend.issues[0].labels.has("handoff:blocked"), missing);
+    } finally { clean(fx); }
+  }
+});
+
+test("v2: dos recuperadores concurrentes de un lease expirado producen un solo ganador", async () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-v2-race-"));
+  const lock = join(root, "lock");
+  mkdirSync(lock);
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({
+    lease_id: "old", owner_instance_id: "ended", acquired_at_ms: 1, heartbeat_at_ms: 1, expires_at_ms: 2,
+  }), "utf8");
+  const child = (candidate) => new Promise((resolveChild, rejectChild) => {
+    const code = `import(${JSON.stringify(MODULE_URL)}).then(({acquireLeaseLock})=>{const r=acquireLeaseLock(${JSON.stringify(lock)},{now:100,leaseMs:60000,candidateId:${JSON.stringify(candidate)},leaseId:${JSON.stringify(candidate)},ownerInstanceId:${JSON.stringify(candidate)}});process.stdout.write(JSON.stringify(r));}).catch(e=>{console.error(e);process.exit(1);});`;
+    const processChild = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = ""; let stderr = "";
+    processChild.stdout.on("data", (chunk) => { stdout += chunk; });
+    processChild.stderr.on("data", (chunk) => { stderr += chunk; });
+    processChild.on("error", rejectChild);
+    processChild.on("close", (status) => status === 0 ? resolveChild(JSON.parse(stdout)) : rejectChild(new Error(stderr)));
+  });
+  try {
+    const results = await Promise.all([child("candidate-a"), child("candidate-b")]);
+    assert.equal(results.filter((item) => item.acquired).length, 1);
+    const winner = results.find((item) => item.acquired).owner;
+    const loser = results.find((item) => !item.acquired);
+    assert(["LEASE_ACTIVE", "LEASE_RECOVERY_RACE", "LEASE_CREATE_RACE"].includes(loser.reason));
+    const impostor = { lease_id: "loser", owner_instance_id: "loser" };
+    assert.equal(heartbeatLeaseLock(lock, impostor, { now: 200, leaseMs: 60_000 }), false);
+    assert.equal(releaseLeaseLock(lock, impostor), false);
+    assert.deepEqual(JSON.parse(readFileSync(join(lock, "owner.json"), "utf8")).lease_id, winner.lease_id);
+    assert.equal(releaseLeaseLock(lock, winner), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("v2: EPERM o EBUSY al renombrar un lease vencido pierde la carrera sin borrar el activo", () => {
+  for (const code of ["EPERM", "EBUSY"]) {
+    const root = mkdtempSync(join(tmpdir(), "handoff-v2-rename-"));
+    const lock = join(root, "lock");
+    mkdirSync(lock);
+    const old = { lease_id: "old", owner_instance_id: "old", expires_at_ms: 1 };
+    writeFileSync(join(lock, "owner.json"), JSON.stringify(old), "utf8");
+    let removed = 0;
+    try {
+      const result = acquireLeaseLock(lock, {
+        now: 2, acquire: () => false,
+        rename: () => { throw Object.assign(new Error(code), { code }); },
+        remove: () => { removed += 1; },
+      });
+      assert.equal(result.reason, "LEASE_RECOVERY_RACE");
+      assert.equal(result.observed_error, code);
+      assert.equal(removed, 0);
+      assert.deepEqual(JSON.parse(readFileSync(join(lock, "owner.json"), "utf8")), old);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("v2: el heartbeat renueva el lease mientras la unidad conserva su identidad", async () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-v2-heartbeat-"));
+  const lock = join(root, "lock");
+  const acquired = acquireLeaseLock(lock, { now: 10, leaseMs: 20, leaseId: "lease", ownerInstanceId: "unit" });
+  let clock = 10;
+  const stop = startLeaseHeartbeat(lock, acquired.owner, { leaseMs: 20, intervalMs: 5, now: () => (clock += 5) });
+  try {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 18));
+    const renewed = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
+    assert(renewed.heartbeat_at_ms >= 15);
+    assert.equal(renewed.lease_id, "lease");
+  } finally {
+    stop();
+    assert.equal(releaseLeaseLock(lock, acquired.owner), true);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("v2: ledger durable ignora acumulados autodeclarados y reserva el máximo atómicamente", () => {
+  const root = mkdtempSync(join(tmpdir(), "handoff-v2-ledger-"));
+  const economic = (maximo, declaredAccumulated = 0) => v2Contract({
+    impacto_economico: {
+      tipo: "aplica", objetivo_economico: "review-pr-109", moneda: "USD", cap_acumulado: 0.4,
+      maximo_intento: maximo, acumulado_observable: declaredAccumulated,
+      remanente: 0.4 - declaredAccumulated, politica_costo_indeterminado: "DETENER_SIN_REINTENTO",
+    },
+  });
+  try {
+    const first = reserveEconomicBudget(economic(0.25), root, { attemptId: "first" });
+    assert(Math.abs(first.remanente_despues - 0.15) < 1e-9);
+    assert.throws(
+      () => reserveEconomicBudget(economic(0.2, 0), root, { attemptId: "self-declared-reset" }),
+      (error) => error.code === "CAP_ECONOMICO_ACUMULADO_EXCEDIDO",
+    );
+    const reconciled = reconcileEconomicBudget(root, first, { atribuible: true, costo: 0.1 });
+    assert.equal(reconciled.comprometido, 0.1);
+    const second = reserveEconomicBudget(economic(0.3, 0), root, { attemptId: "second" });
+    assert.equal(Math.round(second.remanente_despues * 1e9) / 1e9, 0);
+    reconcileEconomicBudget(root, second, { atribuible: false, costo: null });
+    assert.throws(
+      () => reserveEconomicBudget(economic(0.01, 0), root, { attemptId: "third" }),
+      (error) => error.code === "CAP_ECONOMICO_ACUMULADO_EXCEDIDO",
+    );
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("v2: el entrypoint reserva antes de la operación paga y concilia su costo atribuible", async () => {
+  const impact = {
+    tipo: "aplica", objetivo_economico: "review-entrypoint", moneda: "USD", cap_acumulado: 0.4,
+    maximo_intento: 0.2, acumulado_observable: 0, remanente: 0.4,
+    politica_costo_indeterminado: "DETENER_SIN_REINTENTO",
+  };
+  const backend = new FakeBackend([{
+    number: 112, title: "económica", body: issueBody(v2Contract({ impacto_economico: impact })),
+    createdAt: "2026-08-18T00:00:00Z",
+  }]);
+  const fx = fixture(backend);
+  try {
+    const result = await processIssue({
+      backend, config: BASE_CONFIG, repo: ROOT, runtimeDir: fx.options.runtimeDir,
+      artifactsDir: fx.options.artifactsDir, transitions: join(fx.options.artifactsDir, "transitions.log"),
+      actors: V2_ACTORS, authObserver: fx.options.authObserver, snapshotVersioned: async () => ({}),
+      invoke: async () => {
+        const ledger = JSON.parse(readFileSync(join(fx.options.runtimeDir, "economy", "ledger.json"), "utf8"));
+        const attempt = ledger.objetivos["review-entrypoint"].intentos[0];
+        assert.equal(attempt.estado_costo, "RESERVADO");
+        assert.equal(attempt.comprometido, 0.2);
+        return { result: v2Result(), telemetry: { cost_calculated_usd: 0.08 }, duration_ms: 1 };
+      },
+    }, backend.issues[0]);
+    assert.equal(result.status, "done");
+    const ledger = JSON.parse(readFileSync(join(fx.options.runtimeDir, "economy", "ledger.json"), "utf8"));
+    const attempt = ledger.objetivos["review-entrypoint"].intentos[0];
+    assert.equal(attempt.estado_costo, "CONCILIADO_ATRIBUIBLE");
+    assert.equal(attempt.comprometido, 0.08);
+  } finally { clean(fx); }
+});
+
+test("v2: callbacks durables de evidencia y snapshot son obligatorios", async () => {
+  await assert.rejects(executeV2Unit(v2Contract(), {
+    validationContext: v2Context({ resolveEvidence: undefined }), snapshotVersioned: async () => ({}), invoke: async () => v2Result(),
+  }), (error) => error.code === "RESOLVER_EVIDENCIA_REQUERIDO");
+  await assert.rejects(executeV2Unit(v2Contract(), {
+    validationContext: v2Context(), invoke: async () => v2Result(),
+  }), (error) => error.code === "SNAPSHOT_VERSIONADO_REQUERIDO");
 });

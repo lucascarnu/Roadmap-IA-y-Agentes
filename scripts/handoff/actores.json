@@ -3,28 +3,39 @@
   "roles": {
     "DIRECTOR_PRODUCT_OWNER": {
       "actor": "Lucas",
+      "agent": null,
       "adapter": "reglas.md",
       "capacidades": ["arbitraje_producto", "autorizacion_economica", "accion_fisica"]
     },
     "ARQUITECTO_LEAD": {
       "actor": "Claude",
+      "agent": "claude",
       "adapter": "CLAUDE.md",
       "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"]
     },
     "EJECUTOR_PRINCIPAL": {
       "actor": "Codex",
+      "agent": "codex",
       "adapter": "AGENTS.md",
       "capacidades": ["filesystem", "git", "github", "red", "ejecucion"]
     },
     "CONSULTOR_AUDITOR": {
       "actor": "Codex Consultor",
+      "agent": "codex",
       "adapter": "CONSULTOR.md",
       "capacidades": ["auditoria_continuidad", "reconciliacion"]
     },
     "REVIEWER_INDEPENDIENTE": {
       "actor": "Kimi",
+      "agent": "kimi",
       "adapter": "reviewer-policy.md",
       "capacidades": ["review_independiente"]
+    },
+    "ORQUESTADOR_HANDOFF": {
+      "actor": "handoff.mjs",
+      "agent": null,
+      "adapter": "scripts/handoff/README.md",
+      "capacidades": ["orquestacion"]
     }
   }
 }

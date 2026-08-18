@@ -15,6 +15,8 @@ const ROOT = resolve(HERE, "..", "..");
 const DEFAULT_CONFIG = join(HERE, "config.json");
 const CONTRACT_SCHEMA = join(HERE, "handoff.schema.json");
 const RESULT_SCHEMA = join(HERE, "handoff-result.schema.json");
+const CONTRACT_V2_SCHEMA = join(HERE, "handoff-v2.schema.json");
+const RESULT_V2_SCHEMA = join(HERE, "handoff-result-v2.schema.json");
 const PROMPT_TEMPLATE = join(HERE, "prompt-template.md");
 const RUNTIME = join(HERE, ".handoff");
 const ARTIFACTS = join(HERE, "artifacts");
@@ -94,6 +96,18 @@ export const HANDOFF_V2_EVIDENCE_TYPES = Object.freeze([
   "PR_INTEGRADA", "COMMIT", "ARTEFACTO_CON_HASH", "RESULTADO_VALIDADO",
 ]);
 
+export const HANDOFF_V2_RUNTIME_OPERATIONS = Object.freeze([
+  Object.freeze({ tipo: "filesystem", objetivo: "runtime-state" }),
+  Object.freeze({ tipo: "filesystem", objetivo: "artifacts" }),
+  Object.freeze({ tipo: "filesystem", objetivo: "economic-ledger" }),
+  Object.freeze({ tipo: "github", objetivo: "state" }),
+  Object.freeze({ tipo: "github", objetivo: "read" }),
+  Object.freeze({ tipo: "github", objetivo: "publish" }),
+  Object.freeze({ tipo: "red", objetivo: "auth-observation" }),
+  Object.freeze({ tipo: "red", objetivo: "invoke-agent" }),
+  Object.freeze({ tipo: "git", objetivo: "read" }),
+]);
+
 const DECISION_STATE = Object.freeze({
   SIN_OBJECIONES: "COMPLETADO",
   OBJECION_MATERIAL: "COMPLETADO",
@@ -150,6 +164,13 @@ function resolveRole(role, requiredCapabilities, context = {}) {
   const missing = requiredCapabilities.filter((capability) => !capabilities.has(capability));
   if (missing.length) failV2("CAPACIDAD_ESTATICA_AUSENTE", `${role} carece de: ${missing.join(", ")}`);
   return entry;
+}
+
+function agentKeyForContract(contract, context = {}) {
+  if (typeof contract.destinatario === "string") return contract.destinatario;
+  const actor = resolveRole(contract.destinatario.rol, contract.destinatario.capacidades_requeridas ?? [], context);
+  if (!actor.agent) failV2("ACTOR_SIN_ADAPTER_EJECUTABLE", contract.destinatario.rol);
+  return actor.agent;
 }
 
 function githubAnchor(value) {
@@ -226,7 +247,8 @@ function validateCanonicalState(state, context) {
   if (state.accion_anterior.id === state.proxima_accion.id) failV2("ESTADO_CANONICO_DIVERGENTE", "La próxima acción ya está cerrada");
   requireKeys(state.evidencia_cierre, ["tipo", "referencia", "head_o_historial"], "evidencia_cierre");
   if (!HANDOFF_V2_EVIDENCE_TYPES.includes(state.evidencia_cierre.tipo)) failV2("EVIDENCIA_CIERRE_INVALIDA", "tipo inválido");
-  const resolver = context.resolveEvidence ?? (() => false);
+  if (typeof context.resolveEvidence !== "function") failV2("RESOLVER_EVIDENCIA_REQUERIDO", "resolveEvidence es obligatorio");
+  const resolver = context.resolveEvidence;
   if (!resolver(state.evidencia_cierre, state.head_reconciliacion)) failV2("EVIDENCIA_CIERRE_NO_RESUELTA", state.evidencia_cierre.referencia);
   if (!/^[0-9a-f]{40}$/.test(state.head_reconciliacion ?? "")) failV2("HEAD_RECONCILIACION_INVALIDO", "HEAD inválido");
   return state.paths_senal?.length ? { warning: "ESTADO_CANONICO_POTENCIALMENTE_DIVERGENTE" } : { warning: null };
@@ -235,11 +257,18 @@ function validateCanonicalState(state, context) {
 export function validateContractV2(contract, context = {}) {
   if (!object(contract)) failV2("ESTRUCTURA_INVALIDA", "Contrato no es objeto");
   if (contract.handoff_version !== "2") failV2("CONTRATO_VERSION_NO_SOPORTADA", `handoff_version ${contract.handoff_version ?? "ausente"} no se migra ni reinterpreta`);
-  const keys = ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"];
+  const keys = ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "resultado_previo", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos", "profundidad_cadena"];
   requireKeys(contract, keys, "contrato v2");
   rejectExtras(contract, keys, "contrato v2");
   if (!/^[0-9a-f]{40}$/.test(contract.head_sha ?? "")) failV2("HEAD_INVALIDO", "head_sha inválido");
   if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) failV2("CONTEXTO_INVALIDO", "contexto_autorizado inválido");
+  if (contract.resultado_previo !== null) {
+    requireKeys(contract.resultado_previo, ["issue", "marker", "result_sha256"], "resultado_previo");
+    rejectExtras(contract.resultado_previo, ["issue", "marker", "result_sha256"], "resultado_previo");
+    if (!Number.isInteger(contract.resultado_previo.issue) || !/^[0-9a-f]{64}$/.test(contract.resultado_previo.result_sha256 ?? "")) failV2("RESULTADO_PREVIO_INVALIDO", "puntero inválido");
+  }
+  const missingCommonContext = GOVERNING_CONTEXT.common.filter((path) => !contract.contexto_autorizado.includes(path));
+  if (missingCommonContext.length) failV2("CANON_GOBERNANTE_AUSENTE", `Falta canon gobernante: ${missingCommonContext.join(", ")}`);
   requireKeys(contract.origen, ["ejecutor", "rol"], "origen");
   const originActor = resolveRole(contract.origen.rol, [], context);
   if (originActor.actor !== contract.origen.ejecutor) failV2("ORIGEN_NO_RESUELTO", "ejecutor y rol no corresponden");
@@ -253,11 +282,16 @@ export function validateContractV2(contract, context = {}) {
     rejectExtras(operation, ["tipo", "objetivo"], "operación permitida");
     if (!["git", "github", "red", "filesystem"].includes(operation.tipo) || typeof operation.objetivo !== "string" || !operation.objetivo) failV2("OPERACION_INVALIDA", "operación permitida inválida");
   }
+  const missingRuntimeOperations = HANDOFF_V2_RUNTIME_OPERATIONS.filter((required) => !contract.operaciones_permitidas.some(
+    (operation) => operation.tipo === required.tipo && operation.objetivo === required.objetivo,
+  ));
+  if (missingRuntimeOperations.length) failV2("OPERACION_RUNTIME_NO_DECLARADA", missingRuntimeOperations.map((item) => `${item.tipo}:${item.objetivo}`).join(", "));
   if (contract.modo === "solo_lectura" && contract.mutaciones_permitidas.length) failV2("SOLO_LECTURA_CON_MUTACIONES", "solo_lectura no admite mutaciones");
   validateEconomicImpact(contract.impacto_economico);
   requireKeys(contract.reintentos, ["maximos", "politica_costo_indeterminado"], "reintentos");
   if (!Number.isInteger(contract.reintentos.maximos) || contract.reintentos.maximos < 0 || contract.reintentos.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") failV2("REINTENTOS_INVALIDOS", "política inválida");
   if (!Array.isArray(contract.transiciones_permitidas)) failV2("TRANSICIONES_INVALIDAS", "tabla requerida");
+  if (!Number.isInteger(contract.profundidad_cadena) || contract.profundidad_cadena < 1) failV2("PROFUNDIDAD_INVALIDA", "profundidad_cadena inválida");
   validateHumanDelegations(contract.operaciones_delegadas_a_humanos, context);
   const canonical = validateCanonicalState(contract.estado_canonico, context);
   return { ...contract, advertencia_estado_canonico: canonical.warning };
@@ -299,23 +333,43 @@ export function assertEconomicAuthorization(contract, operation) {
   return true;
 }
 
-export async function executeDeclaredOperation(contract, operation, handlers = {}) {
+export function assertDeclaredOperationAllowed(contract, operation) {
   const declared = contract.operaciones_permitidas.some((item) => item.tipo === operation.tipo && item.objetivo === operation.objetivo);
   if (!declared) failV2("MUTACION_BLOQUEADA_PREVENTIVAMENTE", `${operation.tipo}:${operation.objetivo}`);
   assertEconomicAuthorization(contract, operation);
+  if (operation.paga && contract.impacto_economico.tipo === "aplica" && !operation.reserva_economica_id) {
+    failV2("RESERVA_ECONOMICA_AUSENTE", "La operación paga no tiene reserva durable");
+  }
+  return true;
+}
+
+export async function executeDeclaredOperation(contract, operation, handlers = {}) {
+  assertDeclaredOperationAllowed(contract, operation);
   const handler = handlers[operation.tipo];
   if (typeof handler !== "function") failV2("CAPACIDAD_NO_IMPLEMENTADA", operation.tipo);
   return handler(operation);
 }
 
 export async function executeV2Unit(contract, options = {}) {
+  if (typeof options.validationContext?.resolveEvidence !== "function") failV2("RESOLVER_EVIDENCIA_REQUERIDO", "resolveEvidence es obligatorio");
+  if (typeof options.snapshotVersioned !== "function") failV2("SNAPSHOT_VERSIONADO_REQUERIDO", "snapshotVersioned es obligatorio");
   const validated = validateContractV2(contract, options.validationContext);
-  const snapshot = options.snapshotVersioned ?? (async () => ({}));
+  const snapshot = options.snapshotVersioned;
   const before = snapshotVersionedPaths(await snapshot());
-  const result = await options.invoke(validated);
-  const after = snapshotVersionedPaths(await snapshot());
-  const mutations = detectPostMutations(before, after, validated);
-  if (!mutations.valid) failV2(mutations.code, `Paths fuera del sobre: ${mutations.paths.join(", ")}`, "handoff:failed");
+  let result;
+  let invocationError;
+  let mutationError;
+  try {
+    result = await options.invoke(validated);
+  } catch (error) {
+    invocationError = error;
+  } finally {
+    const after = snapshotVersionedPaths(await snapshot());
+    const mutations = detectPostMutations(before, after, validated);
+    if (!mutations.valid) mutationError = new HandoffError(`Paths fuera del sobre: ${mutations.paths.join(", ")}`, "handoff:failed", mutations.code);
+  }
+  if (mutationError) throw mutationError;
+  if (invocationError) throw invocationError;
   const validatedResult = validateResultV2(result, validated, options.validationContext);
   for (const operation of options.operations ?? []) {
     await executeDeclaredOperation(validated, operation, options.handlers);
@@ -335,18 +389,145 @@ export function detectPostMutations(before, after, contract) {
   return { valid: true, code: null, paths: changed };
 }
 
+export function snapshotTrackedPaths(repo, run = runProcess) {
+  const raw = run("git", ["-c", `safe.directory=${repo}`, "-C", repo, "ls-files", "-z"], {
+    env: buildChildEnv(), timeout: 60_000,
+  }).stdout;
+  const entries = {};
+  for (const path of raw.split("\0").filter(Boolean)) {
+    const absolute = resolve(repo, path);
+    entries[path.replaceAll("\\", "/")] = existsSync(absolute) ? sha256(readFileSync(absolute)) : "MISSING";
+  }
+  return entries;
+}
+
+export function resolveEvidenceFromGit(repo, evidence, _headReconciliation, run = runProcess) {
+  try {
+    if (["COMMIT", "PR_INTEGRADA"].includes(evidence.tipo)) {
+      const commit = run("git", ["-c", `safe.directory=${repo}`, "-C", repo, "rev-parse", "--verify", `${evidence.head_o_historial}^{commit}`], {
+        env: buildChildEnv(), timeout: 30_000,
+      }).stdout.trim();
+      if (!/^[0-9a-f]{40}$/.test(commit)) return false;
+      if (evidence.tipo === "PR_INTEGRADA") {
+        const issue = evidence.referencia.match(/PR\s+#(\d+)/i)?.[1];
+        if (!issue) return false;
+        const message = run("git", ["-c", `safe.directory=${repo}`, "-C", repo, "show", "-s", "--format=%B", commit], {
+          env: buildChildEnv(), timeout: 30_000,
+        }).stdout;
+        return message.includes(`#${issue}`);
+      }
+      return true;
+    }
+    const match = evidence.referencia.match(/^(.+?)#sha256=([0-9a-f]{64})$/);
+    if (!match || !safeRelativePath(match[1])) return false;
+    const path = resolve(repo, match[1]);
+    return existsSync(path) && sha256(readFileSync(path)) === match[2];
+  } catch {
+    return false;
+  }
+}
+
+function economicLedgerPath(runtimeDir) {
+  return join(runtimeDir, "economy", "ledger.json");
+}
+
+function withEconomicLedger(runtimeDir, update, options = {}) {
+  const lockPath = join(runtimeDir, "economy", "ledger.lock");
+  const lease = acquireLeaseLock(lockPath, {
+    now: options.now ?? Date.now(), leaseMs: options.leaseMs ?? 30_000,
+    candidateId: options.candidateId, leaseId: options.leaseId, ownerInstanceId: options.ownerInstanceId,
+  });
+  if (!lease.acquired) failV2("LEDGER_ECONOMICO_BLOQUEADO", lease.reason);
+  try {
+    const path = economicLedgerPath(runtimeDir);
+    const ledger = existsSync(path) ? readJson(path) : { version: 1, objetivos: {} };
+    const result = update(ledger);
+    writeJson(path, ledger);
+    return result;
+  } finally {
+    releaseLeaseLock(lockPath, lease.owner);
+  }
+}
+
+export function reserveEconomicBudget(contract, runtimeDir, options = {}) {
+  if (contract.impacto_economico.tipo !== "aplica") return null;
+  const impact = contract.impacto_economico;
+  return withEconomicLedger(runtimeDir, (ledger) => {
+    const objective = ledger.objetivos[impact.objetivo_economico] ?? {
+      moneda: impact.moneda, cap_acumulado: impact.cap_acumulado, intentos: [],
+    };
+    if (objective.moneda !== impact.moneda || objective.cap_acumulado !== impact.cap_acumulado) {
+      failV2("CAP_OBJETIVO_DIVERGENTE", "El objetivo ya existe con moneda o cap diferente");
+    }
+    const comprometido = objective.intentos.reduce((sum, attempt) => sum + attempt.comprometido, 0);
+    const remanente = objective.cap_acumulado - comprometido;
+    if (impact.maximo_intento > remanente + 1e-9) failV2("CAP_ECONOMICO_ACUMULADO_EXCEDIDO", "El ledger durable no admite el intento");
+    const reservation = {
+      attempt_id: options.attemptId ?? randomUUID(),
+      objetivo_economico: impact.objetivo_economico,
+      maximo: impact.maximo_intento,
+      comprometido: impact.maximo_intento,
+      costo_observado: null,
+      estado_costo: "RESERVADO",
+      reservado_en: options.timestamp ?? new Date().toISOString(),
+    };
+    objective.intentos.push(reservation);
+    ledger.objetivos[impact.objetivo_economico] = objective;
+    return { ...reservation, remanente_despues: remanente - impact.maximo_intento };
+  }, options);
+}
+
+export function reconcileEconomicBudget(runtimeDir, reservation, outcome, options = {}) {
+  if (!reservation) return null;
+  return withEconomicLedger(runtimeDir, (ledger) => {
+    const objective = ledger.objetivos[reservation.objetivo_economico];
+    const attempt = objective?.intentos.find((item) => item.attempt_id === reservation.attempt_id);
+    if (!attempt) failV2("RESERVA_ECONOMICA_NO_ENCONTRADA", reservation.attempt_id);
+    if (attempt.estado_costo !== "RESERVADO") return { ...attempt, conciliacion_reutilizada: true };
+    if (outcome.atribuible === true && typeof outcome.costo === "number" && outcome.costo >= 0) {
+      attempt.costo_observado = outcome.costo;
+      attempt.comprometido = outcome.costo;
+      attempt.estado_costo = "CONCILIADO_ATRIBUIBLE";
+    } else {
+      attempt.costo_observado = null;
+      attempt.estado_costo = "COSTO_INDETERMINADO";
+    }
+    attempt.cerrado_en = options.timestamp ?? new Date().toISOString();
+    return { ...attempt };
+  }, options);
+}
+
 export function acquireLeaseLock(path, options = {}) {
   const now = options.now ?? Date.now();
   const leaseMs = options.leaseMs ?? 60_000;
-  const owner = { lease_id: options.leaseId ?? randomUUID(), owner_instance_id: options.ownerInstanceId ?? randomUUID(), acquired_at_ms: now, heartbeat_at_ms: now, expires_at_ms: now + leaseMs };
-  if (existsSync(path)) {
-    let current;
-    try { current = readJson(join(path, "owner.json")); } catch { return { acquired: false, reason: "LOCK_IDENTITY_UNREADABLE" }; }
-    if (current.expires_at_ms > now) return { acquired: false, reason: "LEASE_ACTIVE", owner: current };
-    releaseLock(path);
+  const candidateId = options.candidateId ?? randomUUID();
+  const owner = {
+    lease_id: options.leaseId ?? randomUUID(),
+    owner_instance_id: options.ownerInstanceId ?? randomUUID(),
+    acquired_at_ms: now,
+    heartbeat_at_ms: now,
+    expires_at_ms: now + leaseMs,
+  };
+  const acquire = options.acquire ?? acquireLock;
+  const rename = options.rename ?? renameSync;
+  const remove = options.remove ?? rmSync;
+  if (acquire(path, owner)) return { acquired: true, owner, recovered: false };
+
+  let current;
+  try { current = readJson(join(path, "owner.json")); } catch { return { acquired: false, reason: "LOCK_IDENTITY_UNREADABLE" }; }
+  if (current.expires_at_ms > now) return { acquired: false, reason: "LEASE_ACTIVE", owner: current };
+
+  const quarantine = `${path}.stale.${candidateId}`;
+  try {
+    rename(path, quarantine);
+  } catch (error) {
+    return { acquired: false, reason: "LEASE_RECOVERY_RACE", observed_error: error.code ?? error.name };
   }
-  if (!acquireLock(path, owner)) return { acquired: false, reason: "LEASE_RACE" };
-  return { acquired: true, owner };
+
+  const acquired = acquire(path, owner);
+  try { remove(quarantine, { recursive: true, force: true }); } catch { /* sólo limpia la cuarentena propia */ }
+  if (!acquired) return { acquired: false, reason: "LEASE_CREATE_RACE" };
+  return { acquired: true, owner, recovered: true };
 }
 
 export function heartbeatLeaseLock(path, owner, options = {}) {
@@ -364,6 +545,32 @@ export function releaseLeaseLock(path, owner) {
   if (current.lease_id !== owner.lease_id || current.owner_instance_id !== owner.owner_instance_id) return false;
   releaseLock(path);
   return true;
+}
+
+export function startLeaseHeartbeat(path, owner, options = {}) {
+  const leaseMs = options.leaseMs ?? 60_000;
+  const intervalMs = options.intervalMs ?? Math.max(100, Math.floor(leaseMs / 3));
+  let stopped = false;
+  const timer = setInterval(() => {
+    if (stopped) return;
+    try {
+      const renewed = heartbeatLeaseLock(path, owner, { leaseMs, now: options.now?.() ?? Date.now() });
+      if (!renewed) {
+        stopped = true;
+        clearInterval(timer);
+        options.onLost?.();
+      }
+    } catch (error) {
+      stopped = true;
+      clearInterval(timer);
+      options.onError?.(error);
+    }
+  }, intervalMs);
+  timer.unref?.();
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
 }
 
 export function sha256(value) {
@@ -522,18 +729,6 @@ export function acquireLock(path, owner = { pid: process.pid, created_at: new Da
   }
 }
 
-function acquireRecoverableProcessLock(path, owner = { pid: process.pid, created_at: new Date().toISOString() }) {
-  if (acquireLock(path, owner)) return true;
-  try {
-    const owner = readJson(join(path, "owner.json"));
-    if (processAlive(owner.pid)) return false;
-  } catch {
-    return false;
-  }
-  releaseLock(path);
-  return acquireLock(path, owner);
-}
-
 function releaseLock(path) {
   rmSync(path, { recursive: true, force: true });
 }
@@ -594,6 +789,28 @@ function gitDiff(repo, baseSha, headSha, run = runProcess) {
 
 function canonicalResultExample(contract) {
   const examplePath = contract.contexto_autorizado[0];
+  if (contract.handoff_version === "2") {
+    return {
+      handoff_version: "2",
+      estado: "COMPLETADO",
+      decision: "SIN_OBJECIONES",
+      resumen: "Resultado breve.",
+      evidencia: [{ archivo: examplePath, detalle: "Evidencia breve." }],
+      archivos_leidos: [examplePath],
+      siguiente: null,
+      firma: {
+        ejecutor_real: "ACTOR_REAL",
+        entorno: "ENTORNO_OBSERVADO",
+        modelo_configurado: "MODELO_CONFIGURADO",
+        modelo_efectivo: "NO_VERIFICADO",
+        esfuerzo_o_modo_configurado: "MODO_CONFIGURADO",
+        esfuerzo_o_modo_efectivo: "NO_OBSERVABLE",
+        sujeto_evaluado: contract.tarea,
+        via_evaluada: "VIA_OBSERVADA",
+        fecha: "AAAA-MM-DD",
+      },
+    };
+  }
   return {
     handoff_version: "1",
     estado: "COMPLETADO",
@@ -612,6 +829,49 @@ function canonicalResultExample(contract) {
   };
 }
 
+function promptTemplateV2() {
+  return `DESTINATARIO: {{DESTINATARIO_MAYUSCULAS}}
+
+Actuá exclusivamente sobre el paquete congelado incluido abajo. Es una sesión nueva y sin memoria. No agregues información externa. El canon incluido prevalece sobre restricciones ad hoc.
+
+Devolvé exclusivamente JSON válido conforme al schema de salida. No incluyas razonamiento interno ni texto fuera del JSON.
+
+## Contrato
+
+{{CONTRATO}}
+
+## Resultado previo
+
+{{RESULTADO_PREVIO}}
+
+## Contexto autorizado reconstruido desde objetos Git
+
+{{CONTEXTO}}
+
+## Schema del contrato de salida
+
+\`\`\`json
+{{SCHEMA_SALIDA}}
+\`\`\`
+
+## Reglas de salida
+
+- Emití un único objeto JSON crudo.
+- Incluí exactamente las claves del schema v2; no uses \`veredicto\`.
+- \`decision\`, \`estado\` y \`siguiente\` deben respetar sus correspondencias mecánicas.
+- Cada evidencia contiene exactamente \`archivo\` y \`detalle\`.
+- \`archivos_leidos\` sólo contiene paths de \`contexto_autorizado\`.
+- No inventes disponibilidad, modelo, esfuerzo, costo ni evidencia.
+{{DIFF_CONGELADO}}
+
+## Ejemplo canónico mínimo
+
+\`\`\`json
+{{EJEMPLO_SALIDA}}
+\`\`\`
+`;
+}
+
 export function buildPrompt(template, contract, previousResult, contexts, resultSchema, frozenDiff = null) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   const renderedDiff = frozenDiff === null ? "" : [
@@ -626,7 +886,7 @@ export function buildPrompt(template, contract, previousResult, contexts, result
     "```",
   ].join("\n");
   const values = {
-    DESTINATARIO_MAYUSCULAS: contract.destinatario.toUpperCase(),
+    DESTINATARIO_MAYUSCULAS: (typeof contract.destinatario === "string" ? contract.destinatario : contract.destinatario.rol).toUpperCase(),
     CONTRATO: JSON.stringify(contract, null, 2),
     RESULTADO_PREVIO: previousResult ? JSON.stringify(previousResult, null, 2) : "null",
     CONTEXTO: renderedContexts,
@@ -662,8 +922,10 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
   const inputDir = join(runDir, "input");
   mkdirSync(inputDir, { recursive: true });
   writeJson(join(inputDir, "contract.json"), contract);
-  writeJson(join(inputDir, "handoff.schema.json"), readJson(CONTRACT_SCHEMA));
-  const resultSchema = readFileSync(RESULT_SCHEMA, "utf8");
+  const contractSchemaPath = contract.handoff_version === "2" ? CONTRACT_V2_SCHEMA : CONTRACT_SCHEMA;
+  const resultSchemaPath = contract.handoff_version === "2" ? RESULT_V2_SCHEMA : RESULT_SCHEMA;
+  writeJson(join(inputDir, "handoff.schema.json"), readJson(contractSchemaPath));
+  const resultSchema = readFileSync(resultSchemaPath, "utf8");
   writeJson(join(inputDir, "handoff-result.schema.json"), JSON.parse(resultSchema));
   const contexts = contract.contexto_autorizado.map((path) => {
     const content = gitShow(repo, contract.head_sha, path, run);
@@ -675,7 +937,8 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
   if (frozenDiff !== null) writeText(join(inputDir, "diff.patch"), frozenDiff);
   if (previousResult) writeJson(join(inputDir, "previous-result.json"), previousResult);
   const prompt = buildPrompt(
-    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, resultSchema, frozenDiff,
+    contract.handoff_version === "2" ? promptTemplateV2() : readFileSync(PROMPT_TEMPLATE, "utf8"),
+    contract, previousResult, contexts, resultSchema, frozenDiff,
   );
   writeText(join(inputDir, "prompt.md"), prompt);
   const manifest = createManifest(inputDir, contract.head_sha);
@@ -720,21 +983,23 @@ function parseKimi(stdout) {
   return { result, telemetry: { version, usage } };
 }
 
-export function invokeAgent({ contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv() }) {
+export function invokeAgent({ contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv(), agentKey = null }) {
   const started = Date.now();
   let parsed;
   let raw;
-  if (contract.destinatario === "claude") {
+  const target = agentKey ?? contract.destinatario;
+  const outputSchema = contract.handoff_version === "2" ? RESULT_V2_SCHEMA : RESULT_SCHEMA;
+  if (target === "claude") {
     const emptyMcp = join(runDir, "empty-mcp.json");
     writeJson(emptyMcp, { mcpServers: {} });
     const response = run(adapter.executable, [
       "--print", "--safe-mode", "--tools", "", "--strict-mcp-config", "--mcp-config", emptyMcp,
       "--disable-slash-commands", "--no-chrome", "--no-session-persistence", "--output-format", "json",
-      "--json-schema", readFileSync(RESULT_SCHEMA, "utf8"), "--model", adapter.model, "--effort", adapter.effort,
+      "--json-schema", readFileSync(outputSchema, "utf8"), "--model", adapter.model, "--effort", adapter.effort,
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
     raw = response.stdout;
     parsed = parseClaude(raw);
-  } else if (contract.destinatario === "codex") {
+  } else if (target === "codex") {
     const finalPath = join(runDir, "final.json");
     const response = run(adapter.executable, [
       "exec", "--strict-config", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
@@ -742,7 +1007,7 @@ export function invokeAgent({ contract, adapter, prompt, runDir, run = runProces
       "--config", `model_reasoning_effort=\"${adapter.effort}\"`, "--config", "approval_policy=\"never\"",
       "--config", "web_search=\"disabled\"", "--config", "features.shell_tool=false",
       "--config", "features.apps=false", "--config", "features.code_mode.enabled=false",
-      "--output-schema", RESULT_SCHEMA, "--output-last-message", finalPath, "--json", "--color", "never", "-",
+      "--output-schema", outputSchema, "--output-last-message", finalPath, "--json", "--color", "never", "-",
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
     raw = response.stdout;
     parsed = parseCodex(raw, finalPath);
@@ -848,6 +1113,16 @@ async function recoverOrphans({ backend, runtimeDir, transitions }) {
       transitionLog(transitions, { issue: issue.number, from: "running", to: "blocked", reason: "running sin estado local" });
       continue;
     }
+    if (state.handoff_version === "2" && !["result_persisted", "published"].includes(state.phase)) {
+      backend.setState(issue.number, "handoff:running", "handoff:blocked");
+      saveState(runtimeDir, issue.number, {
+        ...state, phase: "blocked", blocked_reason: "v2 at-most-once: resultado no persistido; costo o efecto indeterminado",
+      });
+      transitionLog(transitions, {
+        issue: issue.number, from: "running", to: "blocked", reason: "v2 at-most-once sin resultado persistido",
+      });
+      continue;
+    }
     if (processAlive(state.owner_pid)) continue;
     const recoveries = state.recovery_count ?? 0;
     if (recoveries >= 1 && state.phase !== "result_persisted" && state.phase !== "published") {
@@ -911,7 +1186,237 @@ async function loadPreviousResult(backend, pointer) {
   fail("No se encontró el resultado_previo publicado", "handoff:blocked");
 }
 
-async function processIssue(context, issue) {
+function childContractV2(parentContract, result, pointer) {
+  return {
+    ...parentContract,
+    tarea: `Continuar el handoff v2 después del resultado validado de Issue #${pointer.issue}: ${parentContract.tarea}`,
+    contexto_autorizado: [...new Set([...parentContract.contexto_autorizado, "scripts/handoff/README.md"])],
+    resultado_previo: pointer,
+    origen: { ejecutor: "handoff.mjs", rol: "ORQUESTADOR_HANDOFF" },
+    destinatario: result.siguiente,
+    profundidad_cadena: parentContract.profundidad_cadena + 1,
+  };
+}
+
+function observedInvocationCost(invocation) {
+  const candidates = [
+    invocation?.cost_calculated_usd,
+    invocation?.cost_usd,
+    invocation?.telemetry?.cost_calculated_usd,
+    invocation?.telemetry?.cost_usd,
+  ];
+  return candidates.find((value) => typeof value === "number" && value >= 0) ?? null;
+}
+
+async function processIssueV2(context, issue, parsedContract) {
+  const { backend, config, repo, runtimeDir, artifactsDir, transitions, invoke, authObserver, hooks } = context;
+  const guardedGitRun = (...args) => {
+    assertDeclaredOperationAllowed(parsedContract, { tipo: "git", objetivo: "read", paga: false });
+    return (context.run ?? runProcess)(...args);
+  };
+  const validationContext = {
+    actors: context.actors ?? readJson(defaultActorsPath()),
+    repoRoot: repo,
+    resolveEvidence: (evidence, head) => resolveEvidenceFromGit(repo, evidence, head, guardedGitRun),
+  };
+  let contract;
+  let agentKey;
+  try {
+    contract = validateContractV2(parsedContract, validationContext);
+    if (contract.profundidad_cadena > config.max_relevos) failV2("PROFUNDIDAD_INVALIDA", "Profundidad de cadena excedida");
+    agentKey = agentKeyForContract(contract, validationContext);
+  } catch (error) {
+    if (!(error instanceof HandoffError) || !TERMINAL_LABELS.has(error.label)) throw error;
+    const provisionalOperation = (tipo, objetivo, handler) => executeDeclaredOperation(
+      parsedContract, { tipo, objetivo, paga: false }, { [tipo]: handler },
+    );
+    try {
+      await provisionalOperation("github", "state", () => backend.setState(issue.number, "handoff:ready", error.label));
+      await provisionalOperation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, {
+        issue: issue.number, handoff_version: "2", phase: error.label.slice(8), owner_lease_id: null,
+        error: error.message, error_code: error.code ?? null,
+      }));
+      await provisionalOperation("filesystem", "runtime-state", () => transitionLog(transitions, {
+        issue: issue.number, from: "ready", to: error.label.slice(8), error: error.message, error_code: error.code ?? null,
+      }));
+    } catch {
+      // Un contrato que tampoco declara la operación necesaria falla sin producir efectos.
+    }
+    return { issue: issue.number, status: error.label.slice(8), error: error.message, error_code: error.code ?? null };
+  }
+  const headRef = config.default_head_ref;
+  const operation = (tipo, objetivo, handler, extras = {}) => executeDeclaredOperation(
+    contract, { tipo, objetivo, paga: false, ...extras }, { [tipo]: handler },
+  );
+  let currentLabel = "handoff:ready";
+  let state = stateFor(runtimeDir, issue.number);
+  const lockPath = issueLockPath(runtimeDir, issue.number);
+  const issueLeaseMs = context.issueLeaseMs ?? config.timeout_ms + 60_000;
+  const lease = await operation("filesystem", "runtime-state", () => acquireLeaseLock(lockPath, { leaseMs: issueLeaseMs }));
+  if (!lease.acquired) return { issue: issue.number, status: "locked" };
+  let leaseLost = false;
+  const stopHeartbeat = startLeaseHeartbeat(lockPath, lease.owner, {
+    leaseMs: issueLeaseMs,
+    intervalMs: context.issueHeartbeatMs ?? Math.max(1_000, Math.floor(issueLeaseMs / 3)),
+    onLost: () => { leaseLost = true; },
+    onError: () => { leaseLost = true; },
+  });
+  try {
+    try {
+      const remoteHead = await operation("github", "read", () => backend.currentHead(headRef));
+      if (remoteHead !== contract.head_sha) fail(`HEAD movido: esperado ${contract.head_sha}; actual ${remoteHead}`, "handoff:stale");
+      await operation("github", "state", () => backend.setState(issue.number, "handoff:ready", "handoff:running"));
+      currentLabel = "handoff:running";
+      state = {
+        ...(state ?? {}), issue: issue.number, handoff_version: "2", owner_lease_id: lease.owner.lease_id,
+        phase: state?.phase === "recovered" ? (state.previous_phase ?? "running") : (state?.phase ?? "running"),
+        recovery_count: state?.recovery_count ?? 0, head_sha: contract.head_sha,
+      };
+      await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, state));
+      await operation("filesystem", "runtime-state", () => transitionLog(transitions, { issue: issue.number, from: "ready", to: "running", handoff_version: "2" }));
+      if (hooks?.afterClaim) await hooks.afterClaim({ issue, contract, state });
+
+      const runDir = state.run_dir ?? join(artifactsDir, `issue-${issue.number}-${contract.head_sha.slice(0, 12)}`);
+      const previousResult = contract.resultado_previo
+        ? await operation("github", "read", () => loadPreviousResult(backend, contract.resultado_previo))
+        : null;
+      const prepared = await operation("filesystem", "artifacts", () => prepareInput({ repo, contract, runDir, previousResult, run: guardedGitRun }));
+      const marker = markerFor(issue.number, contract.head_sha, prepared.manifest.input_fingerprint);
+      const resultPath = join(runDir, "result.validated.json");
+      let result;
+      let invocation = null;
+      let viaBefore;
+      let viaAfter;
+
+      if (existsSync(resultPath) && ["result_persisted", "published"].includes(state.phase)) {
+        result = validateResultV2(readJson(resultPath), contract, validationContext);
+      } else {
+        const adapter = { ...config.agents[agentKey], timeout_ms: config.timeout_ms };
+        viaBefore = await operation("red", "auth-observation", () => observeVia(authObserver, agentKey, adapter));
+        await operation("filesystem", "artifacts", () => writeJson(join(runDir, "via-before.json"), viaBefore));
+        if (!viaBefore.valid) fail("La vía preflight no coincide o no es demostrable", "handoff:blocked-via");
+
+        let reservation = null;
+        if (contract.impacto_economico.tipo === "aplica") {
+          reservation = await operation("filesystem", "economic-ledger", () => reserveEconomicBudget(contract, runtimeDir));
+        }
+        const snapshotVersioned = context.snapshotVersioned ?? (() => snapshotTrackedPaths(repo, guardedGitRun));
+        const before = snapshotVersionedPaths(await snapshotVersioned());
+        let invocationError;
+        let mutationError;
+        try {
+          invocation = await executeDeclaredOperation(contract, {
+            tipo: "red", objetivo: "invoke-agent", paga: contract.impacto_economico.tipo === "aplica",
+            reserva_economica_id: reservation?.attempt_id,
+          }, {
+            red: () => invoke({ contract, adapter, prompt: prepared.prompt, runDir, run: context.run, env: buildChildEnv(), agentKey }),
+          });
+        } catch (error) {
+          invocationError = error;
+        } finally {
+          const after = snapshotVersionedPaths(await snapshotVersioned());
+          const mutations = detectPostMutations(before, after, contract);
+          if (!mutations.valid) mutationError = new HandoffError(
+            `Paths fuera del sobre: ${mutations.paths.join(", ")}`, "handoff:failed", mutations.code,
+          );
+          if (reservation) {
+            const cost = observedInvocationCost(invocation);
+            await operation("filesystem", "economic-ledger", () => reconcileEconomicBudget(
+              runtimeDir, reservation, { atribuible: cost !== null, costo: cost },
+            ));
+          }
+        }
+        if (mutationError) throw mutationError;
+        if (invocationError) throw invocationError;
+        result = validateResultV2(invocation.result, contract, validationContext);
+        await operation("filesystem", "artifacts", () => writeJson(resultPath, result));
+        state = { ...state, phase: "result_persisted", previous_phase: "result_persisted", run_dir: runDir, marker };
+        await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, state));
+        if (hooks?.afterPersist) await hooks.afterPersist({ issue, contract, state, result });
+      }
+
+      if (leaseLost) failV2("LEASE_PERDIDO", "El heartbeat perdió la identidad del lease");
+      const remoteHeadAfter = await operation("github", "read", () => backend.currentHead(headRef));
+      if (remoteHeadAfter !== contract.head_sha) fail(`HEAD movido durante la corrida: ${remoteHeadAfter}`, "handoff:stale");
+      const adapter = { ...config.agents[agentKey], timeout_ms: config.timeout_ms };
+      viaAfter = await operation("red", "auth-observation", () => observeVia(authObserver, agentKey, adapter));
+      await operation("filesystem", "artifacts", () => writeJson(join(runDir, "via-observada.json"), viaAfter));
+      if (!viaAfter.valid) fail("La vía observada no coincide o no es demostrable", "handoff:blocked-via");
+
+      const { raw, body } = resultComment(marker, result);
+      const comments = await operation("github", "read", () => backend.comments(issue.number));
+      if (!comments.find((comment) => (comment.body ?? "").includes(marker))) {
+        const bodyFile = join(runDir, "result-comment.md");
+        await operation("filesystem", "artifacts", () => writeText(bodyFile, body));
+        await operation("github", "publish", () => backend.publish(issue.number, bodyFile));
+      }
+      state = { ...state, phase: "published", previous_phase: "published", marker, result_sha256: sha256(Buffer.from(raw)) };
+      await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, state));
+
+      let child = null;
+      if (result.siguiente) {
+        if (contract.profundidad_cadena >= config.max_relevos) fail("Siguiente relevo excede max_relevos", "handoff:blocked");
+        const pointer = { issue: issue.number, marker, result_sha256: state.result_sha256 };
+        const nextContract = childContractV2(contract, result, pointer);
+        validateContractV2(nextContract, validationContext);
+        const childId = childMarker(issue.number, contract.head_sha, prepared.manifest.input_fingerprint);
+        child = await operation("github", "read", () => backend.findChild(childId));
+        if (!child) {
+          const childBody = `${childId}\n\n\`\`\`json\n${JSON.stringify(nextContract, null, 2)}\n\`\`\`\n`;
+          const bodyFile = join(runDir, "child-issue.md");
+          await operation("filesystem", "artifacts", () => writeText(bodyFile, childBody));
+          child = await operation("github", "publish", () => backend.createIssue(
+            `handoff v2: ${nextContract.destinatario.rol} / ${nextContract.head_sha.slice(0, 12)}`, bodyFile,
+          ));
+        }
+        state = { ...state, child_issue: child.number };
+        await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, state));
+      }
+
+      await operation("github", "state", () => backend.setState(issue.number, "handoff:running", "handoff:done"));
+      currentLabel = "handoff:done";
+      await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, { ...state, phase: "done", owner_lease_id: null }));
+      await operation("filesystem", "runtime-state", () => transitionLog(transitions, { issue: issue.number, from: "running", to: "done", child_issue: child?.number ?? null, handoff_version: "2" }));
+      await operation("filesystem", "artifacts", () => writeJson(join(runDir, "telemetry.json"), {
+        issue: issue.number, handoff_version: "2", head_sha: contract.head_sha,
+        input_fingerprint: prepared.manifest.input_fingerprint,
+        prompt_sha256: prepared.manifest.files.find((entry) => entry.path === "prompt.md")?.sha256,
+        via_before: viaBefore ?? "reused_result", via_after: viaAfter,
+        duration_ms: invocation?.duration_ms ?? 0, invocation: invocation?.telemetry ?? null,
+        result_sha256: state.result_sha256, child_issue: child?.number ?? null,
+      }));
+      return { issue: issue.number, status: "done", child_issue: child?.number ?? null };
+    } catch (error) {
+      if (error instanceof CrashSimulation) throw error;
+      const label = error instanceof HandoffError ? error.label : "handoff:failed";
+      if (!TERMINAL_LABELS.has(label)) throw error;
+      if (currentLabel === "handoff:running" || currentLabel === "handoff:ready") {
+        await operation("github", "state", () => backend.setState(issue.number, currentLabel, label));
+        currentLabel = label;
+      }
+      const current = stateFor(runtimeDir, issue.number) ?? state ?? {};
+      await operation("filesystem", "runtime-state", () => saveState(runtimeDir, issue.number, {
+        ...current, phase: label.slice(8), owner_lease_id: null, error: error.message, error_code: error.code ?? null,
+      }));
+      await operation("filesystem", "runtime-state", () => transitionLog(transitions, {
+        issue: issue.number, from: "running", to: label.slice(8), error: error.message, error_code: error.code ?? null,
+      }));
+      const adapter = config.agents[agentKey];
+      return {
+        issue: issue.number, status: label.slice(8), error: error.message, error_code: error.code ?? null,
+        ...(label === "handoff:blocked-via" ? {
+          failed_via: adapter?.authorized_via ?? null,
+          authorized_fallback_via: adapter?.authorized_fallback_via ?? null,
+        } : {}),
+      };
+    }
+  } finally {
+    stopHeartbeat();
+    await operation("filesystem", "runtime-state", () => releaseLeaseLock(lockPath, lease.owner));
+  }
+}
+
+async function processIssueV1(context, issue) {
   const { backend, config, repo, runtimeDir, artifactsDir, transitions, invoke, authObserver, hooks } = context;
   let currentLabel = "handoff:ready";
   let contract;
@@ -1038,6 +1543,13 @@ async function processIssue(context, issue) {
   } finally {
     if (!(hooks?.preserveLockOnCrash && currentLabel === "handoff:running")) releaseLock(lockPath);
   }
+}
+
+export async function processIssue(context, issue) {
+  const parsed = parseContractBody(issue.body);
+  return parsed.handoff_version === "2"
+    ? processIssueV2(context, issue, parsed)
+    : processIssueV1(context, issue);
 }
 
 function compactReason(value, limit = 240) {
@@ -1274,7 +1786,15 @@ export async function tick(options = {}) {
   mkdirSync(runtimeDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
   const globalLock = join(runtimeDir, "poll.lock");
-  if (!acquireRecoverableProcessLock(globalLock)) return { status: "locked", promovidas: [], poll: null };
+  const globalLease = acquireLeaseLock(globalLock, {
+    leaseMs: options.lockLeaseMs ?? config.timeout_ms + 60_000,
+    now: options.lockNow ?? Date.now(),
+  });
+  if (!globalLease.acquired) return { status: "locked", promovidas: [], poll: null };
+  const stopGlobalHeartbeat = startLeaseHeartbeat(globalLock, globalLease.owner, {
+    leaseMs: options.lockLeaseMs ?? config.timeout_ms + 60_000,
+    intervalMs: options.lockHeartbeatMs,
+  });
   const promovidas = [];
   let rescatables = [];
   try {
@@ -1388,7 +1908,8 @@ export async function tick(options = {}) {
       });
     }
   } finally {
-    releaseLock(globalLock);
+    stopGlobalHeartbeat();
+    releaseLeaseLock(globalLock, globalLease.owner);
   }
 
   for (const issue of rescatables) {
@@ -1436,8 +1957,16 @@ export async function poll(options = {}) {
   mkdirSync(runtimeDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
   const globalLock = join(runtimeDir, "poll.lock");
-  const lockOwner = { pid: options.hooks?.crash_owner_pid ?? process.pid, created_at: new Date().toISOString() };
-  if (!acquireRecoverableProcessLock(globalLock, lockOwner)) return { status: "locked", processed: [] };
+  const globalLease = acquireLeaseLock(globalLock, {
+    leaseMs: options.lockLeaseMs ?? config.timeout_ms + 60_000,
+    now: options.lockNow ?? Date.now(),
+    ownerInstanceId: options.hooks?.crash_owner_instance_id,
+  });
+  if (!globalLease.acquired) return { status: "locked", processed: [] };
+  const stopGlobalHeartbeat = startLeaseHeartbeat(globalLock, globalLease.owner, {
+    leaseMs: options.lockLeaseMs ?? config.timeout_ms + 60_000,
+    intervalMs: options.lockHeartbeatMs,
+  });
   const processed = [];
   const processedIssues = new Set();
   try {
@@ -1463,7 +1992,8 @@ export async function poll(options = {}) {
     }
     return outcome;
   } finally {
-    if (!options.preserveGlobalLock) releaseLock(globalLock);
+    stopGlobalHeartbeat();
+    if (!options.preserveGlobalLock) releaseLeaseLock(globalLock, globalLease.owner);
   }
 }
 

@@ -3,12 +3,24 @@
   "title": "Handoff contract v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"],
+  "required": ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "resultado_previo", "origen", "destinatario", "modo", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos", "profundidad_cadena"],
   "properties": {
     "handoff_version": { "const": "2" },
     "tarea": { "type": "string", "minLength": 1 },
     "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "contexto_autorizado": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "resultado_previo": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false, "required": ["issue", "marker", "result_sha256"],
+          "properties": {
+            "issue": { "type": "integer", "minimum": 1 }, "marker": { "type": "string", "minLength": 1 },
+            "result_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      ]
+    },
     "origen": {
       "type": "object", "additionalProperties": false, "required": ["ejecutor", "rol"],
       "properties": { "ejecutor": { "type": "string" }, "rol": { "type": "string" } }
@@ -71,7 +83,8 @@
           "explicacion": { "type": "string" }
         }
       }
-    }
+    },
+    "profundidad_cadena": { "type": "integer", "minimum": 1 }
   },
   "allOf": [
     {

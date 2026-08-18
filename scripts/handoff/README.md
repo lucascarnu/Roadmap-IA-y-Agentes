@@ -335,6 +335,15 @@ modo `solo_lectura`, no completa defaults y no reinterpreta campos narrativos.
 En particular, los 17 valores históricos de `veredicto` son prosa libre y no
 forman un vocabulario normativo.
 
+`processIssue` es el entrypoint operativo común: parsea el sobre y despacha v1
+o v2 por `handoff_version`. La ruta v2 prepara el input con los schemas v2,
+resuelve el actor por `actores.json`, invoca el adapter correspondiente, valida
+y persiste `result.validated.json`, publica el resultado idempotente y construye
+el relevo v2 cuando existe `siguiente`. No es un helper aislado de tests. El
+contrato v2 vuelve a exigir íntegramente `GOVERNING_CONTEXT.common`, además de
+los adapters de origen, destinatario y siguiente; la ausencia de cualquiera de
+esos documentos bloquea antes de invocar al agente.
+
 El resultado v2 separa `resumen`, narrativo, de `decision`, mecánico. Sus cinco
 identificadores son vocabulario nuevo para conceptos ya anclados en el canon:
 
@@ -376,6 +385,14 @@ remanente y la política `DETENER_SIN_REINTENTO`. Un máximo mayor al remanente 
 detiene antes de red o gasto. La política de reintentos es explícita; un costo
 indeterminado nunca habilita reintento automático.
 
+El acumulado efectivo no se toma de lo que una unidad se autodeclara. El ledger
+durable `scripts/handoff/.handoff/economy/ledger.json`, protegido por su propio
+lease, agrupa reservas por `objetivo_economico`. Antes de una operación paga
+reserva atómicamente el máximo del intento contra el remanente del cap. Un costo
+observado y atribuible reemplaza la reserva y libera exactamente la diferencia;
+si el costo queda indeterminado, el máximo completo permanece comprometido. La
+operación de red exige el identificador de esa reserva.
+
 La protección de mutaciones tiene dos niveles y no los confunde:
 
 - `executeDeclaredOperation` previene las operaciones Git, GitHub, red o
@@ -388,6 +405,13 @@ La protección de mutaciones tiene dos niveles y no los confunde:
   como `MUTACION_FUERA_DE_SOBRE_DETECTADA_POSTERIORMENTE` y la unidad falla
   cerrada. En `solo_lectura`, cualquier mutación versionada queda fuera del
   sobre.
+
+La ruta operativa v2 aplica esa guarda en el punto de efecto: lecturas Git para
+evidencia, contexto y snapshots; cambios y lecturas de estado GitHub;
+observación de autenticación; invocación de agente; persistencia de estado,
+artefactos y ledger. Las operaciones de descubrimiento del scheduler anteriores
+a conocer un sobre son control del puente, no operaciones de la unidad. Una
+lista de operaciones informada después de invocar no sustituye estas guardas.
 
 No se describe una detección posterior como rechazo preventivo. La tabla
 `transiciones_permitidas` valida el siguiente estado y actor.
@@ -407,6 +431,19 @@ exigen esa identidad. Un lease sólo se recupera después de expirar y jamás se
 señaliza ni termina un PID. Esto es portable y evita confundir un proceso nuevo
 con otro terminado cuyo PID fue reutilizado. El lock PID de v1 se conserva sólo
 para el runtime histórico y no se presenta como identidad suficiente de v2.
+
+`poll` y `tick` mantienen heartbeat durante su trabajo, y cada unidad v2 hace lo
+mismo con su lease por Issue. La recuperación de un lease expirado no borra el
+path observado: intenta renombrarlo atómicamente a
+`lock.stale.<candidate_id>`. Sólo quien gana ese rename puede crear el nuevo
+lock y limpiar su propia cuarentena. Cualquier fallo de rename —incluidos
+`EPERM` y `EBUSY`— se interpreta como carrera perdida y obliga a reobservar; el
+perdedor no puede renovar, liberar ni eliminar el lease del ganador.
+
+La resolución de evidencia y el snapshot versionado tienen implementaciones
+durables basadas en objetos Git y `git ls-files`. El segundo snapshot vive en un
+`finally`: si el agente escribe fuera del sobre y después lanza una excepción,
+la mutación posterior conserva precedencia y la unidad falla cerrada.
 
 La firma v2 sigue la firma de ejecución de `reglas.md`: ejecutor real, entorno,
 modelo configurado y efectivo, esfuerzo o modo configurado y efectivo, sujeto,
