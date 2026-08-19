@@ -7,6 +7,7 @@ categoria: agentes-de-desarrollo
 clasificacion: oro
 materiales:
   - "https://raw.githubusercontent.com/openai/codex/rust-v0.147.0/codex-rs/cli/src/debug_sandbox.rs"
+  - "https://raw.githubusercontent.com/openai/codex/rust-v0.147.0/codex-rs/protocol/src/shell_environment.rs"
   - "https://learn.chatgpt.com/docs/config-file/config-advanced"
 ---
 
@@ -32,6 +33,16 @@ versión evaluada.
   `run_command_under_sandbox()` y
   `cmd.env_clear(); cmd.envs(env);` en
   `spawn_debug_sandbox_child()`.
+- **Qué afirmación respalda sobre `CODEX_HOME`:** que bajo
+  `shell_environment_policy.inherit = "core"` el proceso hijo lanzado por
+  `codex sandbox` **no** recibe `CODEX_HOME`. En
+  `codex-rs/protocol/src/shell_environment.rs`, `create_env` parte de
+  `std::env::vars()` y el modo `Core` conserva sólo su lista fija, que no
+  incluye `CODEX_HOME` ni en Unix ni en Windows; la única variable Codex
+  insertada condicionalmente es `CODEX_THREAD_ID`. En
+  `codex-rs/cli/src/debug_sandbox.rs`, `spawn_debug_sandbox_child()`
+  agrega `CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR` y variables de
+  plataforma, pero no reinyecta `CODEX_HOME`.
 - **Qué afirmación respalda sobre `codex exec --json`:** la
   documentación oficial confirma que produce salida JSONL. La página
   citada no enumera el catálogo exhaustivo de tipos de evento.
@@ -41,5 +52,6 @@ versión evaluada.
   Capa B. El monitor preparado contra esos identificadores no constituye
   evidencia de que el catálogo sea completo.
 - **Condición de revalidación:** un cambio de versión del CLI, cualquier
-  cambio en `debug_sandbox.rs`, o cualquier cambio observable en el
+  cambio en `debug_sandbox.rs` o `shell_environment.rs`, cualquier cambio
+  en la composición del modo `Core`, o cualquier cambio observable en el
   formato JSONL de `codex exec --json`.

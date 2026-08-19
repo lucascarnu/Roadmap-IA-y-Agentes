@@ -123,7 +123,7 @@ export function buildNormativeOverrideArgs() {
 
 export function buildDiagnosticOverrideArgs({ includeExclude }) {
   const diagnostic = CRITICAL_OVERRIDES
-    .filter((value) => value !== "shell_environment_policy.inherit=\"core\"")
+    .filter((value) => !value.startsWith("shell_environment_policy.inherit="))
     .filter((value) => includeExclude || value !== ENVIRONMENT_EXCLUDE_OVERRIDE);
   diagnostic.push("shell_environment_policy.inherit=\"all\"");
   return diagnostic.flatMap((value) => ["-c", value]);
@@ -407,6 +407,7 @@ export function runLayerA(options = {}) {
     "--junction", campaign.junction,
     "--result", resultPath(run),
     "--run-id", run.run_id,
+    "--expected-codex-home", campaign.codexHome,
     "--host-credential-baseline", hostCredentialBaseline,
   ];
   const sandboxNormative = runCodex(sandboxArgs(normativeOverrides, LAYER_A_RUNS.normativa), {
@@ -464,8 +465,16 @@ export function runLayerA(options = {}) {
     : [];
   const credentialProbe = probes.find((probe) => probe.id === "credential_store");
   const sandboxCredentialAccess = credentialProbe?.status === "NOT_RUN"
-    ? { sandbox_command_access: "NO_OBSERVABLE", cause: "EMPTY_TEMPORAL_CODEX_HOME" }
-    : { sandbox_command_access: credentialProbe?.access ?? "NO_OBSERVABLE", cause: credentialProbe?.cause ?? "NO_OBSERVABLE" };
+    ? {
+      sandbox_command_access: "NO_OBSERVABLE",
+      cause: "SANDBOX_DID_NOT_START",
+      codex_home_visibility: "NO_OBSERVABLE",
+    }
+    : {
+      sandbox_command_access: credentialProbe?.access ?? "NO_OBSERVABLE",
+      cause: credentialProbe?.cause ?? "NO_OBSERVABLE",
+      codex_home_visibility: credentialProbe?.codex_home_visibility ?? "NO_OBSERVABLE",
+    };
   const tempHomeCredentialPresence = doctorSummary.auth_summary === "no Codex credentials were found"
     ? "AUSENTES"
     : doctorSummary.auth_status === "ok" ? "PRESENTES" : "NO_OBSERVABLE";

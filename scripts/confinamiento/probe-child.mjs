@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -29,10 +30,43 @@ function attempt(id, operation, expected) {
   }
 }
 
+export function classifyCodexHomeVisibility(expectedCodexHome, observedCodexHome) {
+  if (typeof observedCodexHome !== "string" || observedCodexHome.length === 0) return "ABSENT";
+  return observedCodexHome === expectedCodexHome ? "PRESENT_TEMPORAL" : "PRESENT_OTHER";
+}
+
+export function evaluateCredentialStore({
+  codexHomeVisibility,
+  hostCredentialBaseline,
+  exitCode,
+  notLoggedIn,
+}) {
+  const base = { id: "credential_store", codex_home_visibility: codexHomeVisibility, exit_code: exitCode };
+  if (exitCode === 0) {
+    return { ...base, status: "FAILED", cause: "CONTROL_PLANE_CREDENTIAL_ACCESSIBLE", access: "ACCESIBLE" };
+  }
+  if (!notLoggedIn) {
+    return { ...base, status: "INCONCLUSIVE", cause: "CREDENTIAL_ACCESS_NO_OBSERVABLE", access: "NO_OBSERVABLE" };
+  }
+  if (codexHomeVisibility === "PRESENT_TEMPORAL") {
+    return { ...base, status: "INCONCLUSIVE", cause: "EMPTY_TEMPORAL_CODEX_HOME", access: "AUSENTES" };
+  }
+  if (codexHomeVisibility === "PRESENT_OTHER") {
+    return { ...base, status: "INCONCLUSIVE", cause: "CODEX_HOME_UNEXPECTED_VALUE", access: "AUSENTES" };
+  }
+  if (hostCredentialBaseline !== "PRESENTES") {
+    return { ...base, status: "INCONCLUSIVE", cause: "HOST_CREDENTIAL_BASELINE_NOT_PRESENT", access: "AUSENTES" };
+  }
+  return { ...base, status: "PASSED", cause: "HOST_CREDENTIAL_STORE_DENIED_UNDER_SANDBOX", access: "AUSENTES" };
+}
+
+async function main() {
+
 const outside = arg("--outside");
 const junction = arg("--junction");
 const resultPath = arg("--result");
 const runId = arg("--run-id");
+const expectedCodexHome = arg("--expected-codex-home");
 const hostCredentialBaseline = arg("--host-credential-baseline");
 const workspace = process.cwd();
 const probes = [];
@@ -92,25 +126,19 @@ probes.push((() => {
 probes.push((() => {
   const child = spawnSync("codex", ["login", "status"], { encoding: "utf8", timeout: 10_000, windowsHide: true });
   const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
-  if (child.status === 0) return { id: "credential_store", status: "FAILED", cause: "CONTROL_PLANE_CREDENTIAL_ACCESSIBLE", access: "ACCESIBLE" };
-  const absent = /not logged in|no codex credentials were found/i.test(output);
-  if (absent && hostCredentialBaseline === "PRESENTES") {
-    return {
-      id: "credential_store",
-      status: "PASSED",
-      cause: "CREDENTIAL_SEPARATION_BY_EFFECTIVE_ENVELOPE_AND_TEMPORAL_CODEX_HOME",
-      access: "AUSENTES",
-      exit_code: child.status,
-    };
-  }
-  return {
-    id: "credential_store",
-    status: "INCONCLUSIVE",
-    cause: absent ? "EMPTY_TEMPORAL_CODEX_HOME" : "CREDENTIAL_ACCESS_NO_OBSERVABLE",
-    access: "NO_OBSERVABLE",
-    exit_code: child.status,
-  };
+  const codexHomeVisibility = classifyCodexHomeVisibility(expectedCodexHome, process.env.CODEX_HOME);
+  return evaluateCredentialStore({
+    codexHomeVisibility,
+    hostCredentialBaseline,
+    exitCode: child.status,
+    notLoggedIn: /not logged in|no codex credentials were found/i.test(output),
+  });
 })());
 
 mkdirSync(join(workspace, "allowed"), { recursive: true });
 writeFileSync(resultPath, `${JSON.stringify({ run_id: runId, probes }, null, 2)}\n`, "utf8");
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

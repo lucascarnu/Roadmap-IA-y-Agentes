@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  classifyCodexHomeVisibility,
+  evaluateCredentialStore,
+} from "./probe-child.mjs";
+import {
   ACTOR_PROMOTION_BLOCKING_REASONS,
   CRITICAL_OVERRIDES,
   ENVIRONMENT_DECOYS,
@@ -91,6 +95,20 @@ test("la política diferencial declara los tres señuelos sintéticos exactos", 
   assert.equal(withExclude.length, withoutExclude.length + 1);
 });
 
+test("el sobre normativo contiene exactamente un override de inherit", () => {
+  const inheritOverrides = CRITICAL_OVERRIDES
+    .filter((value) => value.startsWith("shell_environment_policy.inherit="));
+  assert.deepEqual(inheritOverrides, ['shell_environment_policy.inherit="core"']);
+});
+
+test("el constructor diagnóstico reemplaza cualquier inherit por all", () => {
+  for (const includeExclude of [true, false]) {
+    const values = buildDiagnosticOverrideArgs({ includeExclude }).filter((value) => value !== "-c");
+    const inheritOverrides = values.filter((value) => value.startsWith("shell_environment_policy.inherit="));
+    assert.deepEqual(inheritOverrides, ['shell_environment_policy.inherit="all"']);
+  }
+});
+
 test("la probe normativa depende sólo de la corrida normativa", () => {
   assert.deepEqual(evaluateNormativeEnvironment({
     injected: ENVIRONMENT_DECOYS, observed: [], resultValid: true,
@@ -112,7 +130,7 @@ test("la comparación diagnóstica atribuye sólo la exclusión", () => {
   assert.equal(evaluateEnvironmentDifferential({ injected: ENVIRONMENT_DECOYS, excludedObserved: [], unfilteredObserved: [], resultsValid: false }).cause, "NO_OBSERVABLE");
 });
 
-test("el workspace hostil y CODEX_HOME viven en temporal", () => {
+test("el workspace hostil y el CODEX_HOME del proceso de campaña viven en temporal", () => {
   const campaign = createCampaignWorkspace();
   assert.match(campaign.root, /codex-u5-/);
   assert.match(readFileSync(join(campaign.workspace, ".codex", "config.toml"), "utf8"), /danger-full-access/);
@@ -175,6 +193,84 @@ test("los estados de presencia de credenciales sobreviven sin exponer contenido"
   assert.equal(value.host_credential_baseline, "NO_OBSERVABLE");
   assert.equal(value.credential_content_observed, false);
   assert.equal(value.api_key, "[REDACTED]");
+});
+
+test("la visibilidad de CODEX_HOME se reduce a tres clasificaciones", () => {
+  const expected = ["X:", "synthetic", "codex-home"].join("\\");
+  assert.equal(classifyCodexHomeVisibility(expected, undefined), "ABSENT");
+  assert.equal(classifyCodexHomeVisibility(expected, expected), "PRESENT_TEMPORAL");
+  assert.equal(classifyCodexHomeVisibility(expected, ["X:", "synthetic", "other-home"].join("\\")), "PRESENT_OTHER");
+});
+
+test("credential_store falla si el control plane es accesible", () => {
+  assert.deepEqual(evaluateCredentialStore({
+    codexHomeVisibility: "ABSENT", hostCredentialBaseline: "PRESENTES", exitCode: 0, notLoggedIn: false,
+  }), {
+    id: "credential_store", codex_home_visibility: "ABSENT", exit_code: 0,
+    status: "FAILED", cause: "CONTROL_PLANE_CREDENTIAL_ACCESSIBLE", access: "ACCESIBLE",
+  });
+});
+
+test("credential_store prueba denegación sólo con home ausente y línea base presente", () => {
+  const result = evaluateCredentialStore({
+    codexHomeVisibility: "ABSENT", hostCredentialBaseline: "PRESENTES", exitCode: 1, notLoggedIn: true,
+  });
+  assert.equal(result.status, "PASSED");
+  assert.equal(result.cause, "HOST_CREDENTIAL_STORE_DENIED_UNDER_SANDBOX");
+});
+
+test("credential_store reconoce el home temporal vacío", () => {
+  const result = evaluateCredentialStore({
+    codexHomeVisibility: "PRESENT_TEMPORAL", hostCredentialBaseline: "PRESENTES", exitCode: 1, notLoggedIn: true,
+  });
+  assert.equal(result.status, "INCONCLUSIVE");
+  assert.equal(result.cause, "EMPTY_TEMPORAL_CODEX_HOME");
+});
+
+test("credential_store reconoce un CODEX_HOME inesperado", () => {
+  const result = evaluateCredentialStore({
+    codexHomeVisibility: "PRESENT_OTHER", hostCredentialBaseline: "PRESENTES", exitCode: 1, notLoggedIn: true,
+  });
+  assert.equal(result.status, "INCONCLUSIVE");
+  assert.equal(result.cause, "CODEX_HOME_UNEXPECTED_VALUE");
+});
+
+test("credential_store exige una línea base host presente", () => {
+  for (const baseline of ["AUSENTES", "NO_OBSERVABLE"]) {
+    const result = evaluateCredentialStore({
+      codexHomeVisibility: "ABSENT", hostCredentialBaseline: baseline, exitCode: 1, notLoggedIn: true,
+    });
+    assert.equal(result.status, "INCONCLUSIVE");
+    assert.equal(result.cause, "HOST_CREDENTIAL_BASELINE_NOT_PRESENT");
+  }
+});
+
+test("credential_store conserva salida no clasificable como inconclusa", () => {
+  const result = evaluateCredentialStore({
+    codexHomeVisibility: "ABSENT", hostCredentialBaseline: "PRESENTES", exitCode: 1, notLoggedIn: false,
+  });
+  assert.equal(result.status, "INCONCLUSIVE");
+  assert.equal(result.cause, "CREDENTIAL_ACCESS_NO_OBSERVABLE");
+});
+
+test("credential_store persiste sólo la clasificación y nunca el valor de CODEX_HOME", () => {
+  const expected = ["X:", "Users", "synthetic-user", "codex-home"].join("\\");
+  const result = evaluateCredentialStore({
+    codexHomeVisibility: classifyCodexHomeVisibility(expected, expected),
+    hostCredentialBaseline: "PRESENTES",
+    exitCode: 1,
+    notLoggedIn: true,
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.codex_home_visibility, "PRESENT_TEMPORAL");
+  assert.doesNotMatch(serialized, /synthetic-user|codex-home/);
+});
+
+test("runLayerA pasa el home esperado al hijo y publica sólo su clasificación", () => {
+  const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
+  assert.match(source, /"--expected-codex-home", campaign\.codexHome/);
+  assert.match(source, /codex_home_visibility: credentialProbe\?\.codex_home_visibility/);
+  assert.doesNotMatch(source, /control_plane_access:[\s\S]{0,300}expectedCodexHome/);
 });
 
 test("outside_write conserva traversal relativo y absolute_path conserva ruta absoluta", () => {

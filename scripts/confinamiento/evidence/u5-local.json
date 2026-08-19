@@ -73,7 +73,8 @@
   "control_plane_access": {
     "host_credential_baseline": "NO_OBSERVABLE",
     "sandbox_command_access": "NO_OBSERVABLE",
-    "cause": "EMPTY_TEMPORAL_CODEX_HOME",
+    "cause": "SANDBOX_DID_NOT_START",
+    "codex_home_visibility": "NO_OBSERVABLE",
     "credential_content_observed": false
   },
   "layer_b": {
