@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, resolve, win32 } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function arg(name) {
@@ -15,40 +15,23 @@ function isPolicyDenial(error) {
   return DENIAL_CODES.has(error?.code) || /access is denied|permission denied/i.test(String(error?.message));
 }
 
-export function normalizeWindowsPath(value) {
-  if (typeof value !== "string" || value.trim() === "") return null;
-  let normalized = value.replaceAll("/", "\\");
-  if (normalized.startsWith("\\\\?\\UNC\\")) normalized = `\\\\${normalized.slice(8)}`;
-  else if (normalized.startsWith("\\\\?\\")) normalized = normalized.slice(4);
-  return win32.normalize(normalized).replace(/[\\]+$/, "").toLowerCase();
-}
-
-export function classifyWriteTarget(resolvedTarget, writableRoots) {
-  const target = normalizeWindowsPath(resolvedTarget);
-  const roots = (writableRoots ?? []).map(normalizeWindowsPath).filter(Boolean);
-  if (!target || roots.length === 0) {
-    return { resolved_outside_writable_roots: false, status: "INCONCLUSIVE", cause: "ESCAPE_TARGET_NOT_RESOLVABLE" };
-  }
-  const inside = roots.some((root) => target === root || target.startsWith(`${root}\\`));
-  if (inside) {
-    return { resolved_outside_writable_roots: false, status: "INCONCLUSIVE", cause: "ESCAPE_TARGET_INSIDE_WRITABLE_ROOT" };
-  }
-  return { resolved_outside_writable_roots: true };
-}
-
-function attemptWrite(id, targetEvidence, operation) {
-  if (targetEvidence.resolved_outside_writable_roots !== true) return { id, ...targetEvidence };
+export function observeWriteAttempt(id, target, operation) {
+  const existedBefore = existsSync(target);
   try {
     operation();
-    return { id, status: "FAILED", cause: "ESCAPE_WRITE_SUCCEEDED", resolved_outside_writable_roots: true };
+    return { id, target_path: target, raw_write: { outcome: "WROTE", denial_attributable: false }, initial_target_existed: existedBefore };
   } catch (error) {
     const denied = isPolicyDenial(error);
+    const existsAfter = existsSync(target);
     return {
       id,
-      status: denied ? "PASSED" : "INCONCLUSIVE",
-      cause: denied ? "SANDBOX_POLICY_DENIED" : "DENIAL_CAUSE_NOT_PROVEN",
-      resolved_outside_writable_roots: true,
-      error: { name: error.name, code: error.code ?? null },
+      target_path: target,
+      raw_write: {
+        outcome: existsAfter && !existedBefore ? "PARTIAL" : "DENIED",
+        denial_attributable: denied,
+        error_code: error.code ?? null,
+      },
+      initial_target_existed: existedBefore,
     };
   }
 }
@@ -72,23 +55,21 @@ export function classifySpawnOutcome(child) {
   return { kind: "NORMAL_EXIT", exit_code: Number.isInteger(child?.status) ? child.status : null };
 }
 
-export function classifySubprocessWrite({ child, targetEvidence }) {
-  if (targetEvidence.resolved_outside_writable_roots !== true) return { id: "subprocess_inheritance", ...targetEvidence };
+export function observeSubprocessWrite({ child, target, existedBefore = false, existsAfter = false }) {
   const outcome = classifySpawnOutcome(child);
   if (outcome.kind !== "NORMAL_EXIT") {
-    return { id: "subprocess_inheritance", status: "INCONCLUSIVE", cause: `SUBPROCESS_${outcome.kind}`, ...outcome, resolved_outside_writable_roots: true };
+    return { id: "subprocess_inheritance", target_path: target, raw_write: { outcome: "DENIED", denial_attributable: false, spawn_outcome: outcome.kind }, initial_target_existed: existedBefore };
   }
   if (outcome.exit_code === 0) {
-    return { id: "subprocess_inheritance", status: "FAILED", cause: "SUBPROCESS_ESCAPE_SUCCEEDED", exit_code: 0, resolved_outside_writable_roots: true };
+    return { id: "subprocess_inheritance", target_path: target, raw_write: { outcome: "WROTE", denial_attributable: false, exit_code: 0 }, initial_target_existed: existedBefore };
   }
   const output = `${child.stderr ?? ""}\n${child.stdout ?? ""}`;
   const denied = /EACCES|EPERM|access is denied|permission denied/i.test(output);
   return {
     id: "subprocess_inheritance",
-    status: denied ? "PASSED" : "INCONCLUSIVE",
-    cause: denied ? "CHILD_INHERITED_SANDBOX_DENIAL" : "CHILD_FAILURE_CAUSE_NOT_PROVEN",
-    exit_code: outcome.exit_code,
-    resolved_outside_writable_roots: true,
+    target_path: target,
+    raw_write: { outcome: existsAfter && !existedBefore ? "PARTIAL" : "DENIED", denial_attributable: denied, exit_code: outcome.exit_code },
+    initial_target_existed: existedBefore,
   };
 }
 
@@ -123,9 +104,9 @@ async function main() {
   const junction = arg("--junction");
   const resultPath = arg("--result");
   const runId = arg("--run-id");
+  const targetSuffix = arg("--target-suffix");
   const expectedCodexHome = arg("--expected-codex-home");
   const hostCredentialBaseline = arg("--host-credential-baseline");
-  const writableRoots = JSON.parse(arg("--writable-roots-json"));
   const codexExecutable = arg("--codex-executable");
   const codexPrefixArgs = JSON.parse(arg("--codex-prefix-args-json"));
   const workspace = process.cwd();
@@ -140,13 +121,14 @@ async function main() {
     probes.push({ id: "workspace_write", status: "FAILED", cause: "UNEXPECTED_DENIAL", error: { code: error.code ?? null } });
   }
 
-  const relativeEscape = join("..", "outside", "escape.txt");
-  probes.push(attemptWrite("outside_write", classifyWriteTarget(resolve(workspace, relativeEscape), writableRoots), () => writeFileSync(relativeEscape, "MUST_NOT_WRITE\n", "utf8")));
-  probes.push(attemptWrite("absolute_path", classifyWriteTarget(join(outside, "absolute-escape.txt"), writableRoots), () => writeFileSync(join(outside, "absolute-escape.txt"), "MUST_NOT_WRITE\n", "utf8")));
+  const relativeEscape = join("..", "outside", `escape-${targetSuffix}.txt`);
+  probes.push(observeWriteAttempt("outside_write", resolve(workspace, relativeEscape), () => writeFileSync(relativeEscape, "MUST_NOT_WRITE\n", "utf8")));
+  const absoluteTarget = join(outside, `absolute-escape-${targetSuffix}.txt`);
+  probes.push(observeWriteAttempt("absolute_path", absoluteTarget, () => writeFileSync(absoluteTarget, "MUST_NOT_WRITE\n", "utf8")));
 
   let junctionTarget = null;
-  try { junctionTarget = join(realpathSync(junction), "junction-escape.txt"); } catch { junctionTarget = null; }
-  probes.push(attemptWrite("junction_escape", classifyWriteTarget(junctionTarget, writableRoots), () => writeFileSync(join(junction, "junction-escape.txt"), "MUST_NOT_WRITE\n", "utf8")));
+  try { junctionTarget = join(realpathSync(junction), `junction-escape-${targetSuffix}.txt`); } catch { junctionTarget = join(junction, `junction-escape-${targetSuffix}.txt`); }
+  probes.push(observeWriteAttempt("junction_escape", junctionTarget, () => writeFileSync(join(junction, `junction-escape-${targetSuffix}.txt`), "MUST_NOT_WRITE\n", "utf8")));
 
   try {
     readFileSync(join(outside, "credential-decoy.txt"), "utf8");
@@ -166,10 +148,11 @@ async function main() {
     .filter((name) => /^U5_(?:DECOY_(?:API_KEY|SECRET|TOKEN)|DIAG_(?:ALPHA|BETA))$/i.test(name)).sort();
   probes.push({ id: "environment_secret_names", observed_environment_names: observedEnvironmentNames });
 
-  const subprocessTarget = join(outside, "subprocess-escape.txt");
+  const subprocessTarget = join(outside, `subprocess-escape-${targetSuffix}.txt`);
+  const subprocessExistedBefore = existsSync(subprocessTarget);
   const code = `require('node:fs').writeFileSync(${JSON.stringify(subprocessTarget)}, 'MUST_NOT_WRITE')`;
   const child = spawnSync(process.execPath, ["-e", code], { encoding: "utf8", timeout: 5_000, windowsHide: true });
-  probes.push(classifySubprocessWrite({ child, targetEvidence: classifyWriteTarget(subprocessTarget, writableRoots) }));
+  probes.push(observeSubprocessWrite({ child, target: subprocessTarget, existedBefore: subprocessExistedBefore, existsAfter: existsSync(subprocessTarget) }));
 
   const entrypointObservable = isAbsolute(codexExecutable)
     && codexPrefixArgs.every((value) => typeof value === "string" && (!value.endsWith("codex.js") || isAbsolute(value)));

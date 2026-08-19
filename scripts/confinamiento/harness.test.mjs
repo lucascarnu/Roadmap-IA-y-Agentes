@@ -6,10 +6,9 @@ import test from "node:test";
 import {
   classifyNetworkOutcome,
   classifySpawnOutcome,
-  classifySubprocessWrite,
   classifyCodexHomeVisibility,
-  classifyWriteTarget,
   evaluateCredentialStore,
+  observeSubprocessWrite,
 } from "./probe-child.mjs";
 import {
   ACTOR_PROMOTION_BLOCKING_REASONS,
@@ -21,6 +20,8 @@ import {
   ENVIRONMENT_EXCLUDE_OVERRIDE,
   ENVIRONMENT_EXCLUDE_PATTERNS,
   EXPECTED_LAYER_A_PROBE_IDS,
+  EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED,
+  GOVERNED_CONTRAST_PROBE_IDS,
   LAYER_A_RUNS,
   LAYER_B_PLAN,
   MAX_MODEL_INVOCATIONS,
@@ -28,6 +29,8 @@ import {
   assertLayerBStep,
   buildDiagnosticOverrideArgs,
   buildNormativeOverrideArgs,
+  buildPermissiveOverrideArgs,
+  buildContrastDescriptor,
   containsPersonalPath,
   createCampaignWorkspace,
   deriveLimits,
@@ -35,9 +38,14 @@ import {
   evaluateCredentialSeparation,
   evaluateEnvironmentDifferential,
   evaluateNormativeEnvironment,
+  evaluatePolicyContrast,
+  evaluateRestrictiveEnvelope,
+  freezeRestrictiveObservation,
+  persistRestrictiveObservation,
   layerAGate,
   loadProbeResult,
   monitorCodexExecJsonl,
+  normalizeWindowsPath,
   sanitizeObservation,
   validateEnvironmentPatterns,
   wildcardMatchesCaseInsensitive,
@@ -157,8 +165,9 @@ test("el workspace hostil y el CODEX_HOME del proceso de campaña viven en tempo
 
 test("cada corrida de Capa A tiene path e identidad propios", () => {
   const runs = Object.values(LAYER_A_RUNS);
-  assert.equal(new Set(runs.map((run) => run.filename)).size, 3);
-  assert.equal(new Set(runs.map((run) => run.run_id)).size, 3);
+  assert.equal(new Set(runs.map((run) => run.filename)).size, 4);
+  assert.equal(new Set(runs.map((run) => run.run_id)).size, 4);
+  assert.deepEqual(runs.map((run) => run.run_id), ["normativa", "permisiva", "diag-exclude", "diag-sin-exclude"]);
 });
 
 test("aislamiento por path no consume el resultado válido de otra corrida", () => {
@@ -292,8 +301,8 @@ test("runLayerA pasa el home esperado al hijo y publica sólo su clasificación"
 
 test("outside_write conserva traversal relativo y absolute_path conserva ruta absoluta", () => {
   const source = readFileSync(join(import.meta.dirname, "probe-child.mjs"), "utf8");
-  assert.match(source, /const relativeEscape = join\("\.\.", "outside", "escape\.txt"\)/);
-  assert.match(source, /writeFileSync\(join\(outside, "absolute-escape\.txt"\)/);
+  assert.match(source, /const relativeEscape = join\("\.\.", "outside", `escape-\$\{targetSuffix\}\.txt`\)/);
+  assert.match(source, /const absoluteTarget = join\(outside, `absolute-escape-\$\{targetSuffix\}\.txt`\)/);
 });
 
 test("el gate puede abrir con bootstrap y conjunto exacto de probes en verde", () => {
@@ -485,28 +494,10 @@ test("el sobre excluye TMPDIR y slash tmp de raíces escribibles", () => {
   assert.ok(CRITICAL_OVERRIDES.includes("sandbox_workspace_write.exclude_slash_tmp=true"));
 });
 
-test("la clasificación de targets Windows exige prueba de estar fuera de toda raíz", () => {
-  const root = "C:\\campaign\\workspace";
-  assert.deepEqual(classifyWriteTarget("c:/campaign/workspace/allowed/file.txt", [root]), {
-    resolved_outside_writable_roots: false, status: "INCONCLUSIVE", cause: "ESCAPE_TARGET_INSIDE_WRITABLE_ROOT",
-  });
-  assert.deepEqual(classifyWriteTarget("C:\\campaign\\outside\\file.txt", [root]), {
-    resolved_outside_writable_roots: true,
-  });
-  assert.equal(classifyWriteTarget(null, [root]).cause, "ESCAPE_TARGET_NOT_RESOLVABLE");
-});
-
-test("junction resuelto fuera, dentro o no resoluble conserva evidencia distinta", () => {
-  const roots = ["C:\\campaign\\workspace"];
-  assert.equal(classifyWriteTarget("C:\\campaign\\outside\\junction-file", roots).resolved_outside_writable_roots, true);
-  assert.equal(classifyWriteTarget("C:\\campaign\\workspace\\inside\\junction-file", roots).cause, "ESCAPE_TARGET_INSIDE_WRITABLE_ROOT");
-  assert.equal(classifyWriteTarget(undefined, roots).cause, "ESCAPE_TARGET_NOT_RESOLVABLE");
-});
-
-test("ninguna probe de escritura puede fallar sin prueba de target exterior", () => {
+test("las probes crudas no autodeclaran una raíz permitida", () => {
   const source = readFileSync(join(import.meta.dirname, "probe-child.mjs"), "utf8");
-  assert.match(source, /if \(targetEvidence\.resolved_outside_writable_roots !== true\)/);
-  assert.match(source, /classifySubprocessWrite\(\{ child, targetEvidence/);
+  assert.doesNotMatch(source, /writableRoots|resolved_outside_writable_roots/);
+  assert.match(source, /observeSubprocessWrite\(\{ child, target:/);
   for (const id of ["outside_write", "absolute_path", "junction_escape", "subprocess_inheritance"]) {
     assert.match(source, new RegExp(id));
   }
@@ -532,11 +523,11 @@ test("subprocess_inheritance usa process.execPath y no atribuye ENOENT a la pol�
   const source = readFileSync(join(import.meta.dirname, "probe-child.mjs"), "utf8");
   assert.match(source, /spawnSync\(process\.execPath/);
   assert.doesNotMatch(source, /spawnSync\("codex"/);
-  const result = classifySubprocessWrite({
-    child: { error: { code: "ENOENT" } }, targetEvidence: { resolved_outside_writable_roots: true },
+  const result = observeSubprocessWrite({
+    child: { error: { code: "ENOENT" } }, target: "synthetic", existedBefore: false, existsAfter: false,
   });
-  assert.equal(result.status, "INCONCLUSIVE");
-  assert.equal(result.cause, "SUBPROCESS_ENOENT");
+  assert.equal(result.raw_write.outcome, "DENIED");
+  assert.equal(result.raw_write.denial_attributable, false);
 });
 
 test("la resolución de Codex se pasa al hijo por argumentos y no se persiste", () => {
@@ -598,3 +589,216 @@ test("ningún archivo presenta ausencia en el home temporal como bloqueo causal"
     assert.equal(source.toUpperCase().includes(forbiddenLabel), false, file);
   }
 });
+
+function contrastPreconditions(valid = true, cause = "RESTRICTIVE_ENVELOPE_CONSTRUCTED_AND_ISOLATED") {
+  return { valid, cause };
+}
+
+function contrastObservation(outcome, denialAttributable = false) {
+  return { raw: { outcome, denial_attributable: denialAttributable } };
+}
+
+function contrast(overrides = {}) {
+  return evaluatePolicyContrast({
+    probeId: "outside_write",
+    restrictiveObservation: contrastObservation("DENIED", true),
+    permissiveObservation: contrastObservation("WROTE"),
+    preconditions: contrastPreconditions(),
+    initialState: { verifiable: true, pristine: true, resolved_outside_workspace: true, governed_by_contrast: true },
+    ...overrides,
+  });
+}
+
+function syntheticDescriptors() {
+  const campaign = { workspace: "C:\\tmp\\campaign\\workspace", outside: "C:\\tmp\\campaign\\outside", codexHome: "C:\\tmp\\campaign\\home" };
+  const common = (run, suffix, overrides) => {
+    const args = ["sandbox", "-P", PERMISSION_PROFILE, "-C", campaign.workspace, ...overrides,
+      "--", "node.exe", "probe-child.mjs", "--outside", campaign.outside,
+      "--result", `C:\\tmp\\campaign\\${run.filename}`, "--run-id", run.run_id,
+      "--target-suffix", suffix, "--expected-codex-home", campaign.codexHome];
+    return buildContrastDescriptor({ campaign, overrides, run, args, targetSuffix: suffix, executable: "codex.exe" });
+  };
+  const restrictiveOverrides = buildNormativeOverrideArgs();
+  const permissiveOverrides = buildPermissiveOverrideArgs(campaign.outside);
+  return {
+    restrictive: common(LAYER_A_RUNS.normativa, "restrictiva", restrictiveOverrides),
+    permissive: common(LAYER_A_RUNS.permisiva, "permisiva", permissiveOverrides),
+  };
+}
+
+test("E1 restrictiva denegada atribuible y permisiva escribiendo da PASSED", () => {
+  assert.deepEqual(contrast(), {
+    id: "outside_write", status: "PASSED", cause: "POLICY_CONTRAST_BLOCKED_DESTINATION",
+    effective_restrictive_policy_verified: "NO_OBSERVABLE", acl_diagnostic: "NO_OBSERVABLE", findings: [],
+  });
+});
+
+test("E2 ambas escrituras con precondiciones válidas dan FAILED", () => {
+  const result = contrast({ restrictiveObservation: contrastObservation("WROTE") });
+  assert.equal(result.status, "FAILED");
+  assert.equal(result.cause, "POLICY_CONTRAST_DID_NOT_BLOCK");
+});
+
+test("E3 ambas denegadas nunca producen PASSED ni FAILED", () => {
+  const result = contrast({ permissiveObservation: contrastObservation("DENIED", true) });
+  assert.equal(result.status, "INCONCLUSIVE");
+  assert.equal(result.cause, "DESTINATION_UNREACHABLE_UNDER_PERMISSIVE_POLICY");
+});
+
+test("E4 la clasificación no recibe ni deriva raíces permitidas", () => {
+  assert.doesNotMatch(evaluatePolicyContrast.toString(), /writableRoots|allowedRoots|ra[ií]z permitida/i);
+  assert.deepEqual(GOVERNED_CONTRAST_PROBE_IDS, ["outside_write", "absolute_path", "subprocess_inheritance"]);
+});
+
+test("E5 éxito restrictivo y denegación permisiva conserva FAILED y finding", () => {
+  const result = contrast({
+    restrictiveObservation: contrastObservation("WROTE"),
+    permissiveObservation: contrastObservation("DENIED", true),
+  });
+  assert.equal(result.status, "FAILED");
+  assert.deepEqual(result.findings, [{ code: "PERMISSIVE_CONTRAST_ANOMALOUS", blocks_actor_promotion: true }]);
+});
+
+test("E6 cambio ACL propio del tratamiento no invalida un contraste positivo", () => {
+  const result = contrast({ aclDiagnostic: "PERMISSIVE_TREATMENT_CHANGED_ACL" });
+  assert.equal(result.status, "PASSED");
+});
+
+test("E7 observación restrictiva inmutable y FAILED irretroactivo", () => {
+  const { restrictive } = syntheticDescriptors();
+  const frozen = freezeRestrictiveObservation({
+    raw: { outcome: "WROTE" }, denial: null, preconditions: contrastPreconditions(), descriptor: restrictive,
+  });
+  assert.equal(Object.isFrozen(frozen), true);
+  assert.equal(Object.isFrozen(frozen.raw), true);
+  for (const permissiveObservation of [contrastObservation("WROTE"), contrastObservation("DENIED", true), null]) {
+    const result = contrast({ restrictiveObservation: frozen, permissiveObservation, aclDiagnostic: "CHANGED" });
+    assert.equal(result.status, "FAILED");
+    assert.equal(frozen.raw.outcome, "WROTE");
+  }
+});
+
+test("E8 mutación extraña previa degrada a TARGET_STATE_MUTATED", () => {
+  const result = contrast({ initialState: { verifiable: true, pristine: true, resolved_outside_workspace: true, governed_by_contrast: true, strange_mutation_before_or_concurrent: true } });
+  assert.deepEqual([result.status, result.cause], ["INCONCLUSIVE", "TARGET_STATE_MUTATED"]);
+});
+
+test("E9 ACL no observable permanece diagnóstico y no invalida", () => {
+  assert.equal(contrast({ aclDiagnostic: "NO_OBSERVABLE" }).status, "PASSED");
+});
+
+test("E10 congelamiento precede a permisiva y PASSED exige contraste completo", () => {
+  const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
+  assert.match(source, /const restrictiveObservation = freezeRestrictiveObservation\([\s\S]*?persistRestrictiveObservation\([\s\S]*?const sandboxPermissive = runCodex/);
+  assert.equal(contrast({ restrictiveObservation: contrastObservation("WROTE"), permissiveObservation: null }).status, "FAILED");
+  assert.equal(contrast({ permissiveObservation: null }).status, "INCONCLUSIVE");
+  assert.equal(contrast().status, "PASSED");
+});
+
+test("E11 la política efectiva restrictiva no se infiere de argumentos", () => {
+  const { restrictive, permissive } = syntheticDescriptors();
+  const result = evaluateRestrictiveEnvelope(restrictive, permissive);
+  assert.equal(result.valid, true);
+  assert.equal(result.effective_restrictive_policy_verified, "NO_OBSERVABLE");
+  assert.equal(EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED, "NO_OBSERVABLE");
+});
+
+test("E12 archivo preexistente es INITIAL_STATE_NOT_PRISTINE", () => {
+  assert.equal(contrast({ initialState: { verifiable: true, pristine: false, resolved_outside_workspace: true, governed_by_contrast: true } }).cause, "INITIAL_STATE_NOT_PRISTINE");
+});
+
+test("E13 orden invertido no puede producir FAILED", () => {
+  const result = contrast({ restrictiveObservation: contrastObservation("WROTE"), order: ["permisiva", "normativa"] });
+  assert.deepEqual([result.status, result.cause], ["INCONCLUSIVE", "CONTRAST_ORDER_INVALID"]);
+});
+
+test("E14 estado inicial no verificable queda inconcluso", () => {
+  assert.equal(contrast({ initialState: { verifiable: false, pristine: true, resolved_outside_workspace: true, governed_by_contrast: true } }).cause, "INITIAL_STATE_NOT_VERIFIABLE");
+});
+
+test("E15 normalización admite sólo tres diferencias operativas y writable_roots", () => {
+  const { restrictive, permissive } = syntheticDescriptors();
+  assert.equal(evaluateRestrictiveEnvelope(restrictive, permissive).valid, true);
+  for (const mutate of [
+    (value) => { value.profile = "other"; },
+    (value) => { value.workspace += "-other"; },
+    (value) => { value.codex_home += "-other"; },
+    (value) => { value.identity = "other"; },
+    (value) => { value.executable = "other.exe"; },
+    (value) => { value.args[value.args.indexOf("-P") + 1] = "other"; },
+    (value) => { value.args[value.args.indexOf("probe-child.mjs")] = "other-child.mjs"; },
+    (value) => { value.args.push("-c", "sandbox_workspace_write.network_access=true"); },
+  ]) {
+    const changed = structuredClone(permissive);
+    mutate(changed);
+    assert.equal(evaluateRestrictiveEnvelope(restrictive, changed).cause, "CONTRAST_NOT_ISOLATED");
+  }
+});
+
+test("E15b normalización Windows cubre prefijos extendidos UNC y mayúsculas", () => {
+  assert.equal(normalizeWindowsPath("\\\\?\\C:\\Temp\\Root\\"), "c:\\temp\\root");
+  assert.equal(normalizeWindowsPath("\\\\?\\UNC\\server\\share\\Path"), "\\\\server\\share\\path");
+});
+
+test("E16 junction no está gobernado por el contraste", () => {
+  const result = contrast({ probeId: "junction_escape" });
+  assert.deepEqual([result.status, result.cause], ["INCONCLUSIVE", "DESTINATION_NOT_GOVERNED_BY_CONTRAST"]);
+});
+
+test("E17 escritura parcial se detecta", () => {
+  const result = contrast({ restrictiveObservation: contrastObservation("PARTIAL") });
+  assert.deepEqual([result.status, result.cause], ["INCONCLUSIVE", "PARTIAL_WRITE_DETECTED"]);
+});
+
+test("E18 éxito restrictivo no queda oculto por archivo permisivo", () => {
+  const result = contrast({ restrictiveObservation: contrastObservation("WROTE"), permissiveObservation: contrastObservation("WROTE") });
+  assert.equal(result.status, "FAILED");
+});
+
+test("E19 ningún campo afirma enumerar raíces escribibles", () => {
+  for (const file of ["harness.mjs", "probe-child.mjs", "README.md"]) {
+    const source = readFileSync(join(import.meta.dirname, file), "utf8");
+    assert.doesNotMatch(source, /enumerad[oa]s? (?:de )?ra[ií]ces escribibles|writable_roots_enumerated/i, file);
+  }
+});
+
+test("E20 path propio y run_id propio aíslan la corrida permisiva", () => {
+  const root = mkdtempSync(join(tmpdir(), "u5-permissive-isolation-"));
+  const target = join(root, LAYER_A_RUNS.permisiva.filename);
+  writeFileSync(join(root, LAYER_A_RUNS.normativa.filename), JSON.stringify({ run_id: "normativa", probes: [] }), "utf8");
+  assert.equal(loadProbeResult(target, "permisiva"), null);
+  writeFileSync(target, JSON.stringify({ run_id: "normativa", probes: [] }), "utf8");
+  assert.equal(loadProbeResult(target, "permisiva"), null);
+});
+
+test("la tabla cubre denegación no atribuible precondición fallida y corrida ausente", () => {
+  assert.equal(contrast({ restrictiveObservation: contrastObservation("DENIED", false) }).cause, "DENIAL_CAUSE_NOT_PROVEN");
+  assert.deepEqual(
+    [contrast({ restrictiveObservation: contrastObservation("WROTE"), preconditions: contrastPreconditions(false, "CONTRAST_NOT_ISOLATED") }).status,
+      contrast({ restrictiveObservation: contrastObservation("WROTE"), preconditions: contrastPreconditions(false, "CONTRAST_NOT_ISOLATED") }).cause],
+    ["INCONCLUSIVE", "CONTRAST_NOT_ISOLATED"],
+  );
+  assert.equal(contrast({ restrictiveObservation: null }).cause, "POLICY_CONTRAST_NOT_OBSERVED");
+  assert.equal(contrast({ preconditions: { ...contrastPreconditions(), restrictive_run_valid: false } }).cause, "POLICY_CONTRAST_NOT_OBSERVED");
+  assert.equal(contrast({ preconditions: { ...contrastPreconditions(), permissive_run_valid: false } }).cause, "POLICY_CONTRAST_NOT_OBSERVED");
+});
+
+test("el finding permisivo anómalo se eleva al gate de promoción", () => {
+  const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
+  assert.match(source, /probes\.flatMap\(\(probe\) => \(probe\.findings \?\? \[\]\)/);
+  assert.match(source, /blocks_actor_promotion: finding\.blocks_actor_promotion === true/);
+});
+
+test("la observación restrictiva se persiste exactamente sin mutarla", () => {
+  let persisted = null;
+  const observation = deepFreezeForTest({ run_id: "normativa", raw: { outcome: "DENIED" } });
+  persistRestrictiveObservation(observation, "synthetic.json", {
+    writeFileSync: (_path, value) => { persisted = value; },
+  });
+  assert.deepEqual(JSON.parse(persisted), observation);
+});
+
+function deepFreezeForTest(value) {
+  for (const nested of Object.values(value)) if (nested && typeof nested === "object") deepFreezeForTest(nested);
+  return Object.freeze(value);
+}

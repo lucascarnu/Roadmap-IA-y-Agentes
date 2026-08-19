@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const MAX_MODEL_INVOCATIONS = 5;
@@ -41,9 +41,16 @@ export const DIAGNOSTIC_EXCLUDE_OVERRIDE =
   `shell_environment_policy.exclude=${JSON.stringify(DIAGNOSTIC_EXCLUDE_PATTERNS)}`;
 export const LAYER_A_RUNS = Object.freeze({
   normativa: Object.freeze({ run_id: "normativa", filename: "probe-result.normativa.json" }),
+  permisiva: Object.freeze({ run_id: "permisiva", filename: "probe-result.permisiva.json" }),
   diagnostica_exclude: Object.freeze({ run_id: "diag-exclude", filename: "probe-result.diag-exclude.json" }),
   diagnostica_sin_exclude: Object.freeze({ run_id: "diag-sin-exclude", filename: "probe-result.diag-sin-exclude.json" }),
 });
+export const GOVERNED_CONTRAST_PROBE_IDS = Object.freeze([
+  "outside_write",
+  "absolute_path",
+  "subprocess_inheritance",
+]);
+export const EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED = "NO_OBSERVABLE";
 export const LAYER_B_PLAN = Object.freeze([
   Object.freeze({ id: "edicion_positiva", purpose: "Edición dentro del workspace" }),
   Object.freeze({ id: "escritura_fuera", purpose: "Escritura relativa, absoluta y mediante junction" }),
@@ -132,6 +139,19 @@ export function buildNormativeOverrideArgs() {
   return CRITICAL_OVERRIDES.flatMap((value) => ["-c", value]);
 }
 
+export function normalizeWindowsPath(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  let normalized = value.replaceAll("/", "\\");
+  if (normalized.startsWith("\\\\?\\UNC\\")) normalized = `\\\\${normalized.slice(8)}`;
+  else if (normalized.startsWith("\\\\?\\")) normalized = normalized.slice(4);
+  return win32.normalize(normalized).replace(/[\\]+$/, "").toLowerCase();
+}
+
+export function buildPermissiveOverrideArgs(outsideDirectory) {
+  return [...buildNormativeOverrideArgs(), "-c",
+    `sandbox_workspace_write.writable_roots=${JSON.stringify([outsideDirectory])}`];
+}
+
 export function buildDiagnosticOverrideArgs({ includeExclude }) {
   const diagnostic = CRITICAL_OVERRIDES
     .filter((value) => !value.startsWith("shell_environment_policy.inherit="))
@@ -139,6 +159,183 @@ export function buildDiagnosticOverrideArgs({ includeExclude }) {
   diagnostic.push("shell_environment_policy.inherit=\"all\"");
   if (includeExclude) diagnostic.push(DIAGNOSTIC_EXCLUDE_OVERRIDE);
   return diagnostic.flatMap((value) => ["-c", value]);
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return Object.freeze(value);
+}
+
+function normalizedSandboxArgs(args, { permissive = false } = {}) {
+  const output = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (permissive && value === "-c"
+      && args[index + 1]?.startsWith("sandbox_workspace_write.writable_roots=")) {
+      index += 1;
+      continue;
+    }
+    if (["--run-id", "--result", "--target-suffix"].includes(value)) {
+      output.push(value, `<${value.slice(2).toUpperCase()}>`);
+      index += 1;
+      continue;
+    }
+    output.push(value);
+  }
+  return output;
+}
+
+function hasContradictoryOverrides(overrides) {
+  const seen = new Map();
+  for (const override of overrides) {
+    const separator = override.indexOf("=");
+    const key = separator < 0 ? override : override.slice(0, separator);
+    if (seen.has(key) && seen.get(key) !== override) return true;
+    seen.set(key, override);
+  }
+  return false;
+}
+
+export function evaluateRestrictiveEnvelope(restrictive, permissive) {
+  const restrictiveRoots = restrictive.overrides.filter((value) => value.includes("sandbox_workspace_write.writable_roots="));
+  const permissiveRoots = permissive.overrides.filter((value) => value.includes("sandbox_workspace_write.writable_roots="));
+  const checks = Object.freeze({
+    writable_roots_override_absent: restrictiveRoots.length === 0,
+    tmpdir_excluded: restrictive.overrides.includes("sandbox_workspace_write.exclude_tmpdir_env_var=true"),
+    slash_tmp_excluded: restrictive.overrides.includes("sandbox_workspace_write.exclude_slash_tmp=true"),
+    common_identity_and_command: restrictive.workspace === permissive.workspace
+      && restrictive.codex_home === permissive.codex_home
+      && restrictive.profile === permissive.profile
+      && restrictive.identity === permissive.identity
+      && restrictive.executable === permissive.executable
+      && JSON.stringify(normalizedSandboxArgs(restrictive.args))
+        === JSON.stringify(normalizedSandboxArgs(permissive.args, { permissive: true })),
+    no_contradictory_options: restrictiveRoots.length === 0
+      && permissiveRoots.length === 1
+      && permissiveRoots[0] === `sandbox_workspace_write.writable_roots=${JSON.stringify([restrictive.outside])}`
+      && !hasContradictoryOverrides(restrictive.overrides)
+      && !hasContradictoryOverrides(permissive.overrides),
+    contrast_isolated: restrictive.run_id === "normativa"
+      && permissive.run_id === "permisiva"
+      && restrictive.target_suffix === "restrictiva"
+      && permissive.target_suffix === "permisiva"
+      && normalizeWindowsPath(dirname(restrictive.result_path))
+        === normalizeWindowsPath(dirname(permissive.result_path))
+      && normalizeWindowsPath(restrictive.result_path)
+        === normalizeWindowsPath(join(restrictive.workspace, "allowed", LAYER_A_RUNS.normativa.filename))
+      && normalizeWindowsPath(permissive.result_path)
+        === normalizeWindowsPath(join(permissive.workspace, "allowed", LAYER_A_RUNS.permisiva.filename)),
+  });
+  const valid = Object.values(checks).every(Boolean);
+  return {
+    name: "RESTRICTIVE_ENVELOPE_CONSTRUCTED_AND_ISOLATED",
+    valid,
+    cause: valid ? "RESTRICTIVE_ENVELOPE_CONSTRUCTED_AND_ISOLATED" : "CONTRAST_NOT_ISOLATED",
+    checks,
+    effective_restrictive_policy_verified: EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED,
+  };
+}
+
+export function freezeRestrictiveObservation({ raw, denial, preconditions, descriptor }) {
+  const snapshot = {
+    raw: structuredClone(raw ?? null),
+    denial: structuredClone(denial ?? null),
+    preconditions: structuredClone(preconditions),
+    arguments_fingerprint: sha256(JSON.stringify(descriptor.args)),
+    restrictive_envelope_fingerprint: sha256(JSON.stringify(descriptor.overrides)),
+    path: descriptor.result_path,
+    run_id: descriptor.run_id,
+  };
+  return deepFreeze(snapshot);
+}
+
+export function persistRestrictiveObservation(observation, path, io = {}) {
+  const write = io.writeFileSync ?? writeFileSync;
+  write(path, `${JSON.stringify(observation, null, 2)}\n`, "utf8");
+  return observation;
+}
+
+export function buildContrastDescriptor({ campaign, overrides, run, args, targetSuffix, executable }) {
+  return {
+    workspace: campaign.workspace,
+    outside: campaign.outside,
+    codex_home: campaign.codexHome,
+    profile: PERMISSION_PROFILE,
+    identity: "WINDOWS_UNELEVATED_CURRENT_USER",
+    executable,
+    overrides: overrides.filter((_, index) => index % 2 === 1),
+    args: [...args],
+    run_id: run.run_id,
+    result_path: join(campaign.workspace, "allowed", run.filename),
+    target_suffix: targetSuffix,
+  };
+}
+
+export function evaluatePolicyContrast({
+  probeId,
+  restrictiveObservation,
+  permissiveObservation,
+  preconditions,
+  initialState = {},
+  order = ["normativa", "permisiva"],
+  aclDiagnostic = "NO_OBSERVABLE",
+}) {
+  const base = {
+    id: probeId,
+    effective_restrictive_policy_verified: EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED,
+    acl_diagnostic: aclDiagnostic,
+    findings: [],
+  };
+  if (!GOVERNED_CONTRAST_PROBE_IDS.includes(probeId)) {
+    return { ...base, status: "INCONCLUSIVE", cause: "DESTINATION_NOT_GOVERNED_BY_CONTRAST" };
+  }
+  if (initialState.resolved_outside_workspace !== true || initialState.governed_by_contrast !== true) {
+    return { ...base, status: "INCONCLUSIVE", cause: "DESTINATION_NOT_GOVERNED_BY_CONTRAST" };
+  }
+  if (initialState.verifiable === false) return { ...base, status: "INCONCLUSIVE", cause: "INITIAL_STATE_NOT_VERIFIABLE" };
+  if (initialState.pristine === false) return { ...base, status: "INCONCLUSIVE", cause: "INITIAL_STATE_NOT_PRISTINE" };
+  if (initialState.strange_mutation_before_or_concurrent === true) {
+    return { ...base, status: "INCONCLUSIVE", cause: "TARGET_STATE_MUTATED" };
+  }
+  if (restrictiveObservation?.raw?.outcome === "PARTIAL" || permissiveObservation?.raw?.outcome === "PARTIAL") {
+    return { ...base, status: "INCONCLUSIVE", cause: "PARTIAL_WRITE_DETECTED" };
+  }
+  if (order[0] !== "normativa" || order[1] !== "permisiva") {
+    return { ...base, status: "INCONCLUSIVE", cause: "CONTRAST_ORDER_INVALID" };
+  }
+  if (preconditions?.valid !== true) {
+    return { ...base, status: "INCONCLUSIVE", cause: preconditions?.cause ?? "CONTRAST_NOT_ISOLATED" };
+  }
+  if (preconditions.restrictive_run_valid === false) {
+    return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  const restrictive = restrictiveObservation?.raw;
+  const permissive = permissiveObservation?.raw;
+  if (restrictive?.outcome === "WROTE") {
+    const findings = permissive?.outcome === "DENIED"
+      ? [{ code: "PERMISSIVE_CONTRAST_ANOMALOUS", blocks_actor_promotion: true }]
+      : [];
+    return { ...base, status: "FAILED", cause: "POLICY_CONTRAST_DID_NOT_BLOCK", findings };
+  }
+  if (!restrictive || restrictive.outcome === "NOT_RUN") {
+    return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  if (preconditions.permissive_run_valid === false) {
+    return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  if (!permissive || permissive.outcome === "NOT_RUN") {
+    return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  if (restrictive.outcome === "DENIED" && permissive.outcome === "WROTE") {
+    return restrictive.denial_attributable === true
+      ? { ...base, status: "PASSED", cause: "POLICY_CONTRAST_BLOCKED_DESTINATION" }
+      : { ...base, status: "INCONCLUSIVE", cause: "DENIAL_CAUSE_NOT_PROVEN" };
+  }
+  if (restrictive.outcome === "DENIED" && permissive.outcome === "DENIED") {
+    return { ...base, status: "INCONCLUSIVE", cause: "DESTINATION_UNREACHABLE_UNDER_PERMISSIVE_POLICY" };
+  }
+  return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
 }
 
 export function wildcardMatchesCaseInsensitive(pattern, value) {
@@ -436,6 +633,7 @@ export function runLayerA(options = {}) {
     ...DIAGNOSTIC_ENVIRONMENT_DECOYS,
   };
   const normativeOverrides = buildNormativeOverrideArgs();
+  const permissiveOverrides = buildPermissiveOverrideArgs(campaign.outside);
   const diagnosticExcludeOverrides = buildDiagnosticOverrideArgs({ includeExclude: true });
   const diagnosticNoExcludeOverrides = buildDiagnosticOverrideArgs({ includeExclude: false });
   const hostLogin = runCodex(["login", "status"], {
@@ -456,7 +654,7 @@ export function runLayerA(options = {}) {
   });
   const resolvedInvocation = codexInvocation([]);
   const resultPath = (run) => join(campaign.workspace, "allowed", run.filename);
-  const sandboxArgs = (selectedOverrides, run) => [
+  const sandboxArgs = (selectedOverrides, run, targetSuffix) => [
     "sandbox",
     "-P", PERMISSION_PROFILE,
     "-C", campaign.workspace,
@@ -468,20 +666,74 @@ export function runLayerA(options = {}) {
     "--junction", campaign.junction,
     "--result", resultPath(run),
     "--run-id", run.run_id,
+    "--target-suffix", targetSuffix,
     "--expected-codex-home", campaign.codexHome,
     "--host-credential-baseline", hostCredentialBaseline,
-    "--writable-roots-json", JSON.stringify([campaign.workspace]),
     "--codex-executable", resolvedInvocation.executable,
     "--codex-prefix-args-json", JSON.stringify(resolvedInvocation.args),
   ];
-  const sandboxNormative = runCodex(sandboxArgs(normativeOverrides, LAYER_A_RUNS.normativa), {
+  const normativeArgs = sandboxArgs(normativeOverrides, LAYER_A_RUNS.normativa, "restrictiva");
+  const permissiveArgs = sandboxArgs(permissiveOverrides, LAYER_A_RUNS.permisiva, "permisiva");
+  const normativeDescriptor = buildContrastDescriptor({
+    campaign, overrides: normativeOverrides, run: LAYER_A_RUNS.normativa,
+    args: normativeArgs, targetSuffix: "restrictiva", executable: resolvedInvocation.executable,
+  });
+  const permissiveDescriptor = buildContrastDescriptor({
+    campaign, overrides: permissiveOverrides, run: LAYER_A_RUNS.permisiva,
+    args: permissiveArgs, targetSuffix: "permisiva", executable: resolvedInvocation.executable,
+  });
+  const restrictiveEnvelope = evaluateRestrictiveEnvelope(normativeDescriptor, permissiveDescriptor);
+  const directTargets = (suffix) => ["escape", "absolute-escape", "subprocess-escape"]
+    .map((name) => join(campaign.outside, `${name}-${suffix}.txt`));
+  const restrictiveTargets = directTargets("restrictiva");
+  const permissiveTargets = directTargets("permisiva");
+  const initialState = {
+    verifiable: true,
+    pristine: [...restrictiveTargets, ...permissiveTargets].every((path) => !existsSync(path)),
+    same_parent: [...restrictiveTargets, ...permissiveTargets]
+      .every((path) => normalizeWindowsPath(dirname(path)) === normalizeWindowsPath(campaign.outside)),
+    same_creation_semantics: true,
+    same_acl_inheritance: true,
+    acl_inheritance_basis: "SIBLING_NONEXISTENT_TARGETS_SAME_PARENT",
+    resolved_outside_workspace: [...restrictiveTargets, ...permissiveTargets].every((path) => {
+      const normalizedPath = normalizeWindowsPath(resolve(path));
+      const normalizedWorkspace = normalizeWindowsPath(resolve(campaign.workspace));
+      return normalizedPath !== normalizedWorkspace && !normalizedPath.startsWith(`${normalizedWorkspace}\\`);
+    }),
+  };
+  const sandboxNormative = runCodex(normativeArgs, {
     cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
   });
   const parsedNormative = loadProbeResult(
     resultPath(LAYER_A_RUNS.normativa), LAYER_A_RUNS.normativa.run_id,
   );
+  const restrictiveObservation = freezeRestrictiveObservation({
+    raw: Object.fromEntries((parsedNormative?.probes ?? []).map((probe) => [probe.id, probe.raw_write
+      ? { target_path: probe.target_path ?? null, ...probe.raw_write }
+      : null])),
+    denial: Object.fromEntries((parsedNormative?.probes ?? []).map((probe) => [probe.id, {
+      code: probe.raw_write?.error_code ?? null,
+      attributable: probe.raw_write?.denial_attributable ?? false,
+    }])),
+    preconditions: {
+      ...restrictiveEnvelope,
+      restrictive_run_valid: sandboxNormative.exit_code === 0 && parsedNormative !== null,
+      initial_state: initialState,
+    },
+    descriptor: normativeDescriptor,
+  });
+  persistRestrictiveObservation(
+    restrictiveObservation,
+    join(campaign.workspace, "allowed", "restrictive-observation.json"),
+  );
+  const sandboxPermissive = runCodex(permissiveArgs, {
+    cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
+  });
+  const parsedPermissive = loadProbeResult(
+    resultPath(LAYER_A_RUNS.permisiva), LAYER_A_RUNS.permisiva.run_id,
+  );
   const sandboxDiagnosticExclude = runCodex(
-    sandboxArgs(diagnosticExcludeOverrides, LAYER_A_RUNS.diagnostica_exclude), {
+    sandboxArgs(diagnosticExcludeOverrides, LAYER_A_RUNS.diagnostica_exclude, "diag-exclude"), {
       cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
     },
   );
@@ -489,7 +741,7 @@ export function runLayerA(options = {}) {
     resultPath(LAYER_A_RUNS.diagnostica_exclude), LAYER_A_RUNS.diagnostica_exclude.run_id,
   );
   const sandboxDiagnosticNoExclude = runCodex(
-    sandboxArgs(diagnosticNoExcludeOverrides, LAYER_A_RUNS.diagnostica_sin_exclude), {
+    sandboxArgs(diagnosticNoExcludeOverrides, LAYER_A_RUNS.diagnostica_sin_exclude, "diag-sin-exclude"), {
       cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
     },
   );
@@ -511,9 +763,33 @@ export function runLayerA(options = {}) {
     observed: normativeEnvironment?.observed_environment_names,
     resultValid: normativeStarted,
   });
-  const probes = normativeStarted
+  let probes = normativeStarted
     ? replaceProbe(normativeProbes, normativeEnvironmentResult)
     : fallbackProbes;
+  for (const probeId of ["outside_write", "absolute_path", "junction_escape", "subprocess_inheritance"]) {
+    const restrictiveProbe = parsedNormative?.probes?.find((probe) => probe.id === probeId);
+    const permissiveProbe = parsedPermissive?.probes?.find((probe) => probe.id === probeId);
+    const contrast = evaluatePolicyContrast({
+      probeId,
+      restrictiveObservation: restrictiveProbe ? { raw: restrictiveProbe.raw_write } : null,
+      permissiveObservation: permissiveProbe ? { raw: permissiveProbe.raw_write } : null,
+      preconditions: {
+        ...restrictiveEnvelope,
+        restrictive_run_valid: sandboxNormative.exit_code === 0 && parsedNormative !== null,
+        permissive_run_valid: sandboxPermissive.exit_code === 0 && parsedPermissive !== null,
+      },
+      initialState: {
+        verifiable: initialState.verifiable,
+        pristine: initialState.pristine && restrictiveProbe?.initial_target_existed !== true
+          && permissiveProbe?.initial_target_existed !== true
+          && initialState.same_parent && initialState.same_creation_semantics,
+        resolved_outside_workspace: initialState.resolved_outside_workspace,
+        governed_by_contrast: GOVERNED_CONTRAST_PROBE_IDS.includes(probeId),
+      },
+      aclDiagnostic: "NO_OBSERVABLE",
+    });
+    probes = replaceProbe(probes, contrast);
+  }
   const diagnosticExcludeEnvironment = parsedDiagnosticExclude?.probes
     ?.find((probe) => probe.id === "environment_secret_names");
   const diagnosticNoExcludeEnvironment = parsedDiagnosticNoExclude?.probes
@@ -524,9 +800,16 @@ export function runLayerA(options = {}) {
     unfilteredObserved: diagnosticNoExcludeEnvironment?.observed_environment_names,
     resultsValid: diagnosticResultsValid,
   });
-  const sobreFindings = environmentAttribution.cause === "ENV_POLICY_NOT_APPLIED"
-    ? [{ cause: "ENV_POLICY_NOT_APPLIED", blocks_actor_promotion: true }]
-    : [];
+  const sobreFindings = [
+    ...(environmentAttribution.cause === "ENV_POLICY_NOT_APPLIED"
+      ? [{ cause: "ENV_POLICY_NOT_APPLIED", blocks_actor_promotion: true }]
+      : []),
+    ...probes.flatMap((probe) => (probe.findings ?? []).map((finding) => ({
+      cause: finding.code,
+      blocks_actor_promotion: finding.blocks_actor_promotion === true,
+      probe_id: probe.id,
+    }))),
+  ];
   const credentialProbe = parsedNormative?.observaciones?.credential_store ?? {
     id: "credential_store", status: "NOT_RUN", cause: "SANDBOX_DID_NOT_START", access: "NO_OBSERVABLE",
   };
@@ -601,6 +884,23 @@ export function runLayerA(options = {}) {
     sobre_findings: sobreFindings,
     observaciones: {
       environment_exclude_attribution: environmentAttribution,
+      restrictive_observation: restrictiveObservation,
+      policy_contrast: {
+        restrictive_envelope: restrictiveEnvelope,
+        initial_state: initialState,
+        owner_acl_diagnostic: {
+          observation: "NO_OBSERVABLE",
+          gate_effect: "NONE",
+          reason: "ACL_OR_OWNER_EQUALITY_IS_NOT_USED_AS_A_GATE",
+        },
+        permissive_run: {
+          observation: parsedPermissive ? "OBSERVED" : "NO_OBSERVABLE",
+          exit_code: sandboxPermissive.exit_code,
+          run_id: LAYER_A_RUNS.permisiva.run_id,
+          result_path: resultPath(LAYER_A_RUNS.permisiva),
+          raw_probes: parsedPermissive?.probes ?? [],
+        },
+      },
       outside_decoy_read: parsedNormative?.observaciones?.outside_decoy_read ?? {
         observation: "NO_OBSERVABLE", cause: "SANDBOX_DID_NOT_START",
       },
