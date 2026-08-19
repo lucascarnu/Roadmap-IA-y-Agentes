@@ -536,6 +536,31 @@ La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDAT
 usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
 Todavía no se cumple.
 
+### Observaciones menores del instrumental de confinamiento
+
+**Estado: ABIERTO. Clasificación: menor, no bloqueante.** Son las dos
+observaciones de impacto `O` que dejó la revalidación independiente de la PR
+#110. No bloquean nada según `0010`, que sólo bloquea ante M1 o M2 con evidencia
+`SETTLED`, y se registran para que no se pierdan.
+
+- **Nombre divergente del campo de contenido de credenciales.**
+  `scripts/confinamiento/evidence/u5-local.json` usa
+  `credential_content_observed`, mientras el harness emite
+  `control_plane_access.content_observed`. La evidencia se autodeclara
+  reetiquetado editorial y no salida cruda, así que la divergencia es cosmética;
+  conviene alinearla igual para que nadie lea dos esquemas donde hay uno.
+- **Redacción parcial de rutas temporales.** `redactText` reemplaza la ruta de
+  perfil de Windows hasta el primer separador posterior al nombre de usuario. El
+  nombre de usuario sí se elimina, pero el sufijo de la ruta temporal
+  sobreviviría dentro de un `stderr` que lo contuviera. En la corrida observada
+  el error no contenía ninguna ruta, así que es un riesgo de redacción parcial y
+  **no un escape observado**. No expone datos personales; sí expone estructura de
+  directorios innecesaria.
+
+Ninguna de las dos afecta la clasificación `BLOQUEADO_POR_LIMITE` de esa unidad
+ni el estado de confinamiento de ningún actor, que sigue
+`NO_CONFIGURADO / NO_PROBADO`.
+
 ## Para medir durante las primeras PR del MVP
 
 Los asuntos de esta sección necesitan evidencia real durante las primeras pull
