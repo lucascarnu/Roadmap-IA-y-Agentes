@@ -8,7 +8,9 @@ clasificacion: oro
 materiales:
   - "https://raw.githubusercontent.com/openai/codex/rust-v0.147.0/codex-rs/cli/src/debug_sandbox.rs"
   - "https://raw.githubusercontent.com/openai/codex/rust-v0.147.0/codex-rs/protocol/src/shell_environment.rs"
-  - "https://learn.chatgpt.com/docs/config-file/config-advanced"
+  - "https://raw.githubusercontent.com/openai/codex/rust-v0.147.0/codex-rs/protocol/src/config_types.rs"
+  - "https://learn.chatgpt.com/docs/config-file/config-reference"
+  - "https://learn.chatgpt.com/docs/windows/windows-sandbox"
 ---
 
 # Entorno de los comandos ejecutados por el sandbox helper de Codex
@@ -43,6 +45,29 @@ versión evaluada.
   `codex-rs/cli/src/debug_sandbox.rs`, `spawn_debug_sandbox_child()`
   agrega `CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR` y variables de
   plataforma, pero no reinyecta `CODEX_HOME`.
+- **Qué afirmación respalda sobre lecturas:** `workspace-write` delimita las
+  escrituras al workspace y a las raíces adicionales; no constituye una
+  frontera general de lectura. Por eso una credencial almacenada como archivo
+  ordinario fuera del workspace no queda protegida sólo por esta modalidad.
+- **Qué afirmación respalda sobre la red:** la documentación oficial declara
+  que el sandbox nativo de Windows previene acceso de red sin aprobación y
+  advierte que el modo `unelevated` conserva límites ACL pero tiene aislamiento
+  de red más débil. En la fuente pinneada, `debug_sandbox.rs` transmite la
+  política de red del perfil a `spawn_windows_sandbox_session_for_level()` y
+  crea la sesión con `proxy_enforced: false` cuando no hay proxy gestionado.
+  Estado: `DOCUMENTADO`. Una respuesta externa real bajo una política
+  restringida es evidencia de que la política no se aplicó en esa corrida; un
+  fallo de DNS o timeout por sí solo no demuestra el bloqueo del sandbox.
+- **Qué afirmación respalda sobre la política ambiental:** la referencia
+  vigente llama `shell_environment_policy.filters` a la forma canónica. La
+  versión pinneada `0.147.0`, en cambio, representa y ejecuta los campos legacy
+  `exclude` e `include_only`, con patrones glob case-insensitive. El
+  instrumental fijado a esa versión usa `exclude` y debe migrarse al cambiar de
+  versión si la compatibilidad deja de existir.
+- **Polaridad de `ignore_default_excludes`:** `true` conserva inicialmente las
+  variables cuyos nombres contienen `KEY`, `SECRET` o `TOKEN`; `false` aplica
+  las exclusiones automáticas antes de los filtros explícitos. La fuente
+  pinneada implementa esta polaridad en `populate_env()`.
 - **Qué afirmación respalda sobre `codex exec --json`:** la
   documentación oficial confirma que produce salida JSONL. La página
   citada no enumera el catálogo exhaustivo de tipos de evento.
@@ -52,6 +77,7 @@ versión evaluada.
   Capa B. El monitor preparado contra esos identificadores no constituye
   evidencia de que el catálogo sea completo.
 - **Condición de revalidación:** un cambio de versión del CLI, cualquier
-  cambio en `debug_sandbox.rs` o `shell_environment.rs`, cualquier cambio
-  en la composición del modo `Core`, o cualquier cambio observable en el
-  formato JSONL de `codex exec --json`.
+  cambio en `debug_sandbox.rs`, `shell_environment.rs` o `config_types.rs`,
+  cualquier cambio en la composición del modo `Core`, en la implementación de
+  red del sandbox Windows, en la sintaxis canónica de filtros o en el formato
+  JSONL de `codex exec --json`.
