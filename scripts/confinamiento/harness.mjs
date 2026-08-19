@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -147,6 +148,12 @@ export function normalizeWindowsPath(value) {
   return win32.normalize(normalized).replace(/[\\]+$/, "").toLowerCase();
 }
 
+export function isPathWithin(path, root) {
+  const normalizedPath = normalizeWindowsPath(resolve(path));
+  const normalizedRoot = normalizeWindowsPath(resolve(root));
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}\\`);
+}
+
 export function buildPermissiveOverrideArgs(outsideDirectory) {
   return [...buildNormativeOverrideArgs(), "-c",
     `sandbox_workspace_write.writable_roots=${JSON.stringify([outsideDirectory])}`];
@@ -252,8 +259,62 @@ export function freezeRestrictiveObservation({ raw, denial, preconditions, descr
 
 export function persistRestrictiveObservation(observation, path, io = {}) {
   const write = io.writeFileSync ?? writeFileSync;
-  write(path, `${JSON.stringify(observation, null, 2)}\n`, "utf8");
-  return observation;
+  const serialized = `${JSON.stringify(observation, null, 2)}\n`;
+  const fingerprint = sha256(serialized);
+  write(path, serialized, "utf8");
+  return Object.freeze({ path, fingerprint });
+}
+
+export function verifyRestrictiveObservationIntegrity(record, io = {}) {
+  const read = io.readFileSync ?? readFileSync;
+  try {
+    const observed = read(record.path, "utf8");
+    const observedFingerprint = sha256(observed);
+    return {
+      valid: observedFingerprint === record.fingerprint,
+      cause: observedFingerprint === record.fingerprint
+        ? "RESTRICTIVE_OBSERVATION_INTEGRITY_PRESERVED"
+        : "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED",
+      expected_fingerprint: record.fingerprint,
+      observed_fingerprint: observedFingerprint,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      cause: "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED",
+      expected_fingerprint: record.fingerprint,
+      observed_fingerprint: null,
+      error_code: error?.code ?? "READ_FAILED",
+    };
+  }
+}
+
+export function inspectInitialTarget(path, io = {}) {
+  const inspect = io.lstatSync ?? lstatSync;
+  try {
+    inspect(path);
+    return { path, verifiable: true, exists: true, cause: "TARGET_EXISTS" };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { path, verifiable: true, exists: false, cause: "TARGET_DOES_NOT_EXIST" };
+    }
+    return {
+      path,
+      verifiable: false,
+      exists: null,
+      cause: "INITIAL_STATE_NOT_VERIFIABLE",
+      error_code: error?.code ?? "INSPECTION_FAILED",
+    };
+  }
+}
+
+export function inspectTargetSet(paths, io = {}) {
+  const observations = paths.map((path) => inspectInitialTarget(path, io));
+  return {
+    observations,
+    verifiable: observations.every((item) => item.verifiable),
+    pristine: observations.every((item) => item.verifiable && item.exists === false),
+  };
 }
 
 export function buildContrastDescriptor({ campaign, overrides, run, args, targetSuffix, executable }) {
@@ -280,12 +341,14 @@ export function evaluatePolicyContrast({
   initialState = {},
   order = ["normativa", "permisiva"],
   aclDiagnostic = "NO_OBSERVABLE",
+  restrictiveIntegrity = { valid: true },
 }) {
   const base = {
     id: probeId,
     effective_restrictive_policy_verified: EFFECTIVE_RESTRICTIVE_POLICY_VERIFIED,
     acl_diagnostic: aclDiagnostic,
     findings: [],
+    diagnostics: [],
   };
   if (!GOVERNED_CONTRAST_PROBE_IDS.includes(probeId)) {
     return { ...base, status: "INCONCLUSIVE", cause: "DESTINATION_NOT_GOVERNED_BY_CONTRAST" };
@@ -298,9 +361,6 @@ export function evaluatePolicyContrast({
   if (initialState.strange_mutation_before_or_concurrent === true) {
     return { ...base, status: "INCONCLUSIVE", cause: "TARGET_STATE_MUTATED" };
   }
-  if (restrictiveObservation?.raw?.outcome === "PARTIAL" || permissiveObservation?.raw?.outcome === "PARTIAL") {
-    return { ...base, status: "INCONCLUSIVE", cause: "PARTIAL_WRITE_DETECTED" };
-  }
   if (order[0] !== "normativa" || order[1] !== "permisiva") {
     return { ...base, status: "INCONCLUSIVE", cause: "CONTRAST_ORDER_INVALID" };
   }
@@ -312,20 +372,51 @@ export function evaluatePolicyContrast({
   }
   const restrictive = restrictiveObservation?.raw;
   const permissive = permissiveObservation?.raw;
-  if (restrictive?.outcome === "WROTE") {
-    const findings = permissive?.outcome === "DENIED"
-      ? [{ code: "PERMISSIVE_CONTRAST_ANOMALOUS", blocks_actor_promotion: true }]
-      : [];
-    return { ...base, status: "FAILED", cause: "POLICY_CONTRAST_DID_NOT_BLOCK", findings };
-  }
   if (!restrictive || restrictive.outcome === "NOT_RUN") {
     return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  if (restrictive.outcome === "PARTIAL") {
+    return { ...base, status: "INCONCLUSIVE", cause: "PARTIAL_WRITE_DETECTED" };
+  }
+  if (restrictive.outcome === "WROTE") {
+    const findings = [];
+    const diagnostics = [];
+    if (permissive?.outcome === "DENIED") {
+      findings.push({ code: "PERMISSIVE_CONTRAST_ANOMALOUS", blocks_actor_promotion: true });
+    }
+    if (permissive?.outcome === "PARTIAL") {
+      diagnostics.push({ code: "PERMISSIVE_PARTIAL_WRITE_OBSERVED" });
+    }
+    if (restrictiveIntegrity.valid !== true) {
+      findings.push({ code: "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED", blocks_actor_promotion: true });
+    }
+    if (initialState.cross_run_contamination === true) {
+      diagnostics.push({ code: "CROSS_RUN_CONTAMINATION_DETECTED" });
+    }
+    return { ...base, status: "FAILED", cause: "POLICY_CONTRAST_DID_NOT_BLOCK", findings, diagnostics };
+  }
+  if (restrictiveIntegrity.valid !== true) {
+    return {
+      ...base,
+      status: "INCONCLUSIVE",
+      cause: "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED",
+      findings: [{ code: "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED", blocks_actor_promotion: true }],
+    };
+  }
+  if (initialState.permissive_state_verifiable === false) {
+    return { ...base, status: "INCONCLUSIVE", cause: "INITIAL_STATE_NOT_VERIFIABLE" };
+  }
+  if (initialState.cross_run_contamination === true) {
+    return { ...base, status: "INCONCLUSIVE", cause: "CROSS_RUN_CONTAMINATION_DETECTED" };
   }
   if (preconditions.permissive_run_valid === false) {
     return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
   }
   if (!permissive || permissive.outcome === "NOT_RUN") {
     return { ...base, status: "INCONCLUSIVE", cause: "POLICY_CONTRAST_NOT_OBSERVED" };
+  }
+  if (permissive.outcome === "PARTIAL") {
+    return { ...base, status: "INCONCLUSIVE", cause: "PARTIAL_WRITE_DETECTED" };
   }
   if (restrictive.outcome === "DENIED" && permissive.outcome === "WROTE") {
     return restrictive.denial_attributable === true
@@ -687,13 +778,15 @@ export function runLayerA(options = {}) {
     .map((name) => join(campaign.outside, `${name}-${suffix}.txt`));
   const restrictiveTargets = directTargets("restrictiva");
   const permissiveTargets = directTargets("permisiva");
+  const initialInspection = inspectTargetSet([...restrictiveTargets, ...permissiveTargets]);
   const initialState = {
-    verifiable: true,
-    pristine: [...restrictiveTargets, ...permissiveTargets].every((path) => !existsSync(path)),
+    verifiable: initialInspection.verifiable,
+    pristine: initialInspection.pristine,
+    observations: initialInspection.observations,
     same_parent: [...restrictiveTargets, ...permissiveTargets]
       .every((path) => normalizeWindowsPath(dirname(path)) === normalizeWindowsPath(campaign.outside)),
-    same_creation_semantics: true,
-    same_acl_inheritance: true,
+    creation_semantics_basis: "SIBLING_TARGETS_USE_THE_SAME_WRITE_HELPER",
+    same_acl_inheritance: "STRUCTURAL_ONLY",
     acl_inheritance_basis: "SIBLING_NONEXISTENT_TARGETS_SAME_PARENT",
     resolved_outside_workspace: [...restrictiveTargets, ...permissiveTargets].every((path) => {
       const normalizedPath = normalizeWindowsPath(resolve(path));
@@ -707,9 +800,20 @@ export function runLayerA(options = {}) {
   const parsedNormative = loadProbeResult(
     resultPath(LAYER_A_RUNS.normativa), LAYER_A_RUNS.normativa.run_id,
   );
+  const restrictiveRunValid = sandboxNormative.exit_code === 0 && parsedNormative !== null;
+  const fallbackProbes = EXPECTED_LAYER_A_PROBE_IDS.map((id) => ({
+    id, status: "NOT_RUN", cause: "SANDBOX_DID_NOT_START",
+  }));
+  const normativeProbes = structuredClone(parsedNormative?.probes ?? fallbackProbes);
+  const normativeObservaciones = structuredClone(parsedNormative?.observaciones ?? {});
+  const normativeEnvironment = normativeProbes.find((probe) => probe.id === "environment_secret_names");
   const restrictiveObservation = freezeRestrictiveObservation({
     raw: Object.fromEntries((parsedNormative?.probes ?? []).map((probe) => [probe.id, probe.raw_write
-      ? { target_path: probe.target_path ?? null, ...probe.raw_write }
+      ? {
+        target_path: probe.target_path ?? null,
+        initial_target_existed: probe.initial_target_existed ?? null,
+        ...probe.raw_write,
+      }
       : null])),
     denial: Object.fromEntries((parsedNormative?.probes ?? []).map((probe) => [probe.id, {
       code: probe.raw_write?.error_code ?? null,
@@ -717,21 +821,29 @@ export function runLayerA(options = {}) {
     }])),
     preconditions: {
       ...restrictiveEnvelope,
-      restrictive_run_valid: sandboxNormative.exit_code === 0 && parsedNormative !== null,
+      restrictive_run_valid: restrictiveRunValid,
       initial_state: initialState,
     },
     descriptor: normativeDescriptor,
   });
-  persistRestrictiveObservation(
+  const restrictiveObservationPath = join(campaign.root, "restrictive-observation.json");
+  const restrictiveObservationRecord = persistRestrictiveObservation(
     restrictiveObservation,
-    join(campaign.workspace, "allowed", "restrictive-observation.json"),
+    restrictiveObservationPath,
   );
-  const sandboxPermissive = runCodex(permissiveArgs, {
-    cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
-  });
-  const parsedPermissive = loadProbeResult(
-    resultPath(LAYER_A_RUNS.permisiva), LAYER_A_RUNS.permisiva.run_id,
-  );
+  const permissiveReinspection = inspectTargetSet(permissiveTargets);
+  const crossRunContamination = permissiveReinspection.verifiable
+    && permissiveReinspection.observations.some((item) => item.exists === true);
+  const permissiveMayRun = permissiveReinspection.verifiable && !crossRunContamination;
+  const sandboxPermissive = permissiveMayRun
+    ? runCodex(permissiveArgs, {
+      cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
+    })
+    : { exit_code: null, error_code: null, stderr: "" };
+  const parsedPermissive = permissiveMayRun
+    ? loadProbeResult(resultPath(LAYER_A_RUNS.permisiva), LAYER_A_RUNS.permisiva.run_id)
+    : null;
+  const restrictiveIntegrity = verifyRestrictiveObservationIntegrity(restrictiveObservationRecord);
   const sandboxDiagnosticExclude = runCodex(
     sandboxArgs(diagnosticExcludeOverrides, LAYER_A_RUNS.diagnostica_exclude, "diag-exclude"), {
       cwd: campaign.workspace, env, timeout: 90_000, spawn: options.spawn,
@@ -748,16 +860,11 @@ export function runLayerA(options = {}) {
   const parsedDiagnosticNoExclude = loadProbeResult(
     resultPath(LAYER_A_RUNS.diagnostica_sin_exclude), LAYER_A_RUNS.diagnostica_sin_exclude.run_id,
   );
-  const normativeStarted = sandboxNormative.exit_code === 0 && parsedNormative !== null;
+  const normativeStarted = restrictiveRunValid;
   const diagnosticResultsValid = sandboxDiagnosticExclude.exit_code === 0
     && parsedDiagnosticExclude !== null
     && sandboxDiagnosticNoExclude.exit_code === 0
     && parsedDiagnosticNoExclude !== null;
-  const fallbackProbes = EXPECTED_LAYER_A_PROBE_IDS.map((id) => ({
-    id, status: "NOT_RUN", cause: "SANDBOX_DID_NOT_START",
-  }));
-  const normativeProbes = parsedNormative?.probes ?? fallbackProbes;
-  const normativeEnvironment = normativeProbes.find((probe) => probe.id === "environment_secret_names");
   const normativeEnvironmentResult = evaluateNormativeEnvironment({
     injected: env,
     observed: normativeEnvironment?.observed_environment_names,
@@ -767,26 +874,36 @@ export function runLayerA(options = {}) {
     ? replaceProbe(normativeProbes, normativeEnvironmentResult)
     : fallbackProbes;
   for (const probeId of ["outside_write", "absolute_path", "junction_escape", "subprocess_inheritance"]) {
-    const restrictiveProbe = parsedNormative?.probes?.find((probe) => probe.id === probeId);
+    const frozenRestrictiveRaw = restrictiveObservation.raw?.[probeId] ?? null;
+    const frozenRestrictiveDenial = restrictiveObservation.denial?.[probeId] ?? null;
     const permissiveProbe = parsedPermissive?.probes?.find((probe) => probe.id === probeId);
     const contrast = evaluatePolicyContrast({
       probeId,
-      restrictiveObservation: restrictiveProbe ? { raw: restrictiveProbe.raw_write } : null,
+      restrictiveObservation: frozenRestrictiveRaw ? {
+        raw: {
+          ...frozenRestrictiveRaw,
+          denial_attributable: frozenRestrictiveDenial?.attributable ?? false,
+        },
+        denial: frozenRestrictiveDenial,
+      } : null,
       permissiveObservation: permissiveProbe ? { raw: permissiveProbe.raw_write } : null,
       preconditions: {
         ...restrictiveEnvelope,
-        restrictive_run_valid: sandboxNormative.exit_code === 0 && parsedNormative !== null,
-        permissive_run_valid: sandboxPermissive.exit_code === 0 && parsedPermissive !== null,
+        restrictive_run_valid: restrictiveRunValid,
+        permissive_run_valid: permissiveMayRun
+          && sandboxPermissive.exit_code === 0 && parsedPermissive !== null,
       },
       initialState: {
         verifiable: initialState.verifiable,
-        pristine: initialState.pristine && restrictiveProbe?.initial_target_existed !== true
-          && permissiveProbe?.initial_target_existed !== true
-          && initialState.same_parent && initialState.same_creation_semantics,
+        pristine: initialState.pristine && frozenRestrictiveRaw?.initial_target_existed !== true
+          && initialState.same_parent,
         resolved_outside_workspace: initialState.resolved_outside_workspace,
         governed_by_contrast: GOVERNED_CONTRAST_PROBE_IDS.includes(probeId),
+        cross_run_contamination: crossRunContamination,
+        permissive_state_verifiable: permissiveReinspection.verifiable,
       },
       aclDiagnostic: "NO_OBSERVABLE",
+      restrictiveIntegrity,
     });
     probes = replaceProbe(probes, contrast);
   }
@@ -810,7 +927,7 @@ export function runLayerA(options = {}) {
       probe_id: probe.id,
     }))),
   ];
-  const credentialProbe = parsedNormative?.observaciones?.credential_store ?? {
+  const credentialProbe = normativeObservaciones.credential_store ?? {
     id: "credential_store", status: "NOT_RUN", cause: "SANDBOX_DID_NOT_START", access: "NO_OBSERVABLE",
   };
   const sandboxCredentialAccess = credentialProbe?.status === "NOT_RUN"
@@ -893,6 +1010,20 @@ export function runLayerA(options = {}) {
           gate_effect: "NONE",
           reason: "ACL_OR_OWNER_EQUALITY_IS_NOT_USED_AS_A_GATE",
         },
+        restrictive_observation_storage: {
+          path: restrictiveObservationPath,
+          outside_workspace: !isPathWithin(restrictiveObservationPath, campaign.workspace),
+          outside_direct_permissive_root: !isPathWithin(restrictiveObservationPath, campaign.outside),
+          integrity: restrictiveIntegrity,
+        },
+        permissive_preflight: {
+          ...permissiveReinspection,
+          cross_run_contamination: crossRunContamination,
+          run_allowed: permissiveMayRun,
+          cause: permissiveMayRun ? "PERMISSIVE_RUN_ALLOWED"
+            : crossRunContamination ? "CROSS_RUN_CONTAMINATION_DETECTED"
+              : "INITIAL_STATE_NOT_VERIFIABLE",
+        },
         permissive_run: {
           observation: parsedPermissive ? "OBSERVED" : "NO_OBSERVABLE",
           exit_code: sandboxPermissive.exit_code,
@@ -901,11 +1032,11 @@ export function runLayerA(options = {}) {
           raw_probes: parsedPermissive?.probes ?? [],
         },
       },
-      outside_decoy_read: parsedNormative?.observaciones?.outside_decoy_read ?? {
+      outside_decoy_read: normativeObservaciones.outside_decoy_read ?? {
         observation: "NO_OBSERVABLE", cause: "SANDBOX_DID_NOT_START",
       },
       credential_store: credentialProbe,
-      path_alias_creation: parsedNormative?.observaciones?.path_alias_creation ?? {
+      path_alias_creation: normativeObservaciones.path_alias_creation ?? {
         observation: "NO_OBSERVABLE", cause: "SANDBOX_DID_NOT_START",
       },
       diagnostic_runs: {

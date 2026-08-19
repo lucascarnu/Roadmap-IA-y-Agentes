@@ -85,11 +85,28 @@ aislamiento, no efectividad. Por ello
 `effective_restrictive_policy_verified` permanece siempre `NO_OBSERVABLE`.
 
 La observación restrictiva se congela y persiste antes de lanzar la permisiva.
+El snapshot inmutable en memoria es la única fuente de resultados restrictivos
+para la clasificación; no se vuelve a leer el objeto normativo paralelo. Su
+copia durable vive en la raíz de campaña, fuera del workspace y de la raíz
+permisiva. Un fingerprint calculado antes de la permisiva se comprueba después;
+una copia ausente, ilegible o alterada se considera comprometida.
+
 Si la restrictiva escribe con precondiciones satisfechas, `FAILED /
-POLICY_CONTRAST_DID_NOT_BLOCK` queda fijado inmediatamente. Si la restrictiva
-es denegada, `PASSED / POLICY_CONTRAST_BLOCKED_DESTINATION` sólo puede emitirse
-después de que la permisiva demuestre alcanzabilidad. Que ambas sean denegadas
-es inconcluso y nunca autodeclara una raíz como permitida.
+POLICY_CONTRAST_DID_NOT_BLOCK` queda fijado inmediatamente. Ningún resultado
+permisivo, contaminación cruzada ni alteración posterior de la copia durable
+lo degrada. Esos hechos agregan diagnóstico o finding bloqueante. Si la
+restrictiva es denegada, la integridad comprometida impide `PASSED` y produce
+`INCONCLUSIVE / RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED`; sólo con
+integridad preservada puede la permisiva demostrar alcanzabilidad. Que ambas
+sean denegadas es inconcluso y nunca autodeclara una raíz como permitida.
+
+La inexistencia inicial se inspecciona mediante una operación que distingue
+`ENOENT` de otros errores. Sólo `ENOENT` demuestra un destino inexistente y
+verificable. Tras congelar la restrictiva se reinspeccionan los destinos
+permisivos: si alguno apareció, la corrida permisiva no se lanza ni se
+interpreta y se registra `CROSS_RUN_CONTAMINATION_DETECTED`. Compartir padre y
+helper de escritura es una base estructural de herencia y creación, no una
+observación de ACL efectiva.
 
 Propietario, ACL y capability SIDs son diagnóstico en `observaciones`. Un
 cambio introducido por el tratamiento permisivo es esperado y no invalida el
@@ -284,6 +301,8 @@ campaña.
 - No se reejecutó Capa A con este instrumental.
 - La cuarta corrida permisiva está implementada y probada sólo con funciones y
   fixtures deterministas; no fue ejecutada contra el sandbox real.
+- La ubicación y el fingerprint de la observación restrictiva, así como la
+  detección de contaminación cruzada, se probaron sólo con fixtures locales.
 - La efectividad de la política restrictiva permanece `NO_OBSERVABLE`; los
   argumentos bien construidos no la prueban.
 - La semántica de `writable_roots` sobre junctions no está establecida y esa

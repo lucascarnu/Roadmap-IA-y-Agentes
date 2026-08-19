@@ -41,7 +41,11 @@ import {
   evaluatePolicyContrast,
   evaluateRestrictiveEnvelope,
   freezeRestrictiveObservation,
+  inspectInitialTarget,
+  inspectTargetSet,
+  isPathWithin,
   persistRestrictiveObservation,
+  verifyRestrictiveObservationIntegrity,
   layerAGate,
   loadProbeResult,
   monitorCodexExecJsonl,
@@ -629,7 +633,7 @@ function syntheticDescriptors() {
 test("E1 restrictiva denegada atribuible y permisiva escribiendo da PASSED", () => {
   assert.deepEqual(contrast(), {
     id: "outside_write", status: "PASSED", cause: "POLICY_CONTRAST_BLOCKED_DESTINATION",
-    effective_restrictive_policy_verified: "NO_OBSERVABLE", acl_diagnostic: "NO_OBSERVABLE", findings: [],
+    effective_restrictive_policy_verified: "NO_OBSERVABLE", acl_diagnostic: "NO_OBSERVABLE", findings: [], diagnostics: [],
   });
 });
 
@@ -671,7 +675,10 @@ test("E7 observación restrictiva inmutable y FAILED irretroactivo", () => {
   });
   assert.equal(Object.isFrozen(frozen), true);
   assert.equal(Object.isFrozen(frozen.raw), true);
-  for (const permissiveObservation of [contrastObservation("WROTE"), contrastObservation("DENIED", true), null]) {
+  for (const permissiveObservation of [
+    contrastObservation("WROTE"), contrastObservation("DENIED", true),
+    contrastObservation("PARTIAL"), null,
+  ]) {
     const result = contrast({ restrictiveObservation: frozen, permissiveObservation, aclDiagnostic: "CHANGED" });
     assert.equal(result.status, "FAILED");
     assert.equal(frozen.raw.outcome, "WROTE");
@@ -689,7 +696,7 @@ test("E9 ACL no observable permanece diagnóstico y no invalida", () => {
 
 test("E10 congelamiento precede a permisiva y PASSED exige contraste completo", () => {
   const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
-  assert.match(source, /const restrictiveObservation = freezeRestrictiveObservation\([\s\S]*?persistRestrictiveObservation\([\s\S]*?const sandboxPermissive = runCodex/);
+  assert.match(source, /const restrictiveObservation = freezeRestrictiveObservation\([\s\S]*?persistRestrictiveObservation\([\s\S]*?const sandboxPermissive = permissiveMayRun/);
   assert.equal(contrast({ restrictiveObservation: contrastObservation("WROTE"), permissiveObservation: null }).status, "FAILED");
   assert.equal(contrast({ permissiveObservation: null }).status, "INCONCLUSIVE");
   assert.equal(contrast().status, "PASSED");
@@ -789,13 +796,131 @@ test("el finding permisivo anómalo se eleva al gate de promoción", () => {
   assert.match(source, /blocks_actor_promotion: finding\.blocks_actor_promotion === true/);
 });
 
+test("F1.a restrictiva WROTE y permisiva PARTIAL conserva FAILED con diagnóstico", () => {
+  const result = contrast({
+    restrictiveObservation: contrastObservation("WROTE"),
+    permissiveObservation: contrastObservation("PARTIAL"),
+  });
+  assert.deepEqual([result.status, result.cause], ["FAILED", "POLICY_CONTRAST_DID_NOT_BLOCK"]);
+  assert.deepEqual(result.diagnostics, [{ code: "PERMISSIVE_PARTIAL_WRITE_OBSERVED" }]);
+});
+
+test("F2.a runLayerA clasifica desde el snapshot y no desde restrictiveProbe", () => {
+  const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
+  const start = source.indexOf("const restrictiveObservation = freezeRestrictiveObservation");
+  const end = source.indexOf("const diagnosticExcludeEnvironment", start);
+  const classificationSection = source.slice(start, end);
+  assert.doesNotMatch(classificationSection, /restrictiveProbe|parsedNormative\?\.probes\?\.find/);
+  const afterFreeze = source.slice(source.indexOf("const restrictiveObservationPath", start));
+  assert.doesNotMatch(afterFreeze, /parsedNormative/);
+  assert.match(classificationSection, /restrictiveObservation\.raw\?\.\[probeId\]/);
+  assert.match(classificationSection, /restrictiveObservation\.denial\?\.\[probeId\]/);
+});
+
+test("F2.b mutar el objeto normativo paralelo no altera la clasificación congelada", () => {
+  const { restrictive } = syntheticDescriptors();
+  const parallel = { outside_write: { outcome: "DENIED", denial_attributable: true } };
+  const snapshot = freezeRestrictiveObservation({
+    raw: structuredClone(parallel), denial: { outside_write: { attributable: true } },
+    preconditions: contrastPreconditions(), descriptor: restrictive,
+  });
+  parallel.outside_write.outcome = "WROTE";
+  const result = contrast({ restrictiveObservation: { raw: snapshot.raw.outside_write } });
+  assert.equal(result.status, "PASSED");
+  assert.equal(snapshot.raw.outside_write.outcome, "DENIED");
+});
+
+test("F3.a artefacto restrictivo queda fuera de workspace outside y writable_roots", () => {
+  const campaign = createCampaignWorkspace();
+  const artifact = join(campaign.root, "restrictive-observation.json");
+  assert.equal(isPathWithin(artifact, campaign.workspace), false);
+  assert.equal(isPathWithin(artifact, campaign.outside), false);
+  const permissive = buildPermissiveOverrideArgs(campaign.outside).join("\n");
+  assert.match(permissive, /sandbox_workspace_write\.writable_roots=/);
+});
+
+test("F3.b fingerprint preservado valida la misma copia durable", () => {
+  const root = mkdtempSync(join(tmpdir(), "u5-restrictive-integrity-"));
+  const path = join(root, "observation.json");
+  const record = persistRestrictiveObservation({ run_id: "normativa", raw: {} }, path);
+  assert.deepEqual(verifyRestrictiveObservationIntegrity(record), {
+    valid: true,
+    cause: "RESTRICTIVE_OBSERVATION_INTEGRITY_PRESERVED",
+    expected_fingerprint: record.fingerprint,
+    observed_fingerprint: record.fingerprint,
+  });
+});
+
+test("F3.c integridad comprometida no degrada FAILED restrictivo", () => {
+  const result = contrast({
+    restrictiveObservation: contrastObservation("WROTE"),
+    restrictiveIntegrity: { valid: false },
+  });
+  assert.equal(result.status, "FAILED");
+  assert.equal(result.cause, "POLICY_CONTRAST_DID_NOT_BLOCK");
+  assert.ok(result.findings.some((finding) => finding.code === "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED"
+    && finding.blocks_actor_promotion === true));
+});
+
+test("F3.d integridad comprometida impide PASSED cuando restrictiva fue DENIED", () => {
+  const missing = verifyRestrictiveObservationIntegrity({ path: "missing", fingerprint: "expected" }, {
+    readFileSync: () => { const error = new Error("missing"); error.code = "ENOENT"; throw error; },
+  });
+  assert.equal(missing.cause, "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED");
+  const result = contrast({ restrictiveIntegrity: missing });
+  assert.deepEqual([result.status, result.cause], ["INCONCLUSIVE", "RESTRICTIVE_OBSERVATION_INTEGRITY_COMPROMISED"]);
+  assert.ok(result.findings.some((finding) => finding.blocks_actor_promotion === true));
+});
+
+test("F4.a error de inspección distinto de ENOENT no es verificable", () => {
+  const result = inspectInitialTarget("synthetic", {
+    lstatSync: () => { const error = new Error("denied"); error.code = "EACCES"; throw error; },
+  });
+  assert.deepEqual([result.verifiable, result.cause, result.error_code],
+    [false, "INITIAL_STATE_NOT_VERIFIABLE", "EACCES"]);
+});
+
+test("F4.b destino permisivo aparecido durante restrictiva detecta contaminación", () => {
+  let exists = false;
+  const io = { lstatSync: () => {
+    if (!exists) { const error = new Error("missing"); error.code = "ENOENT"; throw error; }
+    return {};
+  } };
+  const before = inspectTargetSet(["permissiva"], io);
+  exists = true;
+  const after = inspectTargetSet(["permissiva"], io);
+  assert.equal(before.pristine, true);
+  assert.equal(after.observations.some((item) => item.exists === true), true);
+  const result = contrast({ initialState: {
+    verifiable: true, pristine: true, resolved_outside_workspace: true,
+    governed_by_contrast: true, cross_run_contamination: true,
+  } });
+  assert.equal(result.cause, "CROSS_RUN_CONTAMINATION_DETECTED");
+  const source = readFileSync(join(import.meta.dirname, "harness.mjs"), "utf8");
+  assert.match(source, /const permissiveMayRun = permissiveReinspection\.verifiable && !crossRunContamination/);
+  assert.match(source, /const sandboxPermissive = permissiveMayRun\s*\? runCodex/);
+});
+
+test("F4.c contaminación cruzada no degrada FAILED restrictivo", () => {
+  const result = contrast({
+    restrictiveObservation: contrastObservation("WROTE"),
+    initialState: {
+      verifiable: true, pristine: true, resolved_outside_workspace: true,
+      governed_by_contrast: true, cross_run_contamination: true,
+    },
+  });
+  assert.deepEqual([result.status, result.cause], ["FAILED", "POLICY_CONTRAST_DID_NOT_BLOCK"]);
+  assert.ok(result.diagnostics.some((item) => item.code === "CROSS_RUN_CONTAMINATION_DETECTED"));
+});
+
 test("la observación restrictiva se persiste exactamente sin mutarla", () => {
   let persisted = null;
   const observation = deepFreezeForTest({ run_id: "normativa", raw: { outcome: "DENIED" } });
-  persistRestrictiveObservation(observation, "synthetic.json", {
+  const record = persistRestrictiveObservation(observation, "synthetic.json", {
     writeFileSync: (_path, value) => { persisted = value; },
   });
   assert.deepEqual(JSON.parse(persisted), observation);
+  assert.equal(record.path, "synthetic.json");
 });
 
 function deepFreezeForTest(value) {
