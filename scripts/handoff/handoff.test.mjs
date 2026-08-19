@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import childProcess from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 import {
   CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
   parseContractBody, poll, prepareInput, sha256, tick,
@@ -12,10 +15,14 @@ import {
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
+import {
+  GOVERNING_CONTEXT_V2, HANDOFF_V2_DECISIONS, HandoffContractV2Error,
+  validateContractV2, validateResultV2,
+} from "./handoff-contract-v2.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
-const HEAD = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const HEAD = "a".repeat(40);
 const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const RESULT_SCHEMA_RAW = readFileSync(join(HERE, "handoff-result.schema.json"), "utf8");
@@ -158,6 +165,12 @@ function fixture(backend, overrides = {}) {
       runtimeDir: join(root, ".handoff"),
       artifactsDir: join(root, "artifacts"),
       ensureLabels: false,
+      run: (command, args) => {
+        assert.equal(command, "git");
+        if (args.includes("show")) return { status: 0, stdout: `contenido sintético de ${args.at(-1)}`, stderr: "" };
+        if (args.includes("diff")) return { status: 0, stdout: "diff sintético\n", stderr: "" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
       authObserver: (agent, adapter) => ({ authorized_via: adapter.authorized_via, observed_via: adapter.authorized_via, evidence: { fixture: true }, valid: true }),
       invoke: ({ contract: current }) => ({ result: validResult(current), telemetry: { fixture: true }, duration_ms: 1 }),
       notify: async () => ({ sent: false, reason: "fixture" }),
@@ -1237,17 +1250,15 @@ test("F1: una segunda caída consecutiva agota el reintento y bloquea", async ()
   } finally { clean(fx); }
 });
 
-test("F2: dos procesos casi simultáneos sólo permiten un lock", async () => {
+test("F2: dos workers casi simultáneos sólo permiten un lock sin crear procesos", async () => {
   const root = mkdtempSync(join(tmpdir(), "handoff-lock-"));
   const lock = join(root, "issue.lock");
-  const start = Date.now() + 700;
-  const source = `import { acquireLock } from ${JSON.stringify(MODULE_URL)}; const wait=${start}-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); const ok=acquireLock(${JSON.stringify(lock)}); console.log(ok?'CLAIMED':'REJECTED'); if(ok) await new Promise(r=>setTimeout(r,500));`;
+  const start = Date.now() + 300;
+  const source = `import { parentPort } from "node:worker_threads"; import { acquireLock } from ${JSON.stringify(MODULE_URL)}; const wait=${start}-Date.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait)); parentPort.postMessage(acquireLock(${JSON.stringify(lock)})?'CLAIMED':'REJECTED');`;
   const launch = () => new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", source], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = ""; let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("exit", (code) => code === 0 ? resolvePromise(stdout.trim()) : rejectPromise(new Error(stderr)));
+    const worker = new Worker(source, { eval: true, type: "module" });
+    worker.once("message", resolvePromise);
+    worker.once("error", rejectPromise);
   });
   try {
     const outcomes = await Promise.all([launch(), launch()]);
@@ -1721,7 +1732,7 @@ test("tick bloquea un descriptor ambiguo con múltiples marcadores", async () =>
 });
 
 test("tick bloquea si el HEAD del marcador no coincide con el contrato", async () => {
-  const comments = [{ body: waitDescriptor(1, {}, "a".repeat(40)) }];
+  const comments = [{ body: waitDescriptor(1, {}, "b".repeat(40)) }];
   const backend = new FakeBackend([waitingIssue(1, {}, { comments })]);
   const fx = fixture(backend, { pollFn: async () => assert.fail("No debe llamar poll") });
   try {
@@ -2067,4 +2078,214 @@ test("fallos de ntfy no alteran el resultado de poll", async () => {
   ));
   assert.deepEqual(http500, baseline);
   assert.match(httpLogs.join("\n"), /HTTP 500/);
+});
+
+const V2_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-v2.schema.json"), "utf8"));
+const V2_RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result-v2.schema.json"), "utf8"));
+const V2_ACTORS_FILE = JSON.parse(readFileSync(join(HERE, "actores.json"), "utf8"));
+const V2_DIRECTOR_REF = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
+const V2_PHYSICAL_REF = "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo";
+
+function v2Actors(provenRoles = []) {
+  const roles = structuredClone(V2_ACTORS_FILE.roles);
+  for (const role of provenRoles) roles[role].confinamiento = { mecanismo: "SANDBOX_SINTETICO", evidencia: "PROBADO_LOCALMENTE" };
+  return { version: "1", roles };
+}
+
+function v2Deps(overrides = {}) {
+  return { actors: v2Actors(), resolveCanonicalReference: () => true, resolveEvidence: () => true, ...overrides };
+}
+
+function v2Contract(overrides = {}) {
+  return {
+    handoff_version: "2", tarea: "Validar contrato sintético.", head_sha: HEAD,
+    contexto_autorizado: [...GOVERNING_CONTEXT_V2, "CLAUDE.md", "AGENTS.md"],
+    origen: { ejecutor: "Claude", rol: "ARQUITECTO_LEAD" },
+    destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] },
+    modo: "solo_lectura",
+    objeto_entrada: { id: "entrada-u1a", descripcion: "Contrato sintético" },
+    objeto_producido: { id: "salida-u1a", descripcion: "Validación pura" },
+    mutaciones_permitidas: [], operaciones_permitidas: [],
+    impacto_economico: { tipo: "no_aplica" },
+    reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
+    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
+    estado_canonico: {
+      accion_anterior: { id: "accion-cerrada", descripcion: "Acción anterior" },
+      evidencia_cierre: { tipo: "COMMIT", referencia: "commit-sintetico", head_o_historial: HEAD },
+      proxima_accion: { id: "accion-siguiente", descripcion: "Acción siguiente" }, head_reconciliacion: HEAD,
+    },
+    operaciones_delegadas_a_humanos: [], ...overrides,
+  };
+}
+
+function v2Result(overrides = {}) {
+  return {
+    handoff_version: "2", estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Contrato válido.",
+    evidencia: [{ archivo: "reglas.md", detalle: "Fixture sintético." }], archivos_leidos: ["reglas.md"], siguiente: null,
+    firma: {
+      ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "modelo-fixture", modelo_efectivo: "NO_OBSERVABLE",
+      esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "contrato v2",
+      via_evaluada: "validación pura", fecha: "2026-08-18",
+    }, ...overrides,
+  };
+}
+
+function v2Error(fn, code) {
+  assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code);
+}
+
+test("U1A representabilidad, versión y confinamiento", async (t) => {
+  await t.test("contrato de ejecución representable", () => {
+    const value = v2Contract({ modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
+    assert.equal(validateContractV2(value, v2Deps({ actors: v2Actors(["EJECUTOR_PRINCIPAL"]) })), value);
+  });
+  await t.test("contrato de solo lectura representable", () => {
+    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
+  });
+  await t.test("handoff_version 1 rechazado con código propio", () => {
+    v2Error(() => validateContractV2({ ...v2Contract(), handoff_version: "1" }, v2Deps()), "CONTRATO_VERSION_NO_SOPORTADA");
+  });
+  for (const [role, actor] of Object.entries(V2_ACTORS_FILE.roles)) {
+    await t.test(`ejecución rechazada para ${role} sin confinamiento probado`, () => {
+      const value = v2Contract({ destinatario: { rol: role, capacidades_requeridas: [] }, modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
+      value.contexto_autorizado = [...new Set([...value.contexto_autorizado, actor.adapter])];
+      v2Error(() => validateContractV2(value, v2Deps()), "CONFINAMIENTO_NO_PROBADO");
+    });
+  }
+  await t.test("solo lectura rechaza mutaciones", () => {
+    v2Error(() => validateContractV2(v2Contract({ mutaciones_permitidas: ["x.md"] }), v2Deps()), "SOLO_LECTURA_CON_MUTACIONES");
+  });
+});
+
+test("U1A firma, decisión, estado y siguiente", async (t) => {
+  for (const key of V2_RESULT_SCHEMA.properties.firma.required) {
+    await t.test(`firma incompleta sin ${key}`, () => {
+      const result = v2Result(); delete result.firma[key];
+      v2Error(() => validateResultV2(result, v2Contract(), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
+    });
+  }
+  await t.test("decision completada con estado bloqueado", () => {
+    v2Error(() => validateResultV2(v2Result({ estado: "BLOQUEADO" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
+  });
+  await t.test("decision bloqueada con estado completado", () => {
+    v2Error(() => validateResultV2(v2Result({ decision: "BLOQUEADO_POR_GATE" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
+  });
+  for (const decision of HANDOFF_V2_DECISIONS.filter((item) => item !== "SIN_OBJECIONES")) {
+    await t.test(`${decision} exige siguiente`, () => {
+      const estado = decision.startsWith("BLOQUEADO") ? "BLOQUEADO" : "COMPLETADO";
+      v2Error(() => validateResultV2(v2Result({ decision, estado }), v2Contract(), v2Deps()), "SIGUIENTE_REQUERIDO");
+    });
+  }
+  await t.test("REQUIERE_ARBITRAJE exige capacidad de arbitraje", () => {
+    const siguiente = { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] };
+    v2Error(() => validateResultV2(v2Result({ decision: "REQUIERE_ARBITRAJE", siguiente }), v2Contract(), v2Deps()), "SIGUIENTE_SIN_AUTORIDAD");
+  });
+});
+
+test("U1A economía contractual sin ledger autodeclarado", async (t) => {
+  await t.test("no_aplica rechaza valores contradictorios", () => {
+    v2Error(() => validateContractV2(v2Contract({ impacto_economico: { tipo: "no_aplica", cap_acumulado: 1 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
+  });
+  const base = { tipo: "aplica", objetivo_economico: "review", moneda: "USD", cap_acumulado: 0.25, maximo_intento: 0.2, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" };
+  for (const key of ["objetivo_economico", "moneda", "cap_acumulado", "maximo_intento"]) {
+    await t.test(`aplica sin ${key}`, () => {
+      const impact = structuredClone(base); delete impact[key];
+      v2Error(() => validateContractV2(v2Contract({ impacto_economico: impact }), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
+    });
+  }
+  for (const key of ["acumulado_observable", "remanente"]) {
+    await t.test(`${key} no es autoritativo`, () => {
+      v2Error(() => validateContractV2(v2Contract({ impacto_economico: { ...base, [key]: 0.05 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
+    });
+  }
+});
+
+test("U1A actores, canon, delegación y estado canónico", async (t) => {
+  await t.test("actor resuelto por rol", () => {
+    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
+  });
+  await t.test("adapter del actor obligatorio en contexto", () => {
+    const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((path) => path !== "AGENTS.md");
+    v2Error(() => validateContractV2(value, v2Deps()), "ADAPTER_FUERA_DE_CONTEXTO");
+  });
+  for (const path of GOVERNING_CONTEXT_V2) {
+    await t.test(`GOVERNING_CONTEXT exige ${path}`, () => {
+      const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((item) => item !== path);
+      v2Error(() => validateContractV2(value, v2Deps()), "CANON_GOBERNANTE_AUSENTE");
+    });
+  }
+  await t.test("operación rutinaria sin fundamento resoluble rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({ resolveCanonicalReference: () => false })), "REFERENCIA_CANONICA_NO_RESUELTA");
+  });
+  await t.test("operación rutinaria delegada aunque exista capacidad estática rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "DELEGACION_RUTINARIA_PROHIBIDA");
+  });
+  await t.test("capacidad estática inexistente se rechaza", () => {
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "capacidad-inventada", naturaleza: "ACCION_FISICA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CAPACIDAD_ESTATICA_AUSENTE");
+  });
+  await t.test("categoría incompatible con operación rechazada", () => {
+    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Física", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CATEGORIA_INCOMPATIBLE_CON_OPERACION");
+  });
+  await t.test("acción física con categoría válida aceptada", () => {
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    assert.doesNotThrow(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()));
+  });
+  await t.test("identidad repetida produce ESTADO_CANONICO_DIVERGENTE", () => {
+    const value = v2Contract(); value.estado_canonico.proxima_accion.id = value.estado_canonico.accion_anterior.id;
+    v2Error(() => validateContractV2(value, v2Deps()), "ESTADO_CANONICO_DIVERGENTE");
+  });
+  await t.test("evidencia no resuelta invalida contrato", () => {
+    v2Error(() => validateContractV2(v2Contract(), v2Deps({ resolveEvidence: () => false })), "EVIDENCIA_CIERRE_NO_RESUELTA");
+  });
+  await t.test("resolvers son fakes inyectados", () => {
+    const calls = { ref: 0, evidence: 0 };
+    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
+    validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({
+      resolveCanonicalReference: () => { calls.ref += 1; return true; }, resolveEvidence: () => { calls.evidence += 1; return true; },
+    }));
+    assert.deepEqual(calls, { ref: 1, evidence: 1 });
+  });
+});
+
+test("U1A schemas, pureza y desconexión operativa", async (t) => {
+  await t.test("schemas y validadores comparten vocabulario", () => {
+    assert.deepEqual(V2_RESULT_SCHEMA.properties.decision.enum, [...HANDOFF_V2_DECISIONS]);
+    assert.deepEqual(V2_SCHEMA.properties.modo.enum, ["solo_lectura", "ejecucion"]);
+    const economic = V2_SCHEMA.properties.impacto_economico.oneOf[1].properties;
+    assert.equal(Object.hasOwn(economic, "acumulado_observable"), false);
+    assert.equal(Object.hasOwn(economic, "remanente"), false);
+    assert.equal(V2_SCHEMA.properties.reintentos.properties.maximos.const, 0);
+  });
+  await t.test("módulo v2 sin imports effectful", () => {
+    const source = readFileSync(join(HERE, "handoff-contract-v2.mjs"), "utf8");
+    for (const forbidden of [/node:fs/, /node:child_process/, /env\.mjs/, /notify\.mjs/, /node:http/, /node:https/, /\bfetch\s*\(/, /Date\.now\s*\(/, /new Date\s*\(/]) assert.doesNotMatch(source, forbidden);
+  });
+  await t.test("poll no referencia v2", () => assert.doesNotMatch(poll.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("tick no referencia v2", () => assert.doesNotMatch(tick.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("invokeAgent no referencia v2", () => assert.doesNotMatch(invokeAgent.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
+  await t.test("processIssue no referencia v2", () => {
+    const source = readFileSync(join(HERE, "handoff.mjs"), "utf8");
+    const start = source.indexOf("async function processIssue"); assert.notEqual(start, -1);
+    assert.doesNotMatch(source.slice(start, start + 7000), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/);
+    assert.doesNotMatch(source, /processIssueV2|executeV2Unit|acquireLeaseLock|heartbeatLeaseLock/);
+  });
+});
+
+test("U1A guardas observables: cero red, procesos y mutaciones compartidas", (t) => {
+  const effects = { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { effects.fetch += 1; throw new Error("fetch prohibido"); };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  for (const [target, key, counter] of [[http, "request", "http"], [https, "request", "https"], [childProcess, "spawn", "spawn"], [childProcess, "spawnSync", "spawnSync"], [childProcess, "execFile", "execFile"], [childProcess, "execFileSync", "execFileSync"]]) {
+    t.mock.method(target, key, () => { effects[counter] += 1; throw new Error(`${key} prohibido`); });
+  }
+  validateContractV2(v2Contract(), v2Deps()); validateResultV2(v2Result(), v2Contract(), v2Deps());
+  assert.deepEqual(effects, { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 });
+  const source = readFileSync(join(HERE, "handoff.test.mjs"), "utf8");
+  assert.match(source, /mkdtempSync\(join\(tmpdir\(\), "handoff-test-"\)\)/);
+  assert.doesNotMatch(source, /writeFileSync\((?:ROOT|HERE)/);
 });

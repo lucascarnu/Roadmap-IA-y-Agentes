@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Handoff result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["handoff_version", "estado", "decision", "resumen", "evidencia", "archivos_leidos", "siguiente", "firma"],
+  "properties": {
+    "handoff_version": { "const": "2" },
+    "estado": { "enum": ["COMPLETADO", "BLOQUEADO"] },
+    "decision": { "enum": ["SIN_OBJECIONES", "OBJECION_MATERIAL", "REQUIERE_ARBITRAJE", "BLOQUEADO_POR_LIMITE", "BLOQUEADO_POR_GATE"] },
+    "resumen": { "type": "string", "minLength": 1 },
+    "evidencia": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false, "required": ["archivo", "detalle"],
+        "properties": { "archivo": { "type": "string" }, "detalle": { "type": "string" } }
+      }
+    },
+    "archivos_leidos": { "type": "array", "items": { "type": "string" } },
+    "siguiente": { "oneOf": [{ "type": "null" }, { "$ref": "handoff-v2.schema.json#/$defs/actorDescriptor" }] },
+    "firma": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ejecutor_real", "entorno", "modelo_configurado", "modelo_efectivo", "esfuerzo_o_modo_configurado", "esfuerzo_o_modo_efectivo", "sujeto_evaluado", "via_evaluada", "fecha"],
+      "properties": {
+        "ejecutor_real": { "type": "string" }, "entorno": { "type": "string" },
+        "modelo_configurado": { "type": "string" }, "modelo_efectivo": { "type": "string" },
+        "esfuerzo_o_modo_configurado": { "type": "string" }, "esfuerzo_o_modo_efectivo": { "type": "string" },
+        "sujeto_evaluado": { "type": "string" }, "via_evaluada": { "type": "string" }, "fecha": { "type": "string" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision": { "enum": ["SIN_OBJECIONES", "OBJECION_MATERIAL", "REQUIERE_ARBITRAJE"] } }, "required": ["decision"] },
+      "then": { "properties": { "estado": { "const": "COMPLETADO" } } }
+    },
+    {
+      "if": { "properties": { "decision": { "enum": ["BLOQUEADO_POR_LIMITE", "BLOQUEADO_POR_GATE"] } }, "required": ["decision"] },
+      "then": { "properties": { "estado": { "const": "BLOQUEADO" } } }
+    },
+    {
+      "if": { "properties": { "decision": { "enum": ["OBJECION_MATERIAL", "REQUIERE_ARBITRAJE", "BLOQUEADO_POR_LIMITE", "BLOQUEADO_POR_GATE"] } }, "required": ["decision"] },
+      "then": { "properties": { "siguiente": { "$ref": "handoff-v2.schema.json#/$defs/actorDescriptor" } } }
+    }
+  ]
+}

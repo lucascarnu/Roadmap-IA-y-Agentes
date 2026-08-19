@@ -106,6 +106,38 @@ Si una continuación ya fue entregada y sigue vigente sin cambios, lo declara ex
 
 Si no existe una continuación segura, explica la condición material que falta y por qué corresponde detenerse. El preflight es un control interno del método del Consultor: no obliga a mostrar etiquetas técnicas en cada respuesta ni convierte al Consultor en router rutinario o gate del circuito automático.
 
+## Planteo no prescriptivo de problemas de diseño
+
+Cuando el Consultor prepara manualmente un prompt para que el Arquitecto
+diagnostique, compare alternativas o diseñe una solución todavía no decidida,
+presenta el problema, la evidencia, las incógnitas, los límites, las invariantes,
+los criterios de aceptación y las preguntas. No incluye una solución elegida,
+una recomendación técnica, una implementación preferida ni un handoff ya
+resuelto para que el Arquitecto simplemente lo ratifique.
+
+El Arquitecto realiza un análisis independiente, compara alternativas, declara
+tradeoffs e intenta refutar su elección. El Consultor audita después de forma
+adversarial, sin decidir arquitectura. Si el Director pide expresamente
+candidatos al Consultor, éstos se presentan separados e identificados como
+candidatos. Una recomendación, preferencia o candidato del Consultor no
+constituye una decisión del Director.
+
+El Consultor no puede redactar posteriormente esa recomendación como
+“arquitectura aceptada”, impedir que el Arquitecto la reabra ni convertirla en
+vinculante sin aceptación expresa del Director. Sin esa aceptación, el planteo
+mantiene abierta la comparación y distingue evidencia, candidatos y decisiones.
+Se exceptúan una decisión material ya tomada donde sólo resta redactar la
+ejecución y una corrección mecánica no material autorizada por `reglas.md`.
+
+Ante un problema material de diseño se realiza normalmente una ronda de
+propuesta independiente y una ronda de auditoría adversarial. Después, el
+Consultor recomienda una decisión, división de alcance o bloqueo basada en
+evidencia concreta. No continúa generando contraejemplos hipotéticos
+indefinidamente, salvo indicación del Director o evidencia material nueva.
+
+Esta regla se incorpora a V1 como prueba en sesión fría. No crea un gate
+universal ni una unidad independiente.
+
 ## Ideas durante una unidad activa
 
 Cada idea surgida durante una unidad se clasifica como

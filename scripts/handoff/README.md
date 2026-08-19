@@ -325,6 +325,46 @@ reclamos locales. Ambos se crean con `mkdir`, que es atómico. Un `running` cuyo
 PID local ya no existe se recupera una vez. Si vuelve a quedar huérfano antes de
 persistir resultado, termina `handoff:blocked`.
 
+## U1A: contrato v2 y validación pura
+
+`handoff-contract-v2.mjs`, `handoff-v2.schema.json`,
+`handoff-result-v2.schema.json` y `actores.json` representan el contrato v2 y
+validan sus invariantes sin ejecutar el contrato. El módulo recibe por inyección
+el registro de actores, la resolución de referencias canónicas y la resolución
+de evidencia; no lee archivos, no consulta Git o GitHub, no invoca agentes y no
+está importado por `poll`, `tick`, `processIssue` ni `invokeAgent`.
+
+La validación cubre versión, canon gobernante, roles, adapters, capacidades,
+modos, mutaciones declaradas, objetos de entrada y salida, economía, reintentos,
+delegaciones humanas, estado canónico, evidencia, decisiones, transiciones y
+firma. Los valores `acumulado_observable` y `remanente` no son autoritativos en
+el contrato: el gasto histórico y el remanente deberán provenir del ledger
+durable del futuro runtime U1B.
+
+El resultado separa `resumen`, narrativo, de `decision`, mecánico. El vocabulario
+nuevo es `SIN_OBJECIONES`, `OBJECION_MATERIAL`, `REQUIERE_ARBITRAJE`,
+`BLOQUEADO_POR_LIMITE` y `BLOQUEADO_POR_GATE`. Sus conceptos se anclan en
+[Intervención crítica del agente](../../reglas.md#intervencion-critica-del-agente),
+[Autoridad y escalación](../../decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md#autoridad-y-escalacion),
+[Servicios fuera del camino crítico](../../decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md#servicios-fuera-del-camino-critico)
+y [Cuándo sí se escala al Director](../../decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director).
+Las delegaciones humanas usan las ocho categorías cerradas de `0013` y la
+acción física documentada en `pendientes.md`; una referencia inexistente, una
+categoría incompatible o una operación rutinaria delegada fallan cerradas.
+
+`actores.json` sólo declara el confinamiento conocido. Ningún actor actual tiene
+confinamiento `PROBADO_LOCALMENTE`; por eso el validador puro rechaza
+`modo: ejecucion` para todos ellos. Probar o configurar el confinamiento real
+pertenece a U5. U1A no implementa locks, ledger, efectos, recuperación ni un
+runtime v2, y ninguna de sus pruebas demuestra autonomía.
+
+Los schemas y artefactos históricos v1 permanecen legibles y el camino
+operativo v1 continúa temporalmente sin cambios. Leer un artefacto histórico no
+lo migra ni lo reinterpreta como v2; el validador v2 rechaza explícitamente
+`handoff_version: "1"`.
+
+> El contrato v2 y sus invariantes son representables y están validados determinísticamente; no existe todavía un runtime autónomo habilitado para ejecutarlo.
+
 ## Evidencia local
 
 Los artefactos no se versionan y viven en:
@@ -344,7 +384,7 @@ node --test scripts/handoff/handoff.test.mjs
 
 La batería no usa modelos ni GitHub. Cubre contrato/salida, canon gobernante
 obligatorio antes de inferencia, contexto específico adicional, una cadena feliz
-de dos relevos, recuperación y reintento único, doble proceso, HEAD movido,
+de dos relevos, recuperación y reintento único, doble worker sin procesos hijos, HEAD movido,
 contrato inválido, salida inválida, profundidad excedida y vía no demostrable.
 
 Pasar estos tests demuestra la lógica local. No demuestra una nueva cadena real:

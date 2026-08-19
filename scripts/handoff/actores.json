@@ -1,0 +1,35 @@
+{
+  "version": "1",
+  "roles": {
+    "DIRECTOR_PRODUCT_OWNER": {
+      "actor": "Lucas",
+      "adapter": "reglas.md",
+      "capacidades": ["arbitraje_producto", "autorizacion_economica", "accion_fisica"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    },
+    "ARQUITECTO_LEAD": {
+      "actor": "Claude",
+      "adapter": "CLAUDE.md",
+      "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    },
+    "EJECUTOR_PRINCIPAL": {
+      "actor": "Codex",
+      "adapter": "AGENTS.md",
+      "capacidades": ["filesystem", "git", "github", "red", "ejecucion"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    },
+    "CONSULTOR_AUDITOR": {
+      "actor": "Codex Consultor",
+      "adapter": "CONSULTOR.md",
+      "capacidades": ["auditoria_continuidad", "reconciliacion"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    },
+    "REVIEWER_INDEPENDIENTE": {
+      "actor": "Kimi",
+      "adapter": "reviewer-policy.md",
+      "capacidades": ["review_independiente"],
+      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    }
+  }
+}

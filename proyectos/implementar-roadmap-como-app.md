@@ -1,7 +1,7 @@
 ---
 estado: activo
 prioridad: alta
-proxima_accion: "Construir el lector de archivos del repositorio"
+proxima_accion: "Construir los listados y vistas de detalle de las seis entidades"
 duracion_proxima_accion: media
 nodos_requeridos: []
 capacidades_requeridas:
@@ -285,6 +285,17 @@ o dirigir: la implementación puede ejecutarla el agente sin que esas técnicas 
 conviertan en aprendizaje obligatorio.
 
 ## Bitácora
+
+**2026-08-18 — Lector construido y próxima acción reconciliada.**
+
+La PR #97 y el commit de integración `5b7aeb7` cerraron la construcción del
+lector de archivos del repositorio. El frontmatter siguió declarando esa acción
+ya terminada y quedó atrasado respecto de la evidencia durable.
+
+La próxima acción se sincroniza con el paso 4 del plan general ya existente, sin
+ampliar alcance. Aunque ese paso la resume como "Listados por entidad", las
+vistas de detalle ya figuran aprobadas en la sección [Consultas](#consultas):
+cada uno de los seis tipos se lista y permite abrir su detalle.
 
 **2026-08-06 — Proyecto creado.**
 
