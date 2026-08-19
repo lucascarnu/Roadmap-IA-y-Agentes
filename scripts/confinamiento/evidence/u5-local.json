@@ -1,6 +1,12 @@
 {
   "schema_version": 1,
   "date": "2026-08-19",
+  "evidence_relabeling": {
+    "classification": "REETIQUETADO_EDITORIAL",
+    "observation_date": "2026-08-19",
+    "new_campaign_run": false,
+    "model_invocation": false
+  },
   "classification": "BLOQUEADO_POR_LIMITE",
   "cli": {
     "version": "codex-cli 0.147.0",
@@ -17,14 +23,14 @@
     "sandbox_mode_requested": "workspace-write",
     "network_requested": "disabled",
     "approval_policy_requested": "never",
-    "environment_policy": "core; exclude KEY, SECRET, TOKEN"
+    "environment_policy": "all; differential exclude KEY, SECRET, TOKEN"
   },
   "effective_config_before_sandbox_bootstrap": {
     "sandbox_filesystem": "restricted",
     "sandbox_network": "restricted",
     "approval_policy": "Never",
     "auth_storage": "Keyring",
-    "auth_result": "DENEGADO",
+    "host_cli_credentials_in_campaign_home": "AUSENTES",
     "mcp_servers": 0,
     "hostile_mcp_omitted": true,
     "hostile_approval_omitted": true,
@@ -42,7 +48,7 @@
     "multi_agent_feature_enabled": false,
     "skills_instructions_present": true,
     "subagent_instructions_present": true,
-    "effective_agent_tool_inventory": "NO_OBSERVABLE"
+    "effective_agent_tool_inventory": "NO_OBSERVABLE_EN_CAPA_A"
   },
   "layer_a": {
     "complete": false,
@@ -63,9 +69,10 @@
       { "id": "credential_store", "status": "NOT_RUN", "cause": "SANDBOX_DID_NOT_START" }
     ]
   },
-  "control_plane_separation": {
-    "host_authenticated": "NO_OBSERVABLE",
-    "sandbox_command_access": "DENEGADO",
+  "control_plane_access": {
+    "host_credential_baseline": "NO_OBSERVABLE",
+    "sandbox_command_access": "NO_OBSERVABLE",
+    "cause": "EMPTY_TEMPORAL_CODEX_HOME",
     "credential_content_observed": false
   },
   "layer_b": {

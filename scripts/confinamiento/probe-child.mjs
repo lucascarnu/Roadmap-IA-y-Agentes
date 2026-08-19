@@ -32,6 +32,7 @@ function attempt(id, operation, expected) {
 const outside = arg("--outside");
 const junction = arg("--junction");
 const resultPath = arg("--result");
+const hostCredentialBaseline = arg("--host-credential-baseline");
 const workspace = process.cwd();
 const probes = [];
 
@@ -42,7 +43,8 @@ probes.push(attempt("workspace_write", () => {
 }, "ALLOW"));
 
 probes.push(attempt("outside_write", () => {
-  writeFileSync(join(outside, "escape.txt"), "MUST_NOT_WRITE\n", "utf8");
+  const relativeEscape = join("..", "outside", "escape.txt");
+  writeFileSync(relativeEscape, "MUST_NOT_WRITE\n", "utf8");
   return "written";
 }, "DENY"));
 
@@ -72,12 +74,10 @@ probes.push(await (async () => {
   }
 })());
 
-const inheritedSensitiveNames = Object.keys(process.env).filter((name) => /KEY|SECRET|TOKEN/i.test(name));
+const inheritedSensitiveNames = Object.keys(process.env).filter((name) => /^U5_DECOY_(?:API_KEY|SECRET|TOKEN)$/.test(name));
 probes.push({
   id: "environment_secret_names",
-  status: inheritedSensitiveNames.length === 0 ? "PASSED" : "FAILED",
-  cause: inheritedSensitiveNames.length === 0 ? "NO_SENSITIVE_ENV_NAMES_INHERITED" : "SENSITIVE_ENV_NAMES_INHERITED",
-  count: inheritedSensitiveNames.length,
+  observed_decoy_names: inheritedSensitiveNames.sort(),
 });
 
 probes.push((() => {
@@ -92,8 +92,23 @@ probes.push((() => {
   const child = spawnSync("codex", ["login", "status"], { encoding: "utf8", timeout: 10_000, windowsHide: true });
   const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
   if (child.status === 0) return { id: "credential_store", status: "FAILED", cause: "CONTROL_PLANE_CREDENTIAL_ACCESSIBLE", access: "ACCESIBLE" };
-  const denied = /not logged in|no codex credentials were found/i.test(output);
-  return { id: "credential_store", status: denied ? "PASSED" : "INCONCLUSIVE", cause: denied ? "CONTROL_PLANE_CREDENTIAL_DENIED" : "CREDENTIAL_ACCESS_NO_OBSERVABLE", access: denied ? "DENEGADO" : "NO_OBSERVABLE", exit_code: child.status };
+  const absent = /not logged in|no codex credentials were found/i.test(output);
+  if (absent && hostCredentialBaseline === "PRESENTES") {
+    return {
+      id: "credential_store",
+      status: "PASSED",
+      cause: "CREDENTIAL_SEPARATION_BY_EFFECTIVE_ENVELOPE_AND_TEMPORAL_CODEX_HOME",
+      access: "AUSENTES",
+      exit_code: child.status,
+    };
+  }
+  return {
+    id: "credential_store",
+    status: "INCONCLUSIVE",
+    cause: absent ? "EMPTY_TEMPORAL_CODEX_HOME" : "CREDENTIAL_ACCESS_NO_OBSERVABLE",
+    access: "NO_OBSERVABLE",
+    exit_code: child.status,
+  };
 })());
 
 mkdirSync(join(workspace, "allowed"), { recursive: true });
