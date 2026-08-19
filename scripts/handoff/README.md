@@ -230,6 +230,19 @@ El puente no lee el contexto autorizado desde el working tree. Por cada path usa
 - hash del prompt;
 - `input_fingerprint` del manifiesto completo.
 
+La salida cruda completa se persiste inmediatamente después de terminar el
+proceso externo y antes de intentar parsear el JSON. A continuación se escriben
+`invocation-receipt.json` —proveedor, modelo solicitado, duración, exit code y
+uso observable— y `via-observada.json`. Recién después se parsea, se valida
+contra el esquema efectivo y se aplican las reglas semánticas. Un JSON inválido,
+recortado o excesivo conserva esos tres artefactos, falla de forma terminal y no
+se trunca, repara ni reintenta automáticamente. Sólo un resultado válido puede
+publicarse.
+
+`via-observada.json` demuestra la ruta autenticada observada después de la
+invocación. Por sí sola no prueba facturación ni consumo efectivo, salvo que la
+telemetría recibida los exponga.
+
 El resultado validado se persiste antes de publicar. La publicación usa:
 
 ```text
@@ -240,15 +253,34 @@ Si GitHub falla después de la inferencia, la recuperación reutiliza el JSON
 persistido y busca el marcador antes de comentar. No vuelve a consumir inferencia
 ni duplica un resultado.
 
-El prompt congelado incluye el contenido literal de
-`handoff-result.schema.json`, reglas explícitas para sus claves y enums, y un
-ejemplo mínimo válido adaptado al destinatario y al HEAD del contrato. Todos los
-agentes reciben el mismo contrato por prompt; los flags de salida estructurada de
-Claude y Codex siguen actuando como una garantía adicional. La salida solicitada
-es JSON crudo, aunque el transporte de Kimi tolera como red de compatibilidad un
-único bloque completo etiquetado `json`. Si el agente no puede observar su modelo
-o esfuerzo efectivo usa `NO_OBSERVABLE`; la telemetría del puente, cuando existe,
-es la fuente autoritativa y la firma del agente no la reemplaza.
+`RESULT_LIMITS` es la única fuente numérica de los límites de salida.
+`materializeResultSchema` aplica esos valores al schema base —que no duplica
+máximos— y produce el schema efectivo con `maxLength`, `maxItems` y
+`uniqueItems`. El mismo resultado materializado viaja en el paquete y su
+manifiesto, aparece en el prompt, alimenta `--json-schema` de Claude, se escribe
+dentro del directorio de cada corrida para `--output-schema` de Codex, integra el
+agent file de Kimi y gobierna la validación local posterior.
+
+El prompt congelado incluye ese esquema efectivo, reglas explícitas para sus
+claves y enums, los límites generados y un ejemplo mínimo válido adaptado al
+destinatario y al HEAD. La instrucción final de Kimi vuelve a colocar los límites
+junto al pedido de salida, declara que excederlos invalida toda la inferencia,
+fija un objetivo de seguridad del 75 % para campos extensos y separa síntesis de
+evidencia breve.
+
+Los flags estructurados de Claude y Codex pueden fortalecer esas vías. Kimi Code
+CLI no recibe un output schema equivalente: para Kimi el esquema y los límites
+siguen siendo instrucciones textuales, no enforcement demostrado. Esta
+materialización no habría evitado por sí sola el exceso observado en Issue #117,
+porque Kimi ya había recibido los límites correctos; elimina deriva y mejora
+consistencia, pero no corrige causalmente la falta de enforcement durante su
+generación.
+
+La salida solicitada es JSON crudo, aunque el transporte de Kimi tolera como red
+de compatibilidad un único bloque completo etiquetado `json`. Si el agente no
+puede observar su modelo o esfuerzo efectivo usa `NO_OBSERVABLE`; la telemetría
+del puente, cuando existe, es la fuente autoritativa y la firma del agente no la
+reemplaza.
 
 Cuando el resultado indica `siguiente_destinatario`, el puente crea el segundo
 Issue con un puntero verificable al comentario anterior y continúa procesándolo

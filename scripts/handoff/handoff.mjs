@@ -19,7 +19,7 @@ const PROMPT_TEMPLATE = join(HERE, "prompt-template.md");
 const RUNTIME = join(HERE, ".handoff");
 const ARTIFACTS = join(HERE, "artifacts");
 const HEAD_REF_PATTERN = /^(?!\.{1,2}(?:\/|$))(?!.*\/\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
-const RESULT_LIMITS = Object.freeze({
+export const RESULT_LIMITS = Object.freeze({
   veredicto: 2000,
   resumen: 6000,
   accion_recomendada: 3000,
@@ -27,6 +27,49 @@ const RESULT_LIMITS = Object.freeze({
   evidencia_items: 30,
   archivos_leidos: 30,
 });
+export const RESULT_SAFETY_RATIO = 0.75;
+
+export function materializeResultSchema(baseSchema, limits = RESULT_LIMITS) {
+  const schema = structuredClone(baseSchema);
+  const properties = schema?.properties;
+  if (!properties?.veredicto || !properties?.resumen || !properties?.accion_recomendada
+    || !properties?.evidencia?.items?.properties?.detalle || !properties?.archivos_leidos) {
+    fail("Schema base de resultado incompatible");
+  }
+  properties.veredicto.maxLength = limits.veredicto;
+  properties.resumen.maxLength = limits.resumen;
+  properties.accion_recomendada.maxLength = limits.accion_recomendada;
+  properties.evidencia.maxItems = limits.evidencia_items;
+  properties.evidencia.items.properties.detalle.maxLength = limits.evidencia_detalle;
+  properties.archivos_leidos.maxItems = limits.archivos_leidos;
+  properties.archivos_leidos.uniqueItems = true;
+  return schema;
+}
+
+export function renderResultLimits(limits = RESULT_LIMITS, safetyRatio = RESULT_SAFETY_RATIO) {
+  const safety = (value) => Math.floor(value * safetyRatio);
+  return [
+    `- \`veredicto\`: máximo duro ${limits.veredicto} caracteres; objetivo de seguridad ${safety(limits.veredicto)}.`,
+    `- \`resumen\`: máximo duro ${limits.resumen} caracteres; objetivo de seguridad ${safety(limits.resumen)}.`,
+    `- \`accion_recomendada\`: máximo duro ${limits.accion_recomendada} caracteres; objetivo de seguridad ${safety(limits.accion_recomendada)}.`,
+    `- Cada \`evidencia[].detalle\`: máximo duro ${limits.evidencia_detalle} caracteres; objetivo de seguridad ${safety(limits.evidencia_detalle)}.`,
+    `- \`evidencia\`: máximo ${limits.evidencia_items} ítems.`,
+    `- \`archivos_leidos\`: máximo ${limits.archivos_leidos} ítems únicos.`,
+  ].join("\n");
+}
+
+export function buildKimiFinalInstruction(limits = RESULT_LIMITS) {
+  return [
+    "Ejecutá la revisión congelada de tu system prompt y devolvé exclusivamente el objeto JSON requerido.",
+    "Exceder cualquier límite duro invalida toda la inferencia; no se truncará ni reparará la salida.",
+    "Para los campos extensos, mantenete como objetivo de seguridad en no más del 75 % del máximo duro:",
+    renderResultLimits(limits),
+    "No repitas todos los invariantes en `resumen`: usá `evidencia` para el detalle breve y `resumen` sólo para la síntesis.",
+  ].join("\n");
+}
+
+const BASE_RESULT_SCHEMA = readJson(RESULT_SCHEMA);
+export const EFFECTIVE_RESULT_SCHEMA = materializeResultSchema(BASE_RESULT_SCHEMA, RESULT_LIMITS);
 
 export const GOVERNING_CONTEXT = Object.freeze({
   common: Object.freeze([
@@ -150,7 +193,7 @@ export function validateContract(contract, config) {
   return { ...contract, head_ref: contract.head_ref ?? config.default_head_ref };
 }
 
-export function validateResult(result, contract, config) {
+export function validateResultAgainstSchema(result, schema = EFFECTIVE_RESULT_SCHEMA) {
   if (!result || typeof result !== "object" || Array.isArray(result)) fail("Salida no es objeto");
   onlyKeys(result, [
     "handoff_version", "estado", "veredicto", "resumen", "evidencia", "archivos_leidos",
@@ -158,25 +201,47 @@ export function validateResult(result, contract, config) {
   ], "resultado", "handoff:failed");
   if (result.handoff_version !== "1") fail("handoff_version de salida inválido");
   if (!["COMPLETADO", "BLOQUEADO"].includes(result.estado)) fail("estado de salida inválido");
-  for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (typeof result[key] !== "string" || !result[key].trim()) fail(`${key} inválido`);
-  for (const key of ["veredicto", "resumen", "accion_recomendada"]) if (result[key].length > RESULT_LIMITS[key]) fail(`${key} excede longitud máxima`);
-  if (!Array.isArray(result.evidencia) || result.evidencia.length > RESULT_LIMITS.evidencia_items) fail("evidencia inválida");
+  const properties = schema.properties;
+  for (const key of ["veredicto", "resumen", "accion_recomendada"]) {
+    if (typeof result[key] !== "string") fail(`${key} inválido`);
+    if (result[key].length > properties[key].maxLength) fail(`${key} excede longitud máxima`);
+  }
+  if (!Array.isArray(result.evidencia) || result.evidencia.length > properties.evidencia.maxItems) fail("evidencia inválida");
   for (const item of result.evidencia) {
     if (!item || typeof item !== "object" || Array.isArray(item)) fail("ítem de evidencia inválido");
     onlyKeys(item, ["archivo", "detalle"], "evidencia", "handoff:failed");
-    if (typeof item.archivo !== "string" || !item.archivo || typeof item.detalle !== "string" || !item.detalle) fail("evidencia incompleta");
-    if (item.detalle.length > RESULT_LIMITS.evidencia_detalle) fail("detalle de evidencia excede longitud máxima");
+    if (typeof item.archivo !== "string" || typeof item.detalle !== "string") fail("evidencia incompleta");
+    if (item.detalle.length > properties.evidencia.items.properties.detalle.maxLength) fail("detalle de evidencia excede longitud máxima");
   }
-  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.length > RESULT_LIMITS.archivos_leidos || new Set(result.archivos_leidos).size !== result.archivos_leidos.length) fail("archivos_leidos inválido");
-  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) fail("archivos_leidos fuera del contexto autorizado");
+  if (!Array.isArray(result.archivos_leidos)
+    || result.archivos_leidos.some((path) => typeof path !== "string")
+    || result.archivos_leidos.length > properties.archivos_leidos.maxItems
+    || (properties.archivos_leidos.uniqueItems === true
+      && new Set(result.archivos_leidos).size !== result.archivos_leidos.length)) fail("archivos_leidos inválido");
   if (!["claude", "codex", "kimi", null].includes(result.siguiente_destinatario)) fail("siguiente_destinatario inválido");
-  if (result.siguiente_destinatario && !config.agents[result.siguiente_destinatario]) fail("siguiente_destinatario no configurado");
   const signature = result.firma;
   if (!signature || typeof signature !== "object" || Array.isArray(signature)) fail("firma inválida");
   onlyKeys(signature, ["ejecutor", "modelo", "esfuerzo", "head_sha"], "firma", "handoff:failed");
+  if (!["claude", "codex", "kimi"].includes(signature.ejecutor)
+    || typeof signature.modelo !== "string" || typeof signature.esfuerzo !== "string"
+    || typeof signature.head_sha !== "string") fail("firma inválida");
+  return result;
+}
+
+export function validateResult(result, contract, config, schema = EFFECTIVE_RESULT_SCHEMA) {
+  validateResultAgainstSchema(result, schema);
+  for (const key of ["veredicto", "resumen", "accion_recomendada"]) {
+    if (!result[key].trim()) fail(`${key} inválido`);
+  }
+  for (const item of result.evidencia) {
+    if (!item.archivo || !item.detalle) fail("evidencia incompleta");
+  }
+  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) fail("archivos_leidos fuera del contexto autorizado");
+  if (result.siguiente_destinatario && !config.agents[result.siguiente_destinatario]) fail("siguiente_destinatario no configurado");
+  const signature = result.firma;
   // La igualdad con contract.head_sha hereda su validación previa de 40 hex.
   if (signature.ejecutor !== contract.destinatario || signature.head_sha !== contract.head_sha) fail("firma no corresponde al contrato");
-  if (typeof signature.modelo !== "string" || !signature.modelo || typeof signature.esfuerzo !== "string" || !signature.esfuerzo) fail("modelo/esfuerzo de firma inválidos");
+  if (!signature.modelo || !signature.esfuerzo) fail("modelo/esfuerzo de firma inválidos");
   if (contract.profundidad_cadena >= config.max_relevos && result.siguiente_destinatario !== null) fail("La salida intenta exceder max_relevos", "handoff:blocked");
   return result;
 }
@@ -254,13 +319,19 @@ function listFiles(root) {
   return files.sort();
 }
 
-export function createManifest(inputDir, headSha) {
+export function createManifest(inputDir, headSha, resultLimits = RESULT_LIMITS) {
   const entries = listFiles(inputDir).filter((path) => path !== "input-manifest.json").map((path) => {
     const content = readFileSync(join(inputDir, path));
     return { path, sha256: sha256(content), bytes: content.byteLength };
   });
   const inputFingerprint = sha256(Buffer.from(JSON.stringify(entries)));
-  const manifest = { version: 1, head_sha: headSha, input_fingerprint: inputFingerprint, files: entries };
+  const manifest = {
+    version: 1,
+    head_sha: headSha,
+    input_fingerprint: inputFingerprint,
+    result_limits: { ...resultLimits },
+    files: entries,
+  };
   writeJson(join(inputDir, "input-manifest.json"), manifest);
   return manifest;
 }
@@ -315,7 +386,9 @@ function canonicalResultExample(contract) {
   };
 }
 
-export function buildPrompt(template, contract, previousResult, contexts, resultSchema, frozenDiff = null) {
+export function buildPrompt(
+  template, contract, previousResult, contexts, resultSchema, frozenDiff = null, resultLimits = RESULT_LIMITS,
+) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   const renderedDiff = frozenDiff === null ? "" : [
     "\n\n## Diff congelado base → HEAD",
@@ -333,7 +406,8 @@ export function buildPrompt(template, contract, previousResult, contexts, result
     CONTRATO: JSON.stringify(contract, null, 2),
     RESULTADO_PREVIO: previousResult ? JSON.stringify(previousResult, null, 2) : "null",
     CONTEXTO: renderedContexts,
-    SCHEMA_SALIDA: resultSchema.trim(),
+    SCHEMA_SALIDA: typeof resultSchema === "string" ? resultSchema.trim() : JSON.stringify(resultSchema, null, 2),
+    LIMITES_RESULTADO: renderResultLimits(resultLimits),
     EJEMPLO_SALIDA: JSON.stringify(canonicalResultExample(contract), null, 2),
     DIFF_CONGELADO: renderedDiff,
   };
@@ -359,15 +433,18 @@ function extractCommentResult(body, marker, expectedHash) {
   return JSON.parse(raw);
 }
 
-export function prepareInput({ repo, contract, runDir, previousResult, run = runProcess }) {
+export function prepareInput({
+  repo, contract, runDir, previousResult, run = runProcess, resultLimits = RESULT_LIMITS,
+}) {
   gitCommitExists(repo, contract.head_sha, run);
   if (contract.base_sha) gitCommitExists(repo, contract.base_sha, run);
   const inputDir = join(runDir, "input");
   mkdirSync(inputDir, { recursive: true });
   writeJson(join(inputDir, "contract.json"), contract);
   writeJson(join(inputDir, "handoff.schema.json"), readJson(CONTRACT_SCHEMA));
-  const resultSchema = readFileSync(RESULT_SCHEMA, "utf8");
-  writeJson(join(inputDir, "handoff-result.schema.json"), JSON.parse(resultSchema));
+  const resultSchema = materializeResultSchema(readJson(RESULT_SCHEMA), resultLimits);
+  writeJson(join(inputDir, "handoff-result.schema.json"), resultSchema);
+  writeJson(join(inputDir, "result-limits.json"), resultLimits);
   const contexts = contract.contexto_autorizado.map((path) => {
     const content = gitShow(repo, contract.head_sha, path, run);
     const target = join(inputDir, "context", ...path.replaceAll("\\", "/").split("/"));
@@ -378,13 +455,13 @@ export function prepareInput({ repo, contract, runDir, previousResult, run = run
   if (frozenDiff !== null) writeText(join(inputDir, "diff.patch"), frozenDiff);
   if (previousResult) writeJson(join(inputDir, "previous-result.json"), previousResult);
   const prompt = buildPrompt(
-    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, resultSchema, frozenDiff,
+    readFileSync(PROMPT_TEMPLATE, "utf8"), contract, previousResult, contexts, resultSchema, frozenDiff, resultLimits,
   );
   writeText(join(inputDir, "prompt.md"), prompt);
-  const manifest = createManifest(inputDir, contract.head_sha);
+  const manifest = createManifest(inputDir, contract.head_sha, resultLimits);
   verifyManifest(inputDir, manifest);
   writeJson(join(runDir, "input-manifest.json"), manifest);
-  return { inputDir, manifest, prompt };
+  return { inputDir, manifest, prompt, resultSchema };
 }
 
 function parseClaude(stdout) {
@@ -423,32 +500,62 @@ function parseKimi(stdout) {
   return { result, telemetry: { version, usage } };
 }
 
-export function invokeAgent({ contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv() }) {
-  const started = Date.now();
-  let parsed;
-  let raw;
+export function observeUsageBeforeResultParse(agent, raw) {
+  try {
+    if (agent === "claude") {
+      const envelope = JSON.parse(raw);
+      return envelope.usage ?? envelope.modelUsage ?? null;
+    }
+    const events = raw.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    if (agent === "codex") {
+      return [...events].reverse().find((event) => event.type === "turn.completed")?.usage ?? null;
+    }
+    return [...events].reverse().find((event) => event.usage)?.usage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function invokeAgent({
+  contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv(),
+  resultSchema = EFFECTIVE_RESULT_SCHEMA, resultLimits = RESULT_LIMITS, observeAfter = null, now = Date.now,
+}) {
+  const started = now();
+  let response;
+  let executionError = null;
+  let finalPath = null;
+  const execute = (command, args, options) => {
+    try {
+      response = run(command, args, options);
+    } catch (error) {
+      executionError = error;
+      response = {
+        status: error?.status ?? null,
+        stdout: error?.stdout ?? "",
+        stderr: error?.stderr ?? "",
+      };
+    }
+  };
   if (contract.destinatario === "claude") {
     const emptyMcp = join(runDir, "empty-mcp.json");
     writeJson(emptyMcp, { mcpServers: {} });
-    const response = run(adapter.executable, [
+    execute(adapter.executable, [
       "--print", "--safe-mode", "--tools", "", "--strict-mcp-config", "--mcp-config", emptyMcp,
       "--disable-slash-commands", "--no-chrome", "--no-session-persistence", "--output-format", "json",
-      "--json-schema", readFileSync(RESULT_SCHEMA, "utf8"), "--model", adapter.model, "--effort", adapter.effort,
+      "--json-schema", JSON.stringify(resultSchema), "--model", adapter.model, "--effort", adapter.effort,
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
-    raw = response.stdout;
-    parsed = parseClaude(raw);
   } else if (contract.destinatario === "codex") {
-    const finalPath = join(runDir, "final.json");
-    const response = run(adapter.executable, [
+    finalPath = join(runDir, "final.json");
+    const runtimeSchemaPath = join(runDir, "handoff-result.effective.schema.json");
+    writeJson(runtimeSchemaPath, resultSchema);
+    execute(adapter.executable, [
       "exec", "--strict-config", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
       "--sandbox", "read-only", "--cd", runDir, "--model", adapter.model,
       "--config", `model_reasoning_effort=\"${adapter.effort}\"`, "--config", "approval_policy=\"never\"",
       "--config", "web_search=\"disabled\"", "--config", "features.shell_tool=false",
       "--config", "features.apps=false", "--config", "features.code_mode.enabled=false",
-      "--output-schema", RESULT_SCHEMA, "--output-last-message", finalPath, "--json", "--color", "never", "-",
+      "--output-schema", runtimeSchemaPath, "--output-last-message", finalPath, "--json", "--color", "never", "-",
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
-    raw = response.stdout;
-    parsed = parseCodex(raw, finalPath);
   } else {
     const emptySkills = join(runDir, "empty-kimi-skills");
     const agentFile = join(runDir, "kimi-reviewer.md");
@@ -459,16 +566,43 @@ export function invokeAgent({ contract, adapter, prompt, runDir, run = runProces
       KIMI_DISABLE_TELEMETRY: "1",
       KIMI_MODEL_THINKING_EFFORT: adapter.effort,
     });
-    const response = run(adapter.executable, [
+    execute(adapter.executable, [
       "--model", adapter.alias, "--agent-file", agentFile, "--skills-dir", emptySkills,
-      "--output-format", "stream-json", "--prompt",
-      "Ejecutá la revisión congelada de tu system prompt y devolvé exclusivamente el objeto JSON requerido.",
+      "--output-format", "stream-json", "--prompt", buildKimiFinalInstruction(resultLimits),
     ], { cwd: runDir, env: kimiEnv, timeout: adapter.timeout_ms });
-    raw = response.stdout;
-    parsed = parseKimi(raw);
   }
+  const raw = response?.stdout ?? "";
+  const duration = now() - started;
   writeText(join(runDir, "raw-output.jsonl"), raw);
-  return { ...parsed, duration_ms: Date.now() - started };
+  const receipt = {
+    provider: contract.destinatario,
+    model_requested: adapter.alias ?? adapter.model,
+    duration_ms: duration,
+    exit_code: response?.status ?? null,
+    usage_observable: observeUsageBeforeResultParse(contract.destinatario, raw),
+  };
+  writeJson(join(runDir, "invocation-receipt.json"), receipt);
+  let viaAfter = null;
+  let viaError = null;
+  if (observeAfter) {
+    try {
+      viaAfter = observeAfter();
+    } catch (error) {
+      viaError = error;
+      viaAfter = {
+        valid: false,
+        observed_via: "NO_OBSERVABLE",
+        cause: "POST_INVOCATION_VIA_OBSERVATION_FAILED",
+      };
+    }
+    writeJson(join(runDir, "via-observada.json"), viaAfter);
+  }
+  if (executionError) throw executionError;
+  if (viaError) throw viaError;
+  const parsed = contract.destinatario === "claude" ? parseClaude(raw)
+    : contract.destinatario === "codex" ? parseCodex(raw, finalPath)
+      : parseKimi(raw);
+  return { ...parsed, duration_ms: duration, receipt, viaAfter };
 }
 
 export class GithubBackend {
@@ -655,8 +789,21 @@ async function processIssue(context, issue) {
         viaBefore = observeVia(authObserver, contract.destinatario, adapter);
         writeJson(join(runDir, "via-before.json"), viaBefore);
         if (!viaBefore.valid) fail("La vía preflight no coincide o no es demostrable", "handoff:blocked-via");
-        invocation = invoke({ contract, adapter, prompt: prepared.prompt, runDir, run: context.run, env: buildChildEnv() });
-        result = validateResult(invocation.result, contract, config);
+        invocation = invoke({
+          contract,
+          adapter,
+          prompt: prepared.prompt,
+          runDir,
+          run: context.run,
+          env: buildChildEnv(),
+          resultSchema: prepared.resultSchema,
+          resultLimits: prepared.manifest.result_limits,
+          observeAfter: () => observeVia(authObserver, contract.destinatario, adapter),
+        });
+        viaAfter = invocation.viaAfter ?? observeVia(authObserver, contract.destinatario, adapter);
+        if (!invocation.viaAfter) writeJson(join(runDir, "via-observada.json"), viaAfter);
+        if (!viaAfter.valid) fail("La vía observada no coincide o no es demostrable", "handoff:blocked-via");
+        result = validateResult(invocation.result, contract, config, prepared.resultSchema);
         writeJson(resultPath, result);
         state = { ...state, phase: "result_persisted", previous_phase: "result_persisted", run_dir: runDir, marker };
         saveState(runtimeDir, issue.number, state);
@@ -665,10 +812,12 @@ async function processIssue(context, issue) {
 
       const remoteHeadAfter = await backend.currentHead(contract.head_ref);
       if (remoteHeadAfter !== contract.head_sha) fail(`HEAD movido durante la corrida: ${remoteHeadAfter}`, "handoff:stale");
-      const adapter = { ...config.agents[contract.destinatario], timeout_ms: config.timeout_ms };
-      viaAfter = observeVia(authObserver, contract.destinatario, adapter);
-      writeJson(join(runDir, "via-observada.json"), viaAfter);
-      if (!viaAfter.valid) fail("La vía observada no coincide o no es demostrable", "handoff:blocked-via");
+      if (!viaAfter) {
+        const adapter = { ...config.agents[contract.destinatario], timeout_ms: config.timeout_ms };
+        viaAfter = observeVia(authObserver, contract.destinatario, adapter);
+        writeJson(join(runDir, "via-observada.json"), viaAfter);
+        if (!viaAfter.valid) fail("La vía observada no coincide o no es demostrable", "handoff:blocked-via");
+      }
 
       const { raw, body } = resultComment(marker, result);
       const existing = backend.comments(issue.number).find((comment) => (comment.body ?? "").includes(marker));

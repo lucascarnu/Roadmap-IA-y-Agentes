@@ -46,7 +46,13 @@ este prompt. No incluyas razonamiento interno ni texto fuera del JSON.
   telemetría del puente, cuando exista, es la fuente autoritativa para modelo y
   esfuerzo; la firma no la reemplaza.
 - `archivos_leidos` sólo puede contener paths del contexto autorizado.
-- Máximos: `evidencia` 30 ítems; `archivos_leidos` 30 ítems sin duplicados; `veredicto` 2000, `resumen` 6000, `accion_recomendada` 3000 y cada `evidencia[].detalle` 2000 caracteres.
+- Límites materiales derivados de la fuente canónica:
+{{LIMITES_RESULTADO}}
+- Exceder cualquier límite duro invalida toda la salida. No se trunca, recorta,
+  reescribe ni repara.
+- Para campos extensos, el objetivo de seguridad es no usar más del 75 % del
+  máximo duro. Usá `evidencia` para el detalle breve y `resumen` sólo para la
+  síntesis; no repitas allí todos los invariantes.
 - Si la evidencia no alcanza, usar `estado=BLOQUEADO` y explicarlo sin inventar.
 - En profundidad máxima, `siguiente_destinatario` debe ser `null`.{{DIFF_CONGELADO}}
 

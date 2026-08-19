@@ -9,9 +9,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import {
-  CrashSimulation, GOVERNING_CONTEXT, GithubBackend, HandoffError, acquireLock, buildPrompt, invokeAgent,
-  parseContractBody, poll, prepareInput, sha256, tick,
-  validateContract, validateResult,
+  CrashSimulation, EFFECTIVE_RESULT_SCHEMA, GOVERNING_CONTEXT, GithubBackend, HandoffError,
+  RESULT_LIMITS, acquireLock, buildKimiFinalInstruction, buildPrompt, invokeAgent,
+  materializeResultSchema, parseContractBody, poll, prepareInput, renderResultLimits, sha256, tick,
+  validateContract, validateResult, validateResultAgainstSchema,
 } from "./handoff.mjs";
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
@@ -27,6 +28,7 @@ const MODULE_URL = pathToFileURL(join(HERE, "handoff.mjs")).href;
 const CONTRACT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff.schema.json"), "utf8"));
 const RESULT_SCHEMA_RAW = readFileSync(join(HERE, "handoff-result.schema.json"), "utf8");
 const RESULT_SCHEMA = JSON.parse(RESULT_SCHEMA_RAW);
+const MATERIALIZED_RESULT_SCHEMA = materializeResultSchema(RESULT_SCHEMA, RESULT_LIMITS);
 const PROMPT_TEMPLATE = readFileSync(join(HERE, "prompt-template.md"), "utf8");
 const BASE_CONFIG = {
   repository: "example/repo",
@@ -253,7 +255,7 @@ function assertResultFailed(result, currentContract) {
 function assertStructuredOutputSubset(schema) {
   const allowed = new Set([
     "type", "enum", "properties", "items", "required", "additionalProperties",
-    "description", "title",
+    "description", "title", "maxLength", "maxItems", "uniqueItems",
   ]);
   const visit = (node, path, typeRequired = false) => {
     assert(node && typeof node === "object" && !Array.isArray(node), `${path} no es un nodo de schema`);
@@ -348,7 +350,8 @@ function legacyPromptForOrdinaryContent({ template, currentContract, previousRes
     .replace("{{CONTRATO}}", JSON.stringify(currentContract, null, 2))
     .replace("{{RESULTADO_PREVIO}}", previousResult ? JSON.stringify(previousResult, null, 2) : "null")
     .replace("{{CONTEXTO}}", renderedContexts)
-    .replace("{{SCHEMA_SALIDA}}", resultSchema.trim())
+    .replace("{{SCHEMA_SALIDA}}", typeof resultSchema === "string" ? resultSchema.trim() : JSON.stringify(resultSchema, null, 2))
+    .replace("{{LIMITES_RESULTADO}}", renderResultLimits(RESULT_LIMITS))
     .replace("{{EJEMPLO_SALIDA}}", JSON.stringify(example, null, 2))
     .replace("{{DIFF_CONGELADO}}", renderedDiff);
 }
@@ -486,7 +489,7 @@ test("contrato y resultado válidos respetan los schemas conceptuales", () => {
 
 test("schema de salida usa sólo el subconjunto estructurado admitido", () => {
   assert.equal(Object.hasOwn(RESULT_SCHEMA, "$schema"), false, "Claude rechaza la declaración de dialecto $schema");
-  assertStructuredOutputSubset(RESULT_SCHEMA);
+  assertStructuredOutputSubset(MATERIALIZED_RESULT_SCHEMA);
 });
 
 test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums", () => {
@@ -495,7 +498,7 @@ test("anti-deriva: el prompt renderiza el schema y explicita sus claves y enums"
   try {
     assert.equal(
       extractPromptJsonBlock(prepared.prompt, "Schema del contrato de salida"),
-      RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"),
+      JSON.stringify(MATERIALIZED_RESULT_SCHEMA, null, 2),
     );
     const { keys, enumValues } = schemaTokens(RESULT_SCHEMA);
     for (const key of keys) assert(prepared.prompt.includes(`"${key}"`), `El prompt omite la clave ${key}`);
@@ -558,7 +561,7 @@ test("buildPrompt conserva salida byte a byte para contenido sin sustituciones e
       currentContract: current,
       previousResult: null,
       contexts,
-      resultSchema: RESULT_SCHEMA_RAW,
+      resultSchema: MATERIALIZED_RESULT_SCHEMA,
       frozenDiff: ordinaryDiff,
     });
     assert.deepEqual(Buffer.from(prepared.prompt, "utf8"), Buffer.from(expected, "utf8"));
@@ -606,7 +609,7 @@ test("buildPrompt no deja tokens sin sustituir en un caso normal", () => {
   assert.equal(prompt.match(/\{\{[A-Z_]+\}\}/g), null);
 });
 
-test("buildPrompt falla cerrado si el template no sustituye exactamente siete claves", () => {
+test("buildPrompt falla cerrado si el template no sustituye exactamente ocho claves", () => {
   const current = validateContract(contract(), BASE_CONFIG);
   const args = [
     current, null, [{ path: current.contexto_autorizado[0], content: "contexto" }], RESULT_SCHEMA_RAW, null,
@@ -932,6 +935,328 @@ test("invokeAgent rechaza eventos de herramienta emitidos por Kimi", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("G1.1 materializeResultSchema deriva todos los límites de RESULT_LIMITS", () => {
+  const schema = materializeResultSchema(RESULT_SCHEMA, RESULT_LIMITS);
+  assert.equal(schema.properties.veredicto.maxLength, RESULT_LIMITS.veredicto);
+  assert.equal(schema.properties.resumen.maxLength, RESULT_LIMITS.resumen);
+  assert.equal(schema.properties.accion_recomendada.maxLength, RESULT_LIMITS.accion_recomendada);
+  assert.equal(schema.properties.evidencia.maxItems, RESULT_LIMITS.evidencia_items);
+  assert.equal(schema.properties.evidencia.items.properties.detalle.maxLength, RESULT_LIMITS.evidencia_detalle);
+  assert.equal(schema.properties.archivos_leidos.maxItems, RESULT_LIMITS.archivos_leidos);
+  assert.equal(schema.properties.archivos_leidos.uniqueItems, true);
+  assert.equal(Object.hasOwn(RESULT_SCHEMA.properties.veredicto, "maxLength"), false);
+});
+
+test("G1.2 paquete prompt manifiesto Claude Kimi y validación comparten límites", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-result-surfaces-"));
+  try {
+    const prepared = prepareInput({
+      repo: ROOT, contract: current, runDir: join(root, "input"), previousResult: null,
+      run: (_command, args) => ({ status: 0, stdout: args.includes("show") ? "contexto\n" : "", stderr: "" }),
+    });
+    assert.deepEqual(prepared.resultSchema, EFFECTIVE_RESULT_SCHEMA);
+    assert.deepEqual(JSON.parse(readFileSync(join(prepared.inputDir, "result-limits.json"), "utf8")), RESULT_LIMITS);
+    assert.deepEqual(prepared.manifest.result_limits, RESULT_LIMITS);
+    assert.deepEqual(JSON.parse(extractPromptJsonBlock(prepared.prompt, "Schema del contrato de salida")), EFFECTIVE_RESULT_SCHEMA);
+    for (const value of Object.values(RESULT_LIMITS)) assert(prepared.prompt.includes(String(value)));
+
+    const claudeContract = validateContract(contract({
+      destinatario: "claude", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.claude],
+    }), BASE_CONFIG);
+    const expected = validResult(claudeContract);
+    const claudeCalls = [];
+    invokeAgent({
+      contract: claudeContract,
+      adapter: BASE_CONFIG.agents.claude,
+      prompt: prepared.prompt,
+      runDir: join(root, "claude"),
+      observeAfter: () => ({ valid: true, observed_via: "fixture" }),
+      run: (_command, args) => {
+        claudeCalls.push(args);
+        return { status: 0, stderr: "", stdout: JSON.stringify({ structured_output: expected }) };
+      },
+    });
+    assert.deepEqual(JSON.parse(claudeCalls[0][claudeCalls[0].indexOf("--json-schema") + 1]), EFFECTIVE_RESULT_SCHEMA);
+
+    const kimiContract = validateContract(contract({
+      destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+    }), BASE_CONFIG);
+    const kimiExpected = validResult(kimiContract);
+    let kimiArgs;
+    invokeAgent({
+      contract: kimiContract,
+      adapter: BASE_CONFIG.agents.kimi,
+      prompt: prepared.prompt,
+      runDir: join(root, "kimi"),
+      observeAfter: () => ({ valid: true, observed_via: "fixture" }),
+      run: (_command, args) => {
+        kimiArgs = args;
+        return { status: 0, stderr: "", stdout: JSON.stringify({ role: "assistant", content: JSON.stringify(kimiExpected) }) };
+      },
+    });
+    const agentPath = kimiArgs[kimiArgs.indexOf("--agent-file") + 1];
+    assert(readFileSync(agentPath, "utf8").includes(JSON.stringify(EFFECTIVE_RESULT_SCHEMA, null, 2)));
+    const finalPrompt = kimiArgs[kimiArgs.indexOf("--prompt") + 1];
+    for (const value of Object.values(RESULT_LIMITS)) assert(finalPrompt.includes(String(value)));
+    assert.equal(validateResultAgainstSchema(expected, EFFECTIVE_RESULT_SCHEMA), expected);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G1.3 Codex recibe el schema efectivo generado dentro de la corrida", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-codex-runtime-schema-"));
+  const expected = validResult(current);
+  let observedArgs;
+  try {
+    invokeAgent({
+      contract: current,
+      adapter: BASE_CONFIG.agents.codex,
+      prompt: "prompt",
+      runDir: root,
+      observeAfter: () => ({ valid: true, observed_via: "fixture" }),
+      run: (_command, args) => {
+        observedArgs = args;
+        const finalPath = args[args.indexOf("--output-last-message") + 1];
+        writeFileSync(finalPath, `${JSON.stringify(expected)}\n`, "utf8");
+        return { status: 0, stderr: "", stdout: JSON.stringify({ type: "turn.completed", usage: null }) };
+      },
+    });
+    const schemaPath = observedArgs[observedArgs.indexOf("--output-schema") + 1];
+    assert.equal(dirname(schemaPath), root);
+    assert.notEqual(resolve(schemaPath), resolve(join(HERE, "handoff-result.schema.json")));
+    assert.deepEqual(JSON.parse(readFileSync(schemaPath, "utf8")), EFFECTIVE_RESULT_SCHEMA);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G1.4 antideriva cambia todas las superficies al cambiar los límites", () => {
+  const altered = Object.fromEntries(Object.entries(RESULT_LIMITS).map(([key, value]) => [key, value + 7]));
+  const schema = materializeResultSchema(RESULT_SCHEMA, altered);
+  const current = validateContract(contract(), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-antidrift-"));
+  try {
+    const prepared = prepareInput({
+      repo: ROOT, contract: current, runDir: join(root, "input"), previousResult: null, resultLimits: altered,
+      run: (_command, args) => ({ status: 0, stdout: args.includes("show") ? "contexto\n" : "", stderr: "" }),
+    });
+    assert.deepEqual(prepared.resultSchema, schema);
+    assert.deepEqual(prepared.manifest.result_limits, altered);
+    assert.deepEqual(JSON.parse(readFileSync(join(prepared.inputDir, "result-limits.json"), "utf8")), altered);
+    const kimiFinal = buildKimiFinalInstruction(altered);
+    for (const value of Object.values(altered)) {
+      assert(prepared.prompt.includes(String(value)));
+      assert(kimiFinal.includes(String(value)));
+    }
+
+    const claudeContract = validateContract(contract({
+      destinatario: "claude", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.claude],
+    }), BASE_CONFIG);
+    let claudeArgs;
+    invokeAgent({
+      contract: claudeContract, adapter: BASE_CONFIG.agents.claude, prompt: prepared.prompt,
+      runDir: join(root, "claude"), resultSchema: schema, resultLimits: altered,
+      observeAfter: () => ({ valid: true }),
+      run: (_command, args) => {
+        claudeArgs = args;
+        return { status: 0, stderr: "", stdout: JSON.stringify({ structured_output: validResult(claudeContract) }) };
+      },
+    });
+    assert.deepEqual(JSON.parse(claudeArgs[claudeArgs.indexOf("--json-schema") + 1]), schema);
+
+    let codexArgs;
+    invokeAgent({
+      contract: current, adapter: BASE_CONFIG.agents.codex, prompt: prepared.prompt,
+      runDir: join(root, "codex"), resultSchema: schema, resultLimits: altered,
+      observeAfter: () => ({ valid: true }),
+      run: (_command, args) => {
+        codexArgs = args;
+        writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify(validResult(current)), "utf8");
+        return { status: 0, stderr: "", stdout: JSON.stringify({ type: "turn.completed" }) };
+      },
+    });
+    assert.deepEqual(JSON.parse(readFileSync(codexArgs[codexArgs.indexOf("--output-schema") + 1], "utf8")), schema);
+
+    const kimiContract = validateContract(contract({
+      destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+    }), BASE_CONFIG);
+    let kimiArgs;
+    invokeAgent({
+      contract: kimiContract, adapter: BASE_CONFIG.agents.kimi, prompt: prepared.prompt,
+      runDir: join(root, "kimi"), resultSchema: schema, resultLimits: altered,
+      observeAfter: () => ({ valid: true }),
+      run: (_command, args) => {
+        kimiArgs = args;
+        return { status: 0, stderr: "", stdout: JSON.stringify({ role: "assistant", content: JSON.stringify(validResult(kimiContract)) }) };
+      },
+    });
+    assert(readFileSync(kimiArgs[kimiArgs.indexOf("--agent-file") + 1], "utf8").includes(JSON.stringify(schema, null, 2)));
+    for (const value of Object.values(altered)) assert(kimiArgs[kimiArgs.indexOf("--prompt") + 1].includes(String(value)));
+
+    const exact = { ...validResult(current), veredicto: "v".repeat(altered.veredicto) };
+    assert.equal(validateResult(exact, current, BASE_CONFIG, schema), exact);
+    assert.throws(() => validateResult({ ...exact, veredicto: `${exact.veredicto}v` }, current, BASE_CONFIG, schema));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G1.5 esquema estático y prompt no duplican máximos numéricos", () => {
+  const template = readFileSync(join(HERE, "prompt-template.md"), "utf8");
+  assert.doesNotMatch(RESULT_SCHEMA_RAW, /"(?:maxLength|maxItems|uniqueItems)"/);
+  for (const value of new Set(Object.values(RESULT_LIMITS))) {
+    assert.doesNotMatch(template, new RegExp(`\\b${value}\\b`));
+  }
+});
+
+test("G2 instrucción final de Kimi incluye límites invalidez 75 por ciento y síntesis", () => {
+  const instruction = buildKimiFinalInstruction(RESULT_LIMITS);
+  for (const value of Object.values(RESULT_LIMITS)) assert(instruction.includes(String(value)));
+  assert.match(instruction, /invalida toda la inferencia/);
+  assert.match(instruction, /75 %/);
+  assert.match(instruction, /no más del 75 %/i);
+  assert.match(instruction, /evidencia[\s\S]*detalle breve[\s\S]*resumen[\s\S]*síntesis/);
+});
+
+test("G5.7 campos extensos aceptan el límite exacto y rechazan uno más", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  for (const [field, limit] of [
+    ["veredicto", RESULT_LIMITS.veredicto], ["resumen", RESULT_LIMITS.resumen],
+    ["accion_recomendada", RESULT_LIMITS.accion_recomendada],
+  ]) {
+    const exact = { ...validResult(current), [field]: "x".repeat(limit) };
+    assert.equal(validateResult(exact, current, BASE_CONFIG), exact);
+    assert.throws(() => validateResult({ ...exact, [field]: `${exact[field]}x` }, current, BASE_CONFIG), new RegExp(field));
+  }
+  const exactDetail = validResult(current);
+  exactDetail.evidencia[0].detalle = "x".repeat(RESULT_LIMITS.evidencia_detalle);
+  assert.equal(validateResult(exactDetail, current, BASE_CONFIG), exactDetail);
+  exactDetail.evidencia[0].detalle += "x";
+  assert.throws(() => validateResult(exactDetail, current, BASE_CONFIG), /detalle de evidencia/);
+});
+
+test("G5.8 arrays aceptan maxItems exacto y rechazan uno más", () => {
+  const paths = Array.from({ length: RESULT_LIMITS.archivos_leidos + 1 }, (_, index) => `contexto/${index}.md`);
+  const current = { ...validateContract(contract(), BASE_CONFIG), contexto_autorizado: paths };
+  const exact = validResult(current);
+  exact.archivos_leidos = paths.slice(0, RESULT_LIMITS.archivos_leidos);
+  exact.evidencia = paths.slice(0, RESULT_LIMITS.evidencia_items)
+    .map((archivo) => ({ archivo, detalle: "breve" }));
+  assert.equal(validateResult(exact, current, BASE_CONFIG), exact);
+  assert.throws(() => validateResult({ ...exact, archivos_leidos: paths }, current, BASE_CONFIG), /archivos_leidos/);
+  assert.throws(() => validateResult({
+    ...exact, evidencia: [...exact.evidencia, { archivo: paths.at(-1), detalle: "extra" }],
+  }, current, BASE_CONFIG), /evidencia/);
+});
+
+function invokeInvalidKimiFixture({ content, root, current, calls }) {
+  return invokeAgent({
+    contract: current,
+    adapter: BASE_CONFIG.agents.kimi,
+    prompt: "prompt congelado",
+    runDir: root,
+    observeAfter: () => ({ valid: true, observed_via: "kimi_membership_oauth" }),
+    run: () => {
+      calls.count += 1;
+      return {
+        status: 0,
+        stderr: "",
+        stdout: JSON.stringify({ role: "assistant", content, usage: { total_tokens: 9 } }),
+      };
+    },
+  });
+}
+
+function assertPreParseArtifacts(root) {
+  assert.equal(existsSync(join(root, "raw-output.jsonl")), true);
+  assert.equal(existsSync(join(root, "invocation-receipt.json")), true);
+  assert.equal(existsSync(join(root, "via-observada.json")), true);
+  assert.notEqual(readFileSync(join(root, "raw-output.jsonl"), "utf8"), "");
+  const receipt = JSON.parse(readFileSync(join(root, "invocation-receipt.json"), "utf8"));
+  assert.equal(receipt.provider, "kimi");
+  assert.equal(receipt.model_requested, BASE_CONFIG.agents.kimi.alias);
+  assert.equal(receipt.exit_code, 0);
+  assert.deepEqual(receipt.usage_observable, { total_tokens: 9 });
+  assert.equal(typeof receipt.duration_ms, "number");
+  assert.deepEqual(JSON.parse(readFileSync(join(root, "via-observada.json"), "utf8")), {
+    valid: true, observed_via: "kimi_membership_oauth",
+  });
+}
+
+test("G4.9 JSON sintácticamente inválido falla con raw recibo y vía persistidos", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-invalid-json-"));
+  const calls = { count: 0 };
+  try {
+    assert.throws(() => invokeInvalidKimiFixture({ content: "{", root, current, calls }), /JSON válido/);
+    assertPreParseArtifacts(root);
+    assert.equal(calls.count, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G4.10 maxLength excesivo falla después de persistir raw recibo y vía", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-max-length-"));
+  const calls = { count: 0 };
+  try {
+    const excessive = { ...validResult(current), resumen: "r".repeat(RESULT_LIMITS.resumen + 1) };
+    const invocation = invokeInvalidKimiFixture({ content: JSON.stringify(excessive), root, current, calls });
+    assert.throws(() => validateResult(invocation.result, current, BASE_CONFIG), /resumen excede/);
+    assertPreParseArtifacts(root);
+    assert.equal(existsSync(join(root, "result.validated.json")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G4.11 maxItems excesivo falla después de persistir raw recibo y vía", () => {
+  const paths = Array.from({ length: RESULT_LIMITS.archivos_leidos + 1 }, (_, index) => `contexto/${index}.md`);
+  const current = {
+    ...validateContract(contract({
+      destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+    }), BASE_CONFIG),
+    contexto_autorizado: paths,
+  };
+  const root = mkdtempSync(join(tmpdir(), "handoff-max-items-"));
+  const calls = { count: 0 };
+  try {
+    const excessive = { ...validResult(current), archivos_leidos: paths };
+    const invocation = invokeInvalidKimiFixture({ content: JSON.stringify(excessive), root, current, calls });
+    assert.throws(() => validateResult(invocation.result, current, BASE_CONFIG), /archivos_leidos/);
+    assertPreParseArtifacts(root);
+    assert.equal(existsSync(join(root, "result.validated.json")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("G4.12 fallos de parseo o límites no producen resultado publicable", () => {
+  const source = readFileSync(join(HERE, "handoff.mjs"), "utf8");
+  const rawIndex = source.indexOf('writeText(join(runDir, "raw-output.jsonl")');
+  const parseIndex = source.indexOf("const parsed = contract.destinatario", rawIndex);
+  const publishIndex = source.indexOf("await backend.publish", parseIndex);
+  assert(rawIndex > 0 && parseIndex > rawIndex && publishIndex > parseIndex);
+  assert.match(source.slice(parseIndex, publishIndex), /validateResult\(invocation\.result/);
+});
+
+test("G5.13 una salida excesiva se rechaza sin truncamiento ni reparación", () => {
+  const current = validateContract(contract(), BASE_CONFIG);
+  const value = "x".repeat(RESULT_LIMITS.veredicto + 1);
+  const result = { ...validResult(current), veredicto: value };
+  assert.throws(() => validateResult(result, current, BASE_CONFIG), /veredicto excede/);
+  assert.equal(result.veredicto, value);
+  assert.equal(result.veredicto.length, RESULT_LIMITS.veredicto + 1);
+});
+
+test("G5.14 ninguna falla dispara una segunda inferencia automática", () => {
+  const current = validateContract(contract({
+    destinatario: "kimi", contexto_autorizado: [...GOVERNING_CONTEXT.common, GOVERNING_CONTEXT.kimi],
+  }), BASE_CONFIG);
+  const root = mkdtempSync(join(tmpdir(), "handoff-no-retry-invalid-"));
+  const calls = { count: 0 };
+  try {
+    assert.throws(() => invokeInvalidKimiFixture({ content: "{", root, current, calls }));
+    assert.equal(calls.count, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva el paquete previo", () => {
   const root = mkdtempSync(join(tmpdir(), "handoff-base-sha-test-"));
   const calls = [];
@@ -960,11 +1285,12 @@ test("base_sha agrega diff.patch al paquete y al fingerprint; ausente conserva e
       "handoff-result.schema.json",
       "handoff.schema.json",
       "prompt.md",
+      "result-limits.json",
     ]);
     assert.equal(noBase.prompt.includes("## Diff congelado base → HEAD"), false);
     assert.equal(
       extractPromptJsonBlock(noBase.prompt, "Schema del contrato de salida"),
-      RESULT_SCHEMA_RAW.trim().replaceAll("\r\n", "\n"),
+      JSON.stringify(MATERIALIZED_RESULT_SCHEMA, null, 2),
     );
 
     calls.length = 0;
