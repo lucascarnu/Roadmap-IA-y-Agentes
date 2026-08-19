@@ -32,6 +32,7 @@ function attempt(id, operation, expected) {
 const outside = arg("--outside");
 const junction = arg("--junction");
 const resultPath = arg("--result");
+const runId = arg("--run-id");
 const hostCredentialBaseline = arg("--host-credential-baseline");
 const workspace = process.cwd();
 const probes = [];
@@ -112,4 +113,4 @@ probes.push((() => {
 })());
 
 mkdirSync(join(workspace, "allowed"), { recursive: true });
-writeFileSync(resultPath, `${JSON.stringify({ probes }, null, 2)}\n`, "utf8");
+writeFileSync(resultPath, `${JSON.stringify({ run_id: runId, probes }, null, 2)}\n`, "utf8");

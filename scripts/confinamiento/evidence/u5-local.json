@@ -5,7 +5,8 @@
     "classification": "REETIQUETADO_EDITORIAL",
     "observation_date": "2026-08-19",
     "new_campaign_run": false,
-    "model_invocation": false
+    "model_invocation": false,
+    "instrument_changed_after_observation": true
   },
   "classification": "BLOQUEADO_POR_LIMITE",
   "cli": {
@@ -23,7 +24,7 @@
     "sandbox_mode_requested": "workspace-write",
     "network_requested": "disabled",
     "approval_policy_requested": "never",
-    "environment_policy": "all; differential exclude KEY, SECRET, TOKEN"
+    "environment_policy": "core; exclude KEY, SECRET, TOKEN"
   },
   "effective_config_before_sandbox_bootstrap": {
     "sandbox_filesystem": "restricted",
