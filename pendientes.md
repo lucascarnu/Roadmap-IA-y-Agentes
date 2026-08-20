@@ -56,6 +56,99 @@ pero el modo de falla al superar el límite es silencioso: un hijo existente pue
 no encontrarse y duplicarse. Disparador para corregirlo: superar los 80 Issues, o
 antes si aparece un hijo duplicado.
 
+### Enforcement mecánico de las devoluciones
+
+**Estado: ABIERTO. Clasificación: PRE_MVP.** **No bloquea** la PR #118, ninguna
+unidad en curso ni el desarrollo de `app/`. Bloquea declarar terminada la línea
+de plantillas y formato de informes antes del MVP.
+
+Son dos defectos recurrentes con una misma causa de fondo: **la documentación
+del formato no impide su incumplimiento**, porque nadie comprueba la devolución
+antes de emitirla.
+
+**Defecto 1 — contenido prometido que llega vacío.** En **cuatro** ocasiones un
+mensaje anunció el JSON contractual completo y el bloque llegó vacío, mientras
+el artefacto persistido sí contenía el JSON válido. No es un fallo de inferencia
+y no invalidó ninguna revisión: una de las ocurrencias acompañó a la revisión
+independiente `APROBADO` de la PR #118 sobre el HEAD
+`0698fda1e12332cf5b9ad7829703f328d6cd0d55`, cuyo `result.validated.json` sí
+estaba completo.
+
+**No se atribuye a ningún actor.** Ni al Ejecutor ni al Consultor: en las cuatro
+ocurrencias la fuente contenía el objeto completo. El defecto está en la
+**representación y la copia por bloque del cliente de Codex para iPad/iOS**.
+
+**Experimento diferencial.** En Codex Desktop para Windows las tres
+representaciones probadas se muestran completas. En iPad/iOS, el mismo mensaje
+pierde el contrato estructurado y muestra en su lugar una tarjeta «No se
+reportaron hallazgos». Cuatro pruebas acotan el disparador:
+
+- **A.** El mismo objeto con las claves renombradas a `review_head`,
+  `review_verdict` y `review_findings` quedó visible y se copió completo.
+- **B.** El contrato original desapareció y no dejó bloque copiable, incluso
+  agregándole una propiedad adicional.
+- **C.** El mismo contrato convertido en una cadena JSON escapada quedó visible
+  y se copió completo.
+- **D.** El contrato original dentro de un bloque anidado también desapareció:
+  al copiar el bloque sólo se obtuvieron los cercos, sin el objeto.
+
+**Conclusión observada.** El disparador es un objeto JSON válido que contiene
+simultáneamente las claves de `head`, veredicto y hallazgos del contrato de
+review; el cliente iOS lo consume como review estructurada y la copia por bloque
+no conserva el payload consumido. **Los acentos graves no son la causa
+primaria**: el comportamiento no depende de usar tres o cuatro, ni de anidar.
+Windows Desktop no lo reproduce con el mismo mensaje.
+
+**Cuatro cosas que no deben colapsarse**, porque el defecto sólo aparece al
+separarlas: la **fuente** que redacta el actor; el **artefacto persistido**, que
+en las cuatro ocurrencias estuvo íntegro; la **representación visual** del
+cliente; y el **portapapeles**, que es donde se pierde el contenido consumido.
+
+**Workaround vigente.** Preferido: expresar esos datos como **campos
+clave-valor en texto normal**. Alternativas comprobadas en iOS: claves
+neutralizadas (prueba A) o el objeto convertido en cadena escapada (prueba C).
+**Queda prohibido incluir el contrato JSON exacto de review dentro de un mensaje
+destinado a copiarse por bloque desde iOS.**
+
+**Límite declarado.** No se midió la copia del **mensaje completo**, sólo la
+copia por bloque. Tampoco se determinó si el consumo del contrato por el cliente
+iOS es intencional. Ambas quedan por investigar y ninguna bloquea el workaround.
+
+**Defecto 2 — incumplimiento del formato acordado.** `reglas.md` ya fija
+encabezado de destinatario, firma de ejecución y, para todo artefacto que el
+Director transporte, un único bloque Markdown con cerco exterior estrictamente
+mayor que cualquier cerco interior. Esas reglas se incumplen igual, porque son
+prosa y su cumplimiento depende de quien redacta.
+
+**Criterio de aceptación.** Un gate que valide mecánicamente, **antes** de
+emitir una devolución: encabezado correspondiente al tipo de mensaje;
+destinatario correcto; artefactos transportables dentro de un único bloque
+Markdown convencional; cerco exterior calculado como `N + 1` sobre el contenido
+ya compuesto; contenido prometido efectivamente presente **o representado por un
+equivalente estructurado que preserve la misma información** —no se exige la
+presencia literal del JSON—; que la vía de transporte manual elegida conserve la
+información necesaria hasta el destinatario; **coincidencia entre el informe
+visible y el artefacto persistido**; firma de ejecución completa;
+modelo y esfuerzo efectivos o su verificabilidad declarada; fecha; hora de
+Brasilia o São Paulo en `UTC−03:00`; y hora `UTC`.
+
+La comprobación de coincidencia es la que cierra el defecto 1: si el informe
+declara incluir un JSON u otro artefacto y aparece vacío, incompleto o distinto
+del persistido, el gate impide la emisión.
+
+**Deduplicación.** No hay ningún asunto previo sobre plantillas ni formato de
+informes: es `NUEVO_APORTE`. Pertenece a la misma familia que la línea de
+enforcement de contexto y enrutamiento —la que exige que un mensaje **entrante**
+no llegue a ejecución sin sus datos obligatorios—, pero es su dirección opuesta:
+acá se valida el mensaje **saliente**. Esa línea todavía está en rediseño y no
+tiene registro durable en el repositorio; cuando lo tenga, conviene que ambas
+compartan schema, generador y validador en vez de duplicarlos.
+
+**Condición de cierre.** El gate existe, corre antes de emitir, tiene pruebas
+negativas que eliminan o alteran cada campo obligatorio y demuestran que la
+devolución no se emite, e incluye una prueba que compara informe visible contra
+artefacto persistido y falla cuando divergen.
+
 ### Solicitud y lectura de revisiones
 
 **Estado: PARCIAL.** Cómo se procesa una review y cuándo cuenta como válida ya no
