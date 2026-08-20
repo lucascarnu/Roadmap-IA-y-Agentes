@@ -66,15 +66,23 @@ Son dos defectos recurrentes con una misma causa de fondo: **la documentación
 del formato no impide su incumplimiento**, porque nadie comprueba la devolución
 antes de emitirla.
 
-**Defecto 1 — contenido prometido que llega vacío.** En tres devoluciones
-distintas el Ejecutor anunció el JSON contractual completo y el bloque llegó
-vacío, mientras el artefacto persistido sí contenía el JSON válido. No es un
-fallo de inferencia y no invalidó ninguna revisión: la última ocurrencia
-acompañó a la revisión independiente `APROBADO` de la PR #118 sobre el HEAD
+**Defecto 1 — contenido prometido que llega vacío.** En **cuatro** ocasiones un
+mensaje anunció el JSON contractual completo y el bloque llegó vacío, mientras
+el artefacto persistido sí contenía el JSON válido. No es un fallo de inferencia
+y no invalidó ninguna revisión: una de las ocurrencias acompañó a la revisión
+independiente `APROBADO` de la PR #118 sobre el HEAD
 `0698fda1e12332cf5b9ad7829703f328d6cd0d55`, cuyo `result.validated.json` sí
-estaba completo. La investigación debe determinar en qué etapa se pierde el
-contenido —ensamblado, saneamiento, serialización, transporte o renderizado
-final—, y no darla por conocida antes de medirla.
+estaba completo.
+
+**No se atribuye a un actor.** Las tres primeras ocurrencias se observaron en
+devoluciones del Ejecutor, pero la cuarta ocurrió transportando un mensaje del
+**Consultor** hacia el Arquitecto, con el JSON completo en el origen. El defecto
+pertenece al trayecto, no a quien redacta.
+
+Por eso la investigación abarca el trayecto completo de presentación y
+transporte manual, sin dar ninguna etapa por descartada antes de medirla:
+composición, ensamblado, saneamiento, serialización, transporte, renderizado
+final, portapapeles y copia desde la interfaz o desde el iPad.
 
 **Defecto 2 — incumplimiento del formato acordado.** `reglas.md` ya fija
 encabezado de destinatario, firma de ejecución y, para todo artefacto que el
