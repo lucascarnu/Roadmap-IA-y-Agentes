@@ -74,15 +74,45 @@ independiente `APROBADO` de la PR #118 sobre el HEAD
 `0698fda1e12332cf5b9ad7829703f328d6cd0d55`, cuyo `result.validated.json` sí
 estaba completo.
 
-**No se atribuye a un actor.** Las tres primeras ocurrencias se observaron en
-devoluciones del Ejecutor, pero la cuarta ocurrió transportando un mensaje del
-**Consultor** hacia el Arquitecto, con el JSON completo en el origen. El defecto
-pertenece al trayecto, no a quien redacta.
+**No se atribuye a ningún actor.** Ni al Ejecutor ni al Consultor: en las cuatro
+ocurrencias la fuente contenía el objeto completo. El defecto está en la
+**representación y la copia por bloque del cliente de Codex para iPad/iOS**.
 
-Por eso la investigación abarca el trayecto completo de presentación y
-transporte manual, sin dar ninguna etapa por descartada antes de medirla:
-composición, ensamblado, saneamiento, serialización, transporte, renderizado
-final, portapapeles y copia desde la interfaz o desde el iPad.
+**Experimento diferencial.** En Codex Desktop para Windows las tres
+representaciones probadas se muestran completas. En iPad/iOS, el mismo mensaje
+pierde el contrato estructurado y muestra en su lugar una tarjeta «No se
+reportaron hallazgos». Cuatro pruebas acotan el disparador:
+
+- **A.** El mismo objeto con las claves renombradas a `review_head`,
+  `review_verdict` y `review_findings` quedó visible y se copió completo.
+- **B.** El contrato original desapareció y no dejó bloque copiable, incluso
+  agregándole una propiedad adicional.
+- **C.** El mismo contrato convertido en una cadena JSON escapada quedó visible
+  y se copió completo.
+- **D.** El contrato original dentro de un bloque anidado también desapareció:
+  al copiar el bloque sólo se obtuvieron los cercos, sin el objeto.
+
+**Conclusión observada.** El disparador es un objeto JSON válido que contiene
+simultáneamente las claves de `head`, veredicto y hallazgos del contrato de
+review; el cliente iOS lo consume como review estructurada y la copia por bloque
+no conserva el payload consumido. **Los acentos graves no son la causa
+primaria**: el comportamiento no depende de usar tres o cuatro, ni de anidar.
+Windows Desktop no lo reproduce con el mismo mensaje.
+
+**Cuatro cosas que no deben colapsarse**, porque el defecto sólo aparece al
+separarlas: la **fuente** que redacta el actor; el **artefacto persistido**, que
+en las cuatro ocurrencias estuvo íntegro; la **representación visual** del
+cliente; y el **portapapeles**, que es donde se pierde el contenido consumido.
+
+**Workaround vigente.** Preferido: expresar esos datos como **campos
+clave-valor en texto normal**. Alternativas comprobadas en iOS: claves
+neutralizadas (prueba A) o el objeto convertido en cadena escapada (prueba C).
+**Queda prohibido incluir el contrato JSON exacto de review dentro de un mensaje
+destinado a copiarse por bloque desde iOS.**
+
+**Límite declarado.** No se midió la copia del **mensaje completo**, sólo la
+copia por bloque. Tampoco se determinó si el consumo del contrato por el cliente
+iOS es intencional. Ambas quedan por investigar y ninguna bloquea el workaround.
 
 **Defecto 2 — incumplimiento del formato acordado.** `reglas.md` ya fija
 encabezado de destinatario, firma de ejecución y, para todo artefacto que el
@@ -94,8 +124,11 @@ prosa y su cumplimiento depende de quien redacta.
 emitir una devolución: encabezado correspondiente al tipo de mensaje;
 destinatario correcto; artefactos transportables dentro de un único bloque
 Markdown convencional; cerco exterior calculado como `N + 1` sobre el contenido
-ya compuesto; contenido prometido efectivamente presente; **coincidencia entre
-el informe visible y el artefacto persistido**; firma de ejecución completa;
+ya compuesto; contenido prometido efectivamente presente **o representado por un
+equivalente estructurado que preserve la misma información** —no se exige la
+presencia literal del JSON—; que la vía de transporte manual elegida conserve la
+información necesaria hasta el destinatario; **coincidencia entre el informe
+visible y el artefacto persistido**; firma de ejecución completa;
 modelo y esfuerzo efectivos o su verificabilidad declarada; fecha; hora de
 Brasilia o São Paulo en `UTC−03:00`; y hora `UTC`.
 
