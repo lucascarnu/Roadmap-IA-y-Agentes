@@ -50,7 +50,7 @@ este prompt. No incluyas razonamiento interno ni texto fuera del JSON.
 {{LIMITES_RESULTADO}}
 - Exceder cualquier límite duro invalida toda la salida. No se trunca, recorta,
   reescribe ni repara.
-- Para campos extensos, el objetivo de seguridad es no usar más del 75 % del
+- Para campos extensos, el objetivo de seguridad es no usar más del {{PORCENTAJE_SEGURIDAD}} del
   máximo duro. Usá `evidencia` para el detalle breve y `resumen` sólo para la
   síntesis; no repitas allí todos los invariantes.
 - Si la evidencia no alcanza, usar `estado=BLOQUEADO` y explicarlo sin inventar.

@@ -29,6 +29,81 @@ export const RESULT_LIMITS = Object.freeze({
 });
 export const RESULT_SAFETY_RATIO = 0.75;
 
+export const PROVIDER_SCHEMA_CAPABILITIES = Object.freeze({
+  claude: Object.freeze({ maxLength: false, maxItems: false, uniqueItems: false }),
+  codex: Object.freeze({ maxLength: false, maxItems: true, uniqueItems: false }),
+  kimi: Object.freeze({ wireSchema: false }),
+});
+
+const RESULT_CONSTRAINT_DESCRIPTIONS = Object.freeze({
+  maxLength: (value) => `Restricción local obligatoria: máximo ${value} caracteres.`,
+  maxItems: (value) => `Restricción local obligatoria: máximo ${value} ítems.`,
+  uniqueItems: () => "Restricción local obligatoria: los ítems deben ser únicos.",
+});
+
+function appendConstraintDescription(node, text) {
+  node.description = node.description ? `${node.description} ${text}` : text;
+}
+
+export function projectSchemaForProvider(effectiveSchema, provider) {
+  const capabilities = PROVIDER_SCHEMA_CAPABILITIES[provider];
+  if (!capabilities) fail(`Proveedor de schema desconocido: ${provider}`);
+  if (capabilities.wireSchema === false) return null;
+  const schema = structuredClone(effectiveSchema);
+  const visit = (node) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return;
+    delete node.$schema;
+    for (const keyword of ["maxLength", "maxItems", "uniqueItems"]) {
+      if (Object.hasOwn(node, keyword) && capabilities[keyword] !== true) {
+        appendConstraintDescription(node, RESULT_CONSTRAINT_DESCRIPTIONS[keyword](node[keyword]));
+        delete node[keyword];
+      }
+    }
+    if (node.properties) Object.values(node.properties).forEach(visit);
+    if (node.items) visit(node.items);
+  };
+  visit(schema);
+  return schema;
+}
+
+export function assertStructuredOutputSubset(schema, provider) {
+  const capabilities = PROVIDER_SCHEMA_CAPABILITIES[provider];
+  if (!capabilities || capabilities.wireSchema === false) fail(`Proveedor sin schema estructurado de wire: ${provider}`);
+  const common = new Set([
+    "type", "enum", "properties", "items", "required", "additionalProperties", "description", "title",
+  ]);
+  const allowed = new Set([
+    ...common,
+    ...["maxLength", "maxItems", "uniqueItems"].filter((keyword) => capabilities[keyword] === true),
+  ]);
+  const visit = (node, path = "$", typeRequired = false) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) fail(`${path} no es un nodo de schema`);
+    if (typeRequired && !Object.hasOwn(node, "type")) fail(`${path} no declara type`);
+    for (const keyword of Object.keys(node)) {
+      if (!allowed.has(keyword)) fail(`${path} usa keyword no permitido para ${provider}: ${keyword}`);
+    }
+    const types = Array.isArray(node.type) ? node.type : [node.type];
+    if (types.includes("object")) {
+      if (node.additionalProperties !== false) fail(`${path} no cierra additionalProperties`);
+      if (!Array.isArray(node.required)
+        || node.required.length !== Object.keys(node.properties ?? {}).length
+        || node.required.some((key) => !Object.hasOwn(node.properties ?? {}, key))) {
+        fail(`${path} no requiere exactamente todas sus propiedades`);
+      }
+    }
+    if (node.properties) {
+      for (const [name, child] of Object.entries(node.properties)) visit(child, `${path}.properties.${name}`, true);
+    }
+    if (node.items) visit(node.items, `${path}.items`, true);
+  };
+  visit(schema, "$", true);
+  return schema;
+}
+
+function renderSafetyPercentage(safetyRatio = RESULT_SAFETY_RATIO) {
+  return `${Number((safetyRatio * 100).toFixed(6))} %`;
+}
+
 export function materializeResultSchema(baseSchema, limits = RESULT_LIMITS) {
   const schema = structuredClone(baseSchema);
   const properties = schema?.properties;
@@ -46,6 +121,13 @@ export function materializeResultSchema(baseSchema, limits = RESULT_LIMITS) {
   return schema;
 }
 
+export function materializeResultSchemaFromManifest(manifest) {
+  if (!manifest?.result_limits || typeof manifest.result_limits !== "object") {
+    fail("Manifiesto sin límites de resultado congelados");
+  }
+  return materializeResultSchema(readJson(RESULT_SCHEMA), manifest.result_limits);
+}
+
 export function renderResultLimits(limits = RESULT_LIMITS, safetyRatio = RESULT_SAFETY_RATIO) {
   const safety = (value) => Math.floor(value * safetyRatio);
   return [
@@ -58,12 +140,12 @@ export function renderResultLimits(limits = RESULT_LIMITS, safetyRatio = RESULT_
   ].join("\n");
 }
 
-export function buildKimiFinalInstruction(limits = RESULT_LIMITS) {
+export function buildKimiFinalInstruction(limits = RESULT_LIMITS, safetyRatio = RESULT_SAFETY_RATIO) {
   return [
     "Ejecutá la revisión congelada de tu system prompt y devolvé exclusivamente el objeto JSON requerido.",
     "Exceder cualquier límite duro invalida toda la inferencia; no se truncará ni reparará la salida.",
-    "Para los campos extensos, mantenete como objetivo de seguridad en no más del 75 % del máximo duro:",
-    renderResultLimits(limits),
+    `Para los campos extensos, mantenete como objetivo de seguridad en no más del ${renderSafetyPercentage(safetyRatio)} del máximo duro:`,
+    renderResultLimits(limits, safetyRatio),
     "No repitas todos los invariantes en `resumen`: usá `evidencia` para el detalle breve y `resumen` sólo para la síntesis.",
   ].join("\n");
 }
@@ -216,8 +298,7 @@ export function validateResultAgainstSchema(result, schema = EFFECTIVE_RESULT_SC
   if (!Array.isArray(result.archivos_leidos)
     || result.archivos_leidos.some((path) => typeof path !== "string")
     || result.archivos_leidos.length > properties.archivos_leidos.maxItems
-    || (properties.archivos_leidos.uniqueItems === true
-      && new Set(result.archivos_leidos).size !== result.archivos_leidos.length)) fail("archivos_leidos inválido");
+    || new Set(result.archivos_leidos).size !== result.archivos_leidos.length) fail("archivos_leidos inválido");
   if (!["claude", "codex", "kimi", null].includes(result.siguiente_destinatario)) fail("siguiente_destinatario inválido");
   const signature = result.firma;
   if (!signature || typeof signature !== "object" || Array.isArray(signature)) fail("firma inválida");
@@ -388,6 +469,7 @@ function canonicalResultExample(contract) {
 
 export function buildPrompt(
   template, contract, previousResult, contexts, resultSchema, frozenDiff = null, resultLimits = RESULT_LIMITS,
+  safetyRatio = RESULT_SAFETY_RATIO,
 ) {
   const renderedContexts = contexts.map(({ path, content }) => `### ${path}\n\n${content}`).join("\n\n");
   const renderedDiff = frozenDiff === null ? "" : [
@@ -407,7 +489,8 @@ export function buildPrompt(
     RESULTADO_PREVIO: previousResult ? JSON.stringify(previousResult, null, 2) : "null",
     CONTEXTO: renderedContexts,
     SCHEMA_SALIDA: typeof resultSchema === "string" ? resultSchema.trim() : JSON.stringify(resultSchema, null, 2),
-    LIMITES_RESULTADO: renderResultLimits(resultLimits),
+    LIMITES_RESULTADO: renderResultLimits(resultLimits, safetyRatio),
+    PORCENTAJE_SEGURIDAD: renderSafetyPercentage(safetyRatio),
     EJEMPLO_SALIDA: JSON.stringify(canonicalResultExample(contract), null, 2),
     DIFF_CONGELADO: renderedDiff,
   };
@@ -518,7 +601,8 @@ export function observeUsageBeforeResultParse(agent, raw) {
 
 export function invokeAgent({
   contract, adapter, prompt, runDir, run = runProcess, env = buildChildEnv(),
-  resultSchema = EFFECTIVE_RESULT_SCHEMA, resultLimits = RESULT_LIMITS, observeAfter = null, now = Date.now,
+  resultSchema = EFFECTIVE_RESULT_SCHEMA, resultLimits = RESULT_LIMITS,
+  resultSafetyRatio = RESULT_SAFETY_RATIO, observeAfter = null, now = Date.now,
 }) {
   const started = now();
   let response;
@@ -537,17 +621,21 @@ export function invokeAgent({
     }
   };
   if (contract.destinatario === "claude") {
+    const wireSchema = projectSchemaForProvider(resultSchema, "claude");
+    assertStructuredOutputSubset(wireSchema, "claude");
     const emptyMcp = join(runDir, "empty-mcp.json");
     writeJson(emptyMcp, { mcpServers: {} });
     execute(adapter.executable, [
       "--print", "--safe-mode", "--tools", "", "--strict-mcp-config", "--mcp-config", emptyMcp,
       "--disable-slash-commands", "--no-chrome", "--no-session-persistence", "--output-format", "json",
-      "--json-schema", JSON.stringify(resultSchema), "--model", adapter.model, "--effort", adapter.effort,
+      "--json-schema", JSON.stringify(wireSchema), "--model", adapter.model, "--effort", adapter.effort,
     ], { cwd: runDir, env, input: Buffer.from(prompt, "utf8"), timeout: adapter.timeout_ms });
   } else if (contract.destinatario === "codex") {
+    const wireSchema = projectSchemaForProvider(resultSchema, "codex");
+    assertStructuredOutputSubset(wireSchema, "codex");
     finalPath = join(runDir, "final.json");
     const runtimeSchemaPath = join(runDir, "handoff-result.effective.schema.json");
-    writeJson(runtimeSchemaPath, resultSchema);
+    writeJson(runtimeSchemaPath, wireSchema);
     execute(adapter.executable, [
       "exec", "--strict-config", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
       "--sandbox", "read-only", "--cd", runDir, "--model", adapter.model,
@@ -568,7 +656,7 @@ export function invokeAgent({
     });
     execute(adapter.executable, [
       "--model", adapter.alias, "--agent-file", agentFile, "--skills-dir", emptySkills,
-      "--output-format", "stream-json", "--prompt", buildKimiFinalInstruction(resultLimits),
+      "--output-format", "stream-json", "--prompt", buildKimiFinalInstruction(resultLimits, resultSafetyRatio),
     ], { cwd: runDir, env: kimiEnv, timeout: adapter.timeout_ms });
   }
   const raw = response?.stdout ?? "";
@@ -774,7 +862,13 @@ async function processIssue(context, issue) {
       const runDir = state.run_dir ?? join(artifactsDir, `issue-${issue.number}-${contract.head_sha.slice(0, 12)}`);
       mkdirSync(runDir, { recursive: true });
       const previousResult = await loadPreviousResult(backend, contract.resultado_previo);
-      const prepared = prepareInput({ repo, contract, runDir, previousResult, run: context.run });
+      const previousManifestPath = join(runDir, "input-manifest.json");
+      const frozenResultLimits = state.run_dir && existsSync(previousManifestPath)
+        ? readJson(previousManifestPath).result_limits
+        : RESULT_LIMITS;
+      const prepared = prepareInput({
+        repo, contract, runDir, previousResult, run: context.run, resultLimits: frozenResultLimits,
+      });
       const marker = markerFor(issue.number, contract.head_sha, prepared.manifest.input_fingerprint);
       const resultPath = join(runDir, "result.validated.json");
       let result;
@@ -783,7 +877,8 @@ async function processIssue(context, issue) {
       let viaAfter;
 
       if (existsSync(resultPath) && ["result_persisted", "published"].includes(state.phase)) {
-        result = validateResult(readJson(resultPath), contract, config);
+        const frozenResultSchema = materializeResultSchemaFromManifest(prepared.manifest);
+        result = validateResult(readJson(resultPath), contract, config, frozenResultSchema);
       } else {
         const adapter = { ...config.agents[contract.destinatario], timeout_ms: config.timeout_ms };
         viaBefore = observeVia(authObserver, contract.destinatario, adapter);
