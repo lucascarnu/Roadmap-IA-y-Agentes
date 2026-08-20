@@ -56,6 +56,58 @@ pero el modo de falla al superar el límite es silencioso: un hijo existente pue
 no encontrarse y duplicarse. Disparador para corregirlo: superar los 80 Issues, o
 antes si aparece un hijo duplicado.
 
+### Enforcement mecánico de las devoluciones
+
+**Estado: ABIERTO. Clasificación: PRE_MVP.** **No bloquea** la PR #118, ninguna
+unidad en curso ni el desarrollo de `app/`. Bloquea declarar terminada la línea
+de plantillas y formato de informes antes del MVP.
+
+Son dos defectos recurrentes con una misma causa de fondo: **la documentación
+del formato no impide su incumplimiento**, porque nadie comprueba la devolución
+antes de emitirla.
+
+**Defecto 1 — contenido prometido que llega vacío.** En tres devoluciones
+distintas el Ejecutor anunció el JSON contractual completo y el bloque llegó
+vacío, mientras el artefacto persistido sí contenía el JSON válido. No es un
+fallo de inferencia y no invalidó ninguna revisión: la última ocurrencia
+acompañó a la revisión independiente `APROBADO` de la PR #118 sobre el HEAD
+`0698fda1e12332cf5b9ad7829703f328d6cd0d55`, cuyo `result.validated.json` sí
+estaba completo. La investigación debe determinar en qué etapa se pierde el
+contenido —ensamblado, saneamiento, serialización, transporte o renderizado
+final—, y no darla por conocida antes de medirla.
+
+**Defecto 2 — incumplimiento del formato acordado.** `reglas.md` ya fija
+encabezado de destinatario, firma de ejecución y, para todo artefacto que el
+Director transporte, un único bloque Markdown con cerco exterior estrictamente
+mayor que cualquier cerco interior. Esas reglas se incumplen igual, porque son
+prosa y su cumplimiento depende de quien redacta.
+
+**Criterio de aceptación.** Un gate que valide mecánicamente, **antes** de
+emitir una devolución: encabezado correspondiente al tipo de mensaje;
+destinatario correcto; artefactos transportables dentro de un único bloque
+Markdown convencional; cerco exterior calculado como `N + 1` sobre el contenido
+ya compuesto; contenido prometido efectivamente presente; **coincidencia entre
+el informe visible y el artefacto persistido**; firma de ejecución completa;
+modelo y esfuerzo efectivos o su verificabilidad declarada; fecha; hora de
+Brasilia o São Paulo en `UTC−03:00`; y hora `UTC`.
+
+La comprobación de coincidencia es la que cierra el defecto 1: si el informe
+declara incluir un JSON u otro artefacto y aparece vacío, incompleto o distinto
+del persistido, el gate impide la emisión.
+
+**Deduplicación.** No hay ningún asunto previo sobre plantillas ni formato de
+informes: es `NUEVO_APORTE`. Pertenece a la misma familia que la línea de
+enforcement de contexto y enrutamiento —la que exige que un mensaje **entrante**
+no llegue a ejecución sin sus datos obligatorios—, pero es su dirección opuesta:
+acá se valida el mensaje **saliente**. Esa línea todavía está en rediseño y no
+tiene registro durable en el repositorio; cuando lo tenga, conviene que ambas
+compartan schema, generador y validador en vez de duplicarlos.
+
+**Condición de cierre.** El gate existe, corre antes de emitir, tiene pruebas
+negativas que eliminan o alteran cada campo obligatorio y demuestran que la
+devolución no se emite, e incluye una prueba que compara informe visible contra
+artefacto persistido y falla cuando divergen.
+
 ### Solicitud y lectura de revisiones
 
 **Estado: PARCIAL.** Cómo se procesa una review y cuándo cuenta como válida ya no
