@@ -32,9 +32,16 @@ Las etiquetas de esta decisión son normativas:
   cierre, pero no deshace el efecto.
 - **REGLA DE CONDUCTA:** disciplina exigida al actor cuando la superficie no
   ofrece una intercepción no omisible.
+- **DEFINICIÓN ESTRUCTURAL:** fija un concepto, un catálogo o una
+  enumeración que otras reglas usan. No detiene ni comprueba nada por sí
+  misma.
+- **REFERENCIA NORMATIVA:** remite a canon vigente o a un entregable
+  futuro. No crea obligación ejecutable propia.
 
 Nada se presenta como gate mecánico si el actor puede omitirlo sin dejar
-rastro.
+rastro. Las tres primeras etiquetas se aplican sólo a requisitos de control;
+una definición o una referencia no se etiqueta como gate ni como validación,
+porque no detiene ni comprueba ninguna condición.
 
 ### Los tres gates
 
@@ -62,20 +69,28 @@ despachable, y el receptor rechaza un artefacto sin manifiesto.
 
 ### Catálogo durable y registro operacional
 
-**VALIDACIÓN POSTERIOR.** El catálogo durable define roles estables sin asignar
+**DEFINICIÓN ESTRUCTURAL.** El catálogo durable define roles estables sin asignar
 ocupantes ni herramientas concretas:
 
 | `role_id` | Nombre canónico | Responsabilidades y capacidades normativas | Independencia o incompatibilidad |
 | --- | --- | --- | --- |
 | `DIRECTOR_PRODUCT_OWNER` | Director / Product Owner | Intención, producto, prioridades, restricciones, presupuesto y arbitrajes reservados | No es operador técnico rutinario |
-| `ARQUITECTO_LEAD` | Arquitecto / Lead | Diseñar, clasificar materialidad, coordinar evidencia y decidir el cierre técnico | Puede combinarse provisionalmente con Ejecutor; no revisa ni valida su propia implementación |
+| `ARQUITECTO_LEAD` | Arquitecto / Lead | Diseñar, clasificar materialidad, coordinar evidencia y decidir el cierre técnico | Puede combinarse provisionalmente con Ejecutor y decidir el cierre técnico de una implementación propia; no ocupa Reviewer independiente ni QA de esa implementación |
 | `EJECUTOR_PRINCIPAL` | Ejecutor principal | Implementar, probar lo observable y publicar | No arbitra su propio cierre ni ocupa Reviewer o QA de su implementación |
 | `REVIEWER_INDEPENDIENTE` | Reviewer independiente | Juzgar si el cambio está bien construido y emitir hallazgos | Instancia ciega e independiente de quien diseñó o implementó; no implementa, ejecuta QA ni decide cierre |
 | `QA_VALIDACION` | QA / Validación | Ejecutar el comportamiento objetivo y responder si funciona realmente | Independiente de quien implementó |
 | `CONSULTOR_AUDITOR` | Consultor / Auditor de Continuidad y Coherencia | Detectar huecos transversales y proponer para arbitraje | No decide arquitectura, implementa, revisa como Reviewer, integra ni crea gates |
 | `ESPECIALISTAS_BAJO_DEMANDA` | Especialistas bajo demanda | Aportar la disciplina requerida por la tarea | Se activan sólo cuando el trabajo lo justifica y no heredan otra autoridad |
 
-**VALIDACIÓN POSTERIOR.** El registro operacional referencia un `role_id` y
+Las incompatibilidades de esta columna son de rol, no de ocupante. Cuando
+[0009](0009-modelo-operativo-de-desarrollo-con-ia.md) admite que Arquitecto
+y Ejecutor recaigan provisionalmente en el mismo ocupante, el cierre técnico
+sigue siendo del rol Arquitecto aunque lo ejerza quien implementó; lo que
+ese ocupante no puede es presentarse como Reviewer independiente ni como QA
+de su propia implementación. En esos cambios no hay juicio independiente, y
+0009 lo registra como un intercambio deliberado.
+
+**DEFINICIÓN ESTRUCTURAL.** El registro operacional referencia un `role_id` y
 registra ocupante o referencia a la asignación vigente, adapter y `cwd`
 efectivos, aplicación o superficie, capacidades observadas, autorización y
 autenticación, mecanismo y evidencia de confinamiento, y fecha, alcance y
@@ -98,10 +113,23 @@ automático de identidad es `.consultor/AGENTS.override.md`.
 
 ### Cuatro conceptos que G0 no puede colapsar
 
-**GATE MECÁNICO.** La admisión distingue capacidad normativa del rol, ocupante
-asignado, adapter efectivo y capacidad efectiva observada en la superficie. Sólo
-esta última demuestra disponibilidad, autorización y autenticación para la
-operación concreta.
+**GATE MECÁNICO.** La admisión distingue capacidad normativa del rol,
+ocupante asignado, adapter efectivo y capacidad efectiva observada en la
+superficie. Ninguno de los cuatro sustituye a los demás.
+
+La capacidad efectiva observada tampoco demuestra por sí sola que la
+operación pueda realizarse. Cuando corresponde, la admisión observa por
+separado:
+
+- disponibilidad y capacidad de la superficie;
+- autorización para la operación;
+- autenticación de la vía;
+- compatibilidad con la operación concreta.
+
+Cada uno es un hecho distinto y ninguno se infiere de otro. Por eso el
+registro operacional los anota por separado y los estados terminales de vía
+distinguen `CAPACIDAD_NO_DISPONIBLE` de `VIA_NO_AUTENTICADA` y de
+`ROL_INCOMPATIBLE`.
 
 ### Validación en dos capas
 
@@ -296,7 +324,7 @@ producto ya satisfecho. Los estados terminales son distinguibles:
 
 ### Perfiles y no objetivos
 
-**VALIDACIÓN POSTERIOR.** Los perfiles que la implementación debe representar
+**DEFINICIÓN ESTRUCTURAL.** Los perfiles que la implementación debe representar
 son `manual`, `puente`, `review` y `github_close`.
 
 **REGLA DE CONDUCTA.** No son objetivos de esta línea: bus de eventos, DAG,
@@ -306,7 +334,7 @@ por worktree como requisito.
 
 ## Relación con el canon
 
-**REGLA DE CONDUCTA.** Esta decisión complementa
+**REFERENCIA NORMATIVA.** Esta decisión complementa
 [0009](0009-modelo-operativo-de-desarrollo-con-ia.md),
 [0010](0010-revision-con-principal-y-segunda-opinion-ciega.md),
 [0013](0013-delegar-cierre-operativo-y-merge-rutinario.md),
