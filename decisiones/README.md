@@ -21,6 +21,7 @@ Registro de decisiones arquitectónicas, una por archivo.
 - [0012 — Handoffs estructurados y ejecución local por suscripción](0012-handoffs-estructurados-y-ejecucion-local-por-suscripcion.md)
 - [0013 — Delegar cierre operativo y merge rutinario](0013-delegar-cierre-operativo-y-merge-rutinario.md)
 - [0014 — Clases de cambio y verificaciones exigidas](0014-clases-de-cambio-y-verificaciones-exigidas.md)
+- [0015 — Sobre operativo del MVP local supervisado](0015-sobre-operativo-del-mvp-local-supervisado.md)
 
 La política gobernante que concreta cómo produce evidencia el rol Reviewer está
 en [reviewer-policy.md](../reviewer-policy.md). La asignación vigente de roles no
