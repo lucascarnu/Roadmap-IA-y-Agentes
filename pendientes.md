@@ -22,13 +22,13 @@ separación.
 
 ## Automatización del workflow de desarrollo asistido
 
-**Estado general: PARCIAL.** En el baseline, las baterías deterministas de
-handoff y review pipeline pasan 126/126. El puente y el pipeline todavía no están
-validados como circuito autónomo completo: la PR #97 utilizó transporte humano y
-runners ad hoc. Autorización, presupuesto, reintentos y siguiente estado no
-están representados completamente por los schemas principales. Handoff v2 queda
-diferido hasta retomar la automatización. Lo que no cabe acá es la argumentación:
-esa vive en las decisiones.
+**Estado general: PARCIAL.** En este HEAD, la batería determinista de handoff
+pasa 189/189 y la de review pipeline pasa 21/21: 210/210 en total. El contrato
+v2 ya existe y sus invariantes se validan de forma determinista, pero continúa
+desconectado de `poll`, `tick` e `invokeAgent`; todavía no existe un runtime v2
+autónomo. El puente v1 tuvo una QA real mediante el Issue #121, sin que ese hecho
+valide un circuito v2 autónomo inexistente. La argumentación no vive acá: vive
+en las decisiones.
 
 Las decisiones del workflow viven en
 [0007](decisiones/0007-flujo-de-desarrollo-asistido-sobre-git-y-github.md),
@@ -584,6 +584,14 @@ pendiente diseñar una política segura y suficientemente determinista.
 La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDATA
 / EN PRUEBA**. Lo que sigue abierto:
 
+El confinamiento fuerte del sistema operativo queda reclasificado como
+**endurecimiento posterior al MVP** conforme a
+[0015](decisiones/0015-sobre-operativo-del-mvp-local-supervisado.md). Esta
+reclasificación alcanza sólo ese objetivo prospectivo: los fallos operativos de
+permisos, continuidad, ejecución no interactiva y gates enumerados a
+continuación conservan su prioridad vigente y no pasan a ser posteriores al
+MVP.
+
 - Registrar como **bloqueo de automatización** cualquier solicitud interactiva
   inesperada dentro de un flujo que debería ser autónomo.
 - **Depurar `.claude/settings.local.json`**, que conserva reglas amplias, muertas
@@ -631,9 +639,12 @@ Todavía no se cumple.
 
 ### Observaciones menores del instrumental de confinamiento
 
-**Estado: ABIERTO. Clasificación: menor, no bloqueante.** Son las dos
-observaciones de impacto `O` que dejó la revalidación independiente de la PR
-#110. No bloquean nada según `0010`, que sólo bloquea ante M1 o M2 con evidencia
+**Estado: ABIERTO. Clasificación: endurecimiento posterior al MVP; menor, no
+bloqueante.** Son las dos observaciones de impacto `O` que dejó la revalidación
+independiente de la PR #110. Se conservan íntegras como evidencia histórica y
+se retoman dentro de la línea de confinamiento fuerte reclasificada por
+[0015](decisiones/0015-sobre-operativo-del-mvp-local-supervisado.md). No
+bloquean nada según `0010`, que sólo bloquea ante M1 o M2 con evidencia
 `SETTLED`, y se registran para que no se pierdan.
 
 - **Nombre divergente del campo de contenido de credenciales.**
@@ -653,6 +664,24 @@ observaciones de impacto `O` que dejó la revalidación independiente de la PR
 Ninguna de las dos afecta la clasificación `BLOQUEADO_POR_LIMITE` de esa unidad
 ni el estado de confinamiento de ningún actor, que sigue
 `NO_CONFIGURADO / NO_PROBADO`.
+
+### Estado de nuevas unidades de `app/`
+
+**Estado: ABIERTO. Estado operativo vigente: CONGELADAS.** El 2026-08-19 el
+Director levantó el congelamiento de nuevas unidades de `app/`; la fuente
+durable de ese hecho histórico es el comentario
+[5349264744](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/114#issuecomment-5349264744)
+del Issue #114, y no se reescribe.
+
+El 2026-08-20 el Director volvió a congelar las nuevas unidades de `app/` hasta
+cerrar los gates críticos de continuidad, despacho y emisión, debido a fallos
+que lo obligan a repetir reglas y contexto. Esa decisión fue comunicada en
+sesión y no tenía registro durable independiente anterior; su primer registro
+durable es
+[0015](decisiones/0015-sobre-operativo-del-mvp-local-supervisado.md).
+
+La segunda congelación es la vigente y alcanza únicamente a nuevas unidades de
+`app/`; no anula el desarrollo previo del MVP.
 
 ## Para medir durante las primeras PR del MVP
 
