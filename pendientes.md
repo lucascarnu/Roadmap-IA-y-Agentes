@@ -58,9 +58,18 @@ antes si aparece un hijo duplicado.
 
 ### Enforcement mecánico de las devoluciones
 
-**Estado: ABIERTO. Clasificación: PRE_MVP.** **No bloquea** la PR #118, ninguna
-unidad en curso ni el desarrollo de `app/`. Bloquea declarar terminada la línea
-de plantillas y formato de informes antes del MVP.
+**Estado: ABIERTO. Clasificación: PRE_MVP.** Integra la línea de emisión y
+formato de informes cuyo cierre el Director exigió antes de reanudar nuevas
+unidades de `app/`; por lo tanto participa del bloqueo vigente. Ese bloqueo
+alcanza únicamente a nuevas unidades y no anula el desarrollo previo del MVP.
+El estado operativo canónico de `app/` vive en [Estado de nuevas unidades de
+`app/`](#estado-de-nuevas-unidades-de-app). Este asunto también bloquea declarar
+terminada la línea de plantillas y formato de informes antes del MVP.
+
+**Trazabilidad.** Esta declaración reemplaza la introducida por la PR #120
+porque resultó incompatible con la decisión vigente del Director. El texto
+anterior permanece recuperable en Git y en esa pull request; esta corrección no
+afirma ni niega cuál era su validez temporal al redactarse.
 
 Son dos defectos recurrentes con una misma causa de fondo: **la documentación
 del formato no impide su incumplimiento**, porque nadie comprueba la devolución
