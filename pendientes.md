@@ -56,6 +56,130 @@ pero el modo de falla al superar el límite es silencioso: un hijo existente pue
 no encontrarse y duplicarse. Disparador para corregirlo: superar los 80 Issues, o
 antes si aparece un hijo duplicado.
 
+### Línea de gates de admisión, acción y emisión
+
+**Estado: ABIERTO. Clasificación: PRE_MVP.** La
+[decisión 0016](decisiones/0016-gates-de-admision-accion-y-emision.md) fija la
+arquitectura documental de tres gates sobre un contrato único. La línea se
+divide en cuatro unidades:
+
+1. **Unidad 1 — decisión.** Registra la separación entre gate mecánico,
+   validación posterior y regla de conducta, el catálogo durable de roles y las
+   condiciones de las unidades siguientes.
+2. **Unidad 2a — contrato.** Separa catálogo y registro operacional, incorpora
+   `role_id`, ejecuta el cutover compatible de aliases y resuelve la admisión de
+   perfiles que necesiten `modo: ejecucion` sin promover la evidencia de
+   confinamiento.
+3. **Unidad 2b — motor.** Implementa admisión, acción y emisión en los canales
+   controlados, incluido el preflight documental, la matriz de dependencias y
+   el transporte PC/iPad.
+4. **Unidad 3 — verificación y guía.** Incorpora fixtures, pruebas negativas,
+   QA de superficies y `guias/construccion-de-gates.md`; destila allí la
+   bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123).
+
+Entre la unidad 1 y las unidades de implementación se completa la
+[fase de aceptación de permisos](#permisos-y-ejecución-no-interactiva): primero
+se depura `.claude/settings.local.json` y se autoriza una baseline; 2a, 2b y 3
+se ejecutan bajo esa baseline. Después se evalúan las pull requests que
+ejercitaron el circuito y recién entonces se considera el descongelamiento.
+
+La condición para reanudar nuevas unidades de `app/` es cobertura de efectos,
+no presencia nominal de una herramienta: contrato con mutaciones permitidas,
+estado final esperado, acciones prohibidas, observadores y postcondiciones para
+todos los efectos materiales. También deben estar cerradas las unidades 1 a 3,
+satisfecha la fase de permisos y ausentes los disparadores de `0015`. Un efecto
+material `NO_OBSERVABLE` mantiene la unidad congelada o exige validación humana
+específica. Cerrar los tres gates no prueba que el sobre operativo limite el
+daño como conjunto; ese riesgo aceptado sigue abierto.
+
+#### Requisitos nuevos de la línea
+
+Los siguientes tres requisitos son nuevos. Se implementan en la unidad 2b, se
+prueban y documentan en la unidad 3 y su aprendizaje se incorpora a la bitácora:
+
+- **Preflight de cobertura documental e impacto:** inventaría canon, fuentes,
+  enumeraciones, consumidores directos, schemas, validadores, pruebas,
+  invariantes y contenido congelado antes de arbitrar o emitir.
+- **Transporte PC/iPad por tipo de campo:** separa zonas normalizables de zonas
+  exactas u opacas, con canonicalización específica y fixtures reales de ambas
+  superficies.
+- **Cierre general de dependencias materiales:** produce una matriz por
+  destinatario y exige un paquete mínimo suficiente y accesible para ejecutar,
+  revisar, auditar, arbitrar o validar sin reconstruir la conversación.
+
+Estos requisitos **no alteran el inventario original de veinticuatro
+continuaciones**.
+
+#### Inventario completo de las veinticuatro continuaciones
+
+**Absorbidas — 18**
+
+- **Unidad 1:**
+  - 5. Ambigüedad de `0014` sobre QA.
+  - 22. Atribución local de las dos citas en `0015`.
+  - 23. Remisión de `0015` a `pendientes.md` para el estado operativo de
+    `app/`.
+- **Unidad 2a:**
+  - 6. Regresión de `salida_requerida` en v2.
+  - 14. El manifiesto debe incluir al productor.
+  - 17. Reproducibilidad mediante congelamiento de todos los productores.
+  - 18. Blob Git como anclaje portable frente a CRLF/LF.
+  - 20. El registro de intento debe identificar el request exacto.
+  - 21. La exclusividad requiere una ruta determinista.
+- **Unidad 2b:**
+  - 10. Comparar el prompt transportado contra el autorizado.
+  - 13. Detectar ampliaciones silenciosas por reglas locales.
+  - 15. Conservar el vínculo entre artefacto contractual y sobre.
+  - 24. Incluir copia congelada de fuentes externas materiales.
+- **Unidad 3:**
+  - 3. Semántica de `Stop` y paridad de superficies.
+  - 8. Anomalía de timestamp repetido en una firma.
+  - 9. Clasificación incorrecta de la PR #120.
+  - 16. Las pruebas de componentes no cubren fallos entre componentes.
+  - 19. Las expectativas de pruebas negativas deben derivarse de una fuente
+    verificable.
+
+**Fuera o activas — 6**
+
+1. Telemetría de dos modelos en una invocación.
+2. Camino Codex del schema proyectado todavía no ejercido.
+4. Pregunta falsable sobre `app-server` y SDK.
+7. Defecto de privacidad de la PR #115, en unidad propia.
+11. Sobre operativo todavía no probado como conjunto.
+12. Criterio de aceptación de permisos, activo en su fase administrativa.
+
+#### Evidencia de maduración de la política compartida
+
+Las PR #118, #120 y #122 no se computan por ahora como evidencia de maduración.
+Que hayan corrido con `.claude/settings.local.json` presente queda
+`NO_VERIFICADO` mientras no exista una referencia durable y accesible por PR;
+esta unidad no canoniza esa causa como hecho.
+
+**DECISION_REQUERIDA_DEL_DIRECTOR.** Se propone un mínimo de tres PR
+consecutivas que, entre las tres, cubran todas las filas requeridas mediante uno
+de estos estados:
+
+- `CAPACIDAD_EJERCIDA`: la superficie gobernada por
+  `.claude/settings.json` ejecutó la acción y dejó evidencia.
+- `DELEGACION_PREVISTA_Y_EJERCIDA`: el diseño previó la delegación y se demostró
+  la transición completa —detección de la falta de capacidad, relevo correcto,
+  ejecución por la vía autorizada y estado remoto final observado— sin confundir
+  un `401` o una denegación con un gate de producto fallido.
+- `LIMITE_DECLARADO_NO_SATISFACE_CRITERIO`: se declaró el límite sin demostrar
+  la delegación. No cuenta.
+
+Las filas son: preparación y publicación de la PR; consulta y tratamiento del
+resultado de review; reconciliación o cierre remoto; ausencia de solicitudes
+interactivas inesperadas; ausencia de dependencia de
+`.claude/settings.local.json`; y baseline y fuentes gobernantes efectivamente
+observadas.
+
+Una acción ejecutada exclusivamente por el Ejecutor, otro conector o el Director
+no cubre la fila como `CAPACIDAD_EJERCIDA`. Como `gh pr merge` está denegado y
+`gh pr ready` no figura en la allowlist de Claude Code, el cierre remoto sólo
+puede contar como `DELEGACION_PREVISTA_Y_EJERCIDA`, salvo que la baseline
+incorpore esos permisos.
+
 ### Enforcement mecánico de las devoluciones
 
 **Estado: ABIERTO. Clasificación: PRE_MVP.** Integra la línea de emisión y

@@ -67,11 +67,20 @@ gobernado por `0010`: gate material, muestreo determinista o riesgo declarado.
 
 QA es obligatorio cuando la unidad afirma que algo funciona en un entorno que
 sólo puede comprobarse ejecutándolo allí y la batería automatizada no puede
-observarlo por sí sola. Esto incluye:
+observarlo por sí sola. Se presume que la unidad afirma eso en estos dos casos,
+salvo declaración explícita en contrario:
 
 - código del MVP que altera comportamiento observable por el usuario;
 - cambios en la infraestructura de ejecución del circuito cuya corrida real no
   esté cubierta por la batería.
+
+`NO_VERIFICADO` nunca satisface un gate de funcionamiento y por sí solo no
+vuelve QA `NO_APLICA` cuando el estado final, la aceptación o la integración
+dependen de ese comportamiento; sólo desactiva la presunción cuando el
+comportamiento queda expresamente fuera del alcance de la unidad y ningún
+criterio de cierre se apoya en que funcione. Si forma parte del objetivo y no
+puede probarse, el gate queda pendiente o la unidad reduce formalmente su
+alcance.
 
 QA no es obligatorio para cambios documentales ni para cambios de código cuya
 verificación esté completamente cubierta por la batería automatizada. Cuando
