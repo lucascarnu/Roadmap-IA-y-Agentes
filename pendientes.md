@@ -692,27 +692,29 @@ durable es
 La segunda congelación es la vigente y alcanza únicamente a nuevas unidades de
 `app/`; no anula el desarrollo previo del MVP.
 
-### Preparación del relevo de Arquitecto / Lead
+### Relevo de Arquitecto / Lead y reorganización futura
 
 **Estado: ABIERTO. Clasificación temporal: PRE-MVP.**
 
-**Relevo e incremento 2 — NUEVO_APORTE.** El relevo del ocupante de
-`ARQUITECTO_LEAD` se prepara mediante `T-CUTOVER-ARQUITECTO-001`. Este primer
-incremento crea la superficie en cuarentena, el método durable y el mapa de
-identidad; la activación queda fuera de su alcance. Un incremento 2 posterior
-debe trasladar al Consultor a `.agentes/consultor/`, retirar la excepción
-transitoria del Ejecutor en la raíz y hacer que la ausencia de override produzca
-`SIN_IDENTIDAD` sin ejecución.
+**Relevo del Arquitecto y reorganización futura — NUEVO_APORTE.** El relevo del
+ocupante de `ARQUITECTO_LEAD` se prepara mediante
+`T-CUTOVER-ARQUITECTO-001`. Este primer incremento crea la superficie en
+cuarentena, el método durable y el mapa de identidad; la activación queda fuera
+de su alcance. Una migración futura del
+Ejecutor o del Consultor a `.agentes/<rol>/` queda como candidato no bloqueante,
+sin compromiso de ejecución, y no condiciona este cutover. Requeriría una unidad
+y una decisión nuevas.
 
-Toda superficie presente o futura bajo `.agentes/<rol>/` debe tener: identidad y
-reglas durables mediante un adapter reconocido; un perfil de permisos durable,
-explícito y de mínimo privilegio según su función; y una prueba desde sesión fría
-de identidad positiva y negativa, lectura, escritura y red efectivas. Para
-Consultor y Arquitecto se conserva la restricción de escritura general salvo una
-necesidad diseñada y autorizada. Durante cada ensayo, el ocupante actual
+Si en el futuro se crea o migra una superficie bajo `.agentes/<rol>/`, debe tener
+identidad y reglas durables mediante un adapter reconocido; un perfil de permisos
+durable, explícito y de mínimo privilegio según su función; y una prueba desde
+sesión fría de identidad positiva y negativa, lectura, escritura y red efectivas.
+Para Consultor y Arquitecto se conserva la restricción de escritura general salvo
+una necesidad diseñada y autorizada. Durante cada ensayo, el ocupante actual
 permanece activo y disponible, sin archivarlo, desactivarlo, reemplazarlo ni
 deshacerlo. El cutover sólo ocurre después de evidencia aprobada y una
-confirmación explícita y separada del Director.
+confirmación explícita y separada del Director. Estas condiciones no obligan a
+mover a los ocupantes actuales.
 
 **Issue #123 y PR #124 — EXTENSION_DE_EXISTENTE.** Ambos objetos permanecen
 pausados; esta referencia registra sólo ese estado y no reproduce sus gates,

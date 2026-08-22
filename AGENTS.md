@@ -4,25 +4,26 @@ Instrucciones y contexto para agentes compatibles como Codex al trabajar en este
 
 ## Identidad operativa y mapa de roles
 
-Este archivo aporta gobernanza compartida y el mapa de roles; no confiere
-identidad por sí mismo. La identidad proviene del `AGENTS.override.md` más
-cercano al directorio de trabajo, según estos casos vigentes:
+Este archivo aporta gobernanza compartida y el mapa de roles. Cuando la cadena
+de instrucciones no contiene un `AGENTS.override.md` más cercano, gobierna a
+`EJECUTOR_PRINCIPAL`. Un override más cercano prevalece según estos casos
+vigentes:
 
 1. [`.agentes/arquitecto/AGENTS.override.md`](.agentes/arquitecto/AGENTS.override.md)
    — cuarentena o `ARQUITECTO_LEAD`, según su contenido vigente;
 2. [`.consultor/AGENTS.override.md`](.consultor/AGENTS.override.md) —
-   `CONSULTOR_AUDITOR`, ubicación legítima hasta el incremento 2;
-3. excepción transitoria: una sesión cuya cadena no incluya ningún override
-   adopta `EJECUTOR_PRINCIPAL`.
+   `CONSULTOR_AUDITOR`, ubicación vigente y estable;
+3. sin un override más cercano, este archivo identifica a la sesión como
+   `EJECUTOR_PRINCIPAL`.
 
-El caso 2 se traslada a `.agentes/consultor/` y el caso 3 se retira en el
-incremento 2; desde entonces la ausencia de override produce `SIN_IDENTIDAD` sin
-ejecución.
+Cualquier migración futura del Ejecutor o del Consultor requiere una unidad y
+una decisión nuevas. No es un compromiso vigente ni condiciona el cutover del
+Arquitecto / Lead.
 
 | Rol | Directorio vigente | Método durable |
 | --- | --- | --- |
 | `ARQUITECTO_LEAD` | `.agentes/arquitecto/` (en preparación) | [`ARQUITECTO.md`](ARQUITECTO.md) |
-| `EJECUTOR_PRINCIPAL` | raíz, por la excepción transitoria | este archivo |
+| `EJECUTOR_PRINCIPAL` | raíz | este archivo |
 | `CONSULTOR_AUDITOR` | `.consultor/` | [`CONSULTOR.md`](CONSULTOR.md) |
 
 Cada adapter aplica el control fail closed de `reglas.md`: si el destinatario no
