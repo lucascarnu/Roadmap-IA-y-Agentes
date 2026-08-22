@@ -22,7 +22,7 @@ Arquitecto / Lead.
 
 | Rol | Directorio vigente | Método durable |
 | --- | --- | --- |
-| `ARQUITECTO_LEAD` | `.agentes/arquitecto/` (en preparación) | [`ARQUITECTO.md`](ARQUITECTO.md) |
+| `ARQUITECTO_LEAD` | `.agentes/arquitecto/` | [`ARQUITECTO.md`](ARQUITECTO.md) |
 | `EJECUTOR_PRINCIPAL` | raíz | este archivo |
 | `CONSULTOR_AUDITOR` | `.consultor/` | [`CONSULTOR.md`](CONSULTOR.md) |
 

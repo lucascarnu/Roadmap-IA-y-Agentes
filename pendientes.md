@@ -157,7 +157,8 @@ esta unidad no canoniza esa causa como hecho.
 
 **DECISION_REQUERIDA_DEL_DIRECTOR.** Se propone un mínimo de tres PR
 consecutivas que, entre las tres, cubran todas las filas requeridas mediante uno
-de estos estados:
+de estos estados. Adoptar ese mínimo es una decisión futura del Director y no
+bloquea el cierre de la Unidad 1:
 
 - `CAPACIDAD_EJERCIDA`: la superficie gobernada por
   `.claude/settings.json` ejecutó la acción y dejó evidencia.
@@ -175,10 +176,13 @@ interactivas inesperadas; ausencia de dependencia de
 observadas.
 
 Una acción ejecutada exclusivamente por el Ejecutor, otro conector o el Director
-no cubre la fila como `CAPACIDAD_EJERCIDA`. Como `gh pr merge` está denegado y
-`gh pr ready` no figura en la allowlist de Claude Code, el cierre remoto sólo
-puede contar como `DELEGACION_PREVISTA_Y_EJERCIDA`, salvo que la baseline
-incorpore esos permisos.
+no cubre la fila como `CAPACIDAD_EJERCIDA`. El Arquitecto Codex demostró cierre
+remoto durable en las PR [#125](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/125)
+y [#126](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/126), que quedan
+como evidencia candidata posterior. En la PR #126, el coordinador falló después
+del merge y el Arquitecto completó únicamente la restitución por fast-forward.
+Estas PR no se computan retroactivamente como maduración sin evaluar todas las
+filas, y este registro no crea un gate nuevo.
 
 ### Enforcement mecánico de las devoluciones
 
@@ -818,13 +822,13 @@ La segunda congelación es la vigente y alcanza únicamente a nuevas unidades de
 
 ### Relevo de Arquitecto / Lead y reorganización futura
 
-**Estado: ABIERTO. Clasificación temporal: PRE-MVP.**
+**Estado: CERRADO para el relevo; ABIERTO y NO BLOQUEANTE para una posible
+reorganización futura. Clasificación temporal: PRE-MVP.**
 
 **Relevo del Arquitecto y reorganización futura — NUEVO_APORTE.** El relevo del
-ocupante de `ARQUITECTO_LEAD` se prepara mediante
-`T-CUTOVER-ARQUITECTO-001`. Este primer incremento crea la superficie en
-cuarentena, el método durable y el mapa de identidad; la activación queda fuera
-de su alcance. Una migración futura del
+ocupante de `ARQUITECTO_LEAD` mediante `T-CUTOVER-ARQUITECTO-001` terminó en la
+PR [#125](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/125), y Codex
+quedó activo según [equipo.md](equipo.md). Una migración futura del
 Ejecutor o del Consultor a `.agentes/<rol>/` queda como candidato no bloqueante,
 sin compromiso de ejecución, y no condiciona este cutover. Requeriría una unidad
 y una decisión nuevas.
@@ -840,10 +844,6 @@ deshacerlo. El cutover sólo ocurre después de evidencia aprobada y una
 confirmación explícita y separada del Director. Estas condiciones no obligan a
 mover a los ocupantes actuales.
 
-**Issue #123 y PR #124 — EXTENSION_DE_EXISTENTE.** Ambos objetos permanecen
-pausados; esta referencia registra sólo ese estado y no reproduce sus gates,
-unidades ni contenido.
-
 **POC-APPSERVER-001 y diseño A3 — NUEVO_APORTE.** Ambos permanecen pausados y
 deben retomarse únicamente mediante una unidad autorizada.
 
@@ -856,10 +856,6 @@ una propuesta independiente, una auditoría adversarial y luego aceptar, dividir
 el alcance o bloquear según la evidencia. Queda pendiente evaluar en la línea de
 gates una detección de ciclos de rediseño sin avance material, sin fijar un
 máximo rígido de rondas.
-
-**Nota de reconciliación.** Al retomar PR #124, el estado de pausa registrado
-acá debe fundirse con la sección que esa PR introduce, sin duplicar la línea de
-gates ni la depuración de `.claude/settings.local.json`.
 
 ### Evaluación futura de arquitectura agéntica con estado compartido durable
 

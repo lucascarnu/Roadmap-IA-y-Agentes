@@ -13,14 +13,17 @@ separa lo que una superficie puede bloquear mecánicamente de lo que sólo puede
 validar después o exigir como conducta.
 
 La evidencia externa disponible distingue tres puntos. `UserPromptSubmit`
-puede bloquear antes de entregar un prompt al modelo y `PreToolUse` puede
-bloquear una herramienta. `Stop`, en cambio, sólo fuerza continuación: no
-retira el mensaje ya emitido; en Claude Code, `MessageDisplay` tampoco puede
-bloquear. Los hooks de proyecto de Codex dependen de que el proyecto esté
-confiado, y en Claude Code sólo la política administrada vuelve los hooks
-inanulables frente a `disableAllHooks`. Las fuentes oficiales consultadas no
-declaran versión y no confirman paridad entre CLI, aplicación de escritorio y
-modo no interactivo; esa paridad queda `NO_VERIFICADO`.
+puede bloquear antes de entregar un prompt al modelo. `PreToolUse` sólo
+constituye gate en rutas soportadas que efectivamente pasan por el hook: la
+[documentación oficial vigente de hooks](https://learn.chatgpt.com/docs/hooks)
+no cubre hosted tools y advierte que rutas especializadas pueden excluirse.
+`Stop`, en cambio, sólo fuerza continuación: no retira el mensaje ya emitido;
+en Claude Code, `MessageDisplay` tampoco puede bloquear. Los hooks de proyecto
+de Codex dependen de que el proyecto esté confiado, y en Claude Code sólo la
+política administrada vuelve los hooks inanulables frente a `disableAllHooks`.
+Las fuentes oficiales consultadas no declaran versión y no confirman paridad
+entre CLI, aplicación de escritorio y modo no interactivo; esa paridad queda
+`NO_VERIFICADO`.
 
 ## Decisión
 
@@ -54,8 +57,10 @@ porque no detiene ni comprueba ninguna condición.
 2. **Acción y resultado — GATE MECÁNICO para llamadas de herramienta
    gobernadas; VALIDACIÓN POSTERIOR para efectos que la superficie no puede
    interceptar.** `PreToolUse` bloquea una operación no declarada antes del
-   efecto. Los observadores y postcondiciones comparan después todos los efectos
-   materiales que no pudieron prevenirse.
+   efecto sólo en las rutas soportadas que pasan efectivamente por el hook; no
+   se presume cobertura para hosted tools ni para rutas especializadas
+   excluidas. Los observadores y postcondiciones comparan después todos los
+   efectos materiales que no pudieron prevenirse.
 3. **Emisión y cierre — GATE MECÁNICO sólo cuando el proyecto es dueño del
    canal; VALIDACIÓN POSTERIOR y REGLA DE CONDUCTA en chat libre.** El renderer
    y el canal controlado pueden impedir publicar un artefacto inválido. `Stop`
@@ -137,10 +142,10 @@ distinguen `CAPACIDAD_NO_DISPONIBLE` de `VIA_NO_AUTENTICADA` y de
 se valida semánticamente el `role_id` contra el catálogo. Un identificador de
 proveedor, producto o modelo en un campo de rol se rechaza.
 
-El alias `codex` es ambiguo entre `EJECUTOR_PRINCIPAL` y
-`CONSULTOR_AUDITOR`: se discrimina por adapter efectivo y, en segunda
-instancia, por `cwd`. Si ninguno resuelve de forma única, la admisión falla
-cerrada con `ROL_AMBIGUO`.
+El alias `codex` es ambiguo entre `ARQUITECTO_LEAD`, `EJECUTOR_PRINCIPAL` y
+`CONSULTOR_AUDITOR`: se resuelve fail closed por el adapter efectivo y el
+`cwd`. Si ambos no permiten una resolución única, la admisión falla cerrada con
+`ROL_AMBIGUO`.
 
 ### Cutover compatible de identidad
 
@@ -151,7 +156,11 @@ persistidos.** La migración de la unidad 2a sigue cinco pasos:
 2. normalizarlo a `role_id`;
 3. conservar el artefacto canónico con `role_id`;
 4. proyectar el alias sólo en la frontera v1 de compatibilidad;
-5. retirar la proyección cuando migren los adapters.
+5. retirar la proyección cuando todos los consumidores directos admitan el
+   `role_id` canónico y la frontera heredada deje de ser necesaria.
+
+El retiro de esa proyección es independiente de cualquier migración de
+directorios o adapters y no compromete a migrar al Ejecutor ni al Consultor.
 
 Durante la transición, los encabezados transportan juntos el literal heredado y
 el `role_id`; el literal heredado es una zona exacta.
@@ -311,7 +320,7 @@ descongelamiento.
 
 ### Reducción explícita
 
-**VALIDACIÓN POSTERIOR.** Cerrar los tres gates no demuestra que el sobre
+**DEFINICIÓN ESTRUCTURAL.** Cerrar los tres gates no demuestra que el sobre
 operativo limite el daño como conjunto. Es el riesgo 7 aceptado en 0015 y sigue
 abierto.
 
