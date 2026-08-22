@@ -2586,7 +2586,7 @@ function v2Deps(overrides = {}) {
 function v2Contract(overrides = {}) {
   return {
     handoff_version: "2", tarea: "Validar contrato sintético.", head_sha: HEAD,
-    contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "AGENTS.md"],
+    contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "AGENTS.md"],
     origen: { ejecutor: "Codex Arquitecto", rol: "ARQUITECTO_LEAD" },
     destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] },
     modo: "solo_lectura",
