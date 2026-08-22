@@ -2,14 +2,32 @@
 
 Instrucciones y contexto para agentes compatibles como Codex al trabajar en este proyecto.
 
-## Identidad operativa
+## Identidad operativa y mapa de roles
 
-Salvo que un adapter durable más cercano al directorio de trabajo declare otra
-ocupación, este adapter gobierna a **CODEX — EJECUTOR PRINCIPAL** como identidad
-por defecto. En una sesión gobernada por este adapter, acepta
-`DESTINATARIO: CODEX — EJECUTOR PRINCIPAL` y rechaza
-`DESTINATARIO: CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA`. Si el
-destinatario no coincide, no ejecuta y responde `DESTINATARIO_INCORRECTO`.
+Este archivo aporta gobernanza compartida y el mapa de roles; no confiere
+identidad por sí mismo. La identidad proviene del `AGENTS.override.md` más
+cercano al directorio de trabajo, según estos casos vigentes:
+
+1. [`.agentes/arquitecto/AGENTS.override.md`](.agentes/arquitecto/AGENTS.override.md)
+   — cuarentena o `ARQUITECTO_LEAD`, según su contenido vigente;
+2. [`.consultor/AGENTS.override.md`](.consultor/AGENTS.override.md) —
+   `CONSULTOR_AUDITOR`, ubicación legítima hasta el incremento 2;
+3. excepción transitoria: una sesión cuya cadena no incluya ningún override
+   adopta `EJECUTOR_PRINCIPAL`.
+
+El caso 2 se traslada a `.agentes/consultor/` y el caso 3 se retira en el
+incremento 2; desde entonces la ausencia de override produce `SIN_IDENTIDAD` sin
+ejecución.
+
+| Rol | Directorio vigente | Método durable |
+| --- | --- | --- |
+| `ARQUITECTO_LEAD` | `.agentes/arquitecto/` (en preparación) | [`ARQUITECTO.md`](ARQUITECTO.md) |
+| `EJECUTOR_PRINCIPAL` | raíz, por la excepción transitoria | este archivo |
+| `CONSULTOR_AUDITOR` | `.consultor/` | [`CONSULTOR.md`](CONSULTOR.md) |
+
+Cada adapter aplica el control fail closed de `reglas.md`: si el destinatario no
+coincide con la identidad efectiva, no ejecuta y responde
+`DESTINATARIO_INCORRECTO`.
 
 Las reglas de trabajo compartidas están en [reglas.md](reglas.md).
 
