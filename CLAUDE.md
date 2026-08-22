@@ -24,31 +24,34 @@ Esta superficie no conserva la posta cotidiana, no despacha al Ejecutor, no
 decide cierres y no integra. Reocupar `ARQUITECTO_LEAD` exige cambiar
 [`equipo.md`](equipo.md); nunca alcanza una afirmación conversacional.
 
-El intérprete que `reglas.md` deja a cargo del adaptador es, para este ejecutor,
-**PowerShell**: `Bash(git *)` y `Bash(gh *)` están denegados.
+No tiene intérprete shell permanente ni capacidad de Git, GitHub, MCP, edición o
+escritura. Su análisis se limita a `Read`, `Grep`, `WebSearch` y los
+`WebFetch` permitidos. Toda ejecución o mutación necesaria se delega al rol y a
+la superficie autorizados para esa tarea.
 
 ## Política de permisos
 
-`.claude/settings.json` contiene la política de permisos del proyecto. Está
-**CANDIDATA / EN PRUEBA**: quedará validada operativamente recién después de
-varias PR reales consecutivas sin intervención humana inesperada.
+`.claude/settings.json` contiene el perfil compartido de mínimo privilegio para
+esta superficie de especialista. `defaultMode: dontAsk` deniega automáticamente
+lo no permitido; los modos de bypass y auto están deshabilitados. La política
+retira shell, edición, MCP y cualquier capacidad permanente de workflow, y sólo
+permite búsqueda y consulta web sobre los dominios oficiales declarados.
 
-`.claude/settings.local.json` queda para preferencias y permisos locales que no
-formen parte del workflow reproducible.
+Esta configuración es una política de herramientas, no un sandbox del sistema
+operativo ni evidencia de confinamiento fuerte.
+
+`.claude/settings.local.json` no debe contener permisos del workflow ni permisos
+permanentes. Su depuración se realiza administrativamente, con rollback, después
+de esta PR. Cualquier ampliación futura exige una tarea y un diseño explícitos y
+no puede persistirse mediante “permitir siempre”.
 
 La documentación oficial que respalda el diseño está registrada en
 [fuentes/documentacion-permisos-claude-code.md](fuentes/documentacion-permisos-claude-code.md).
 
-**Límites efectivos que una sesión nueva debe conocer.** Git y GitHub se operan
-con PowerShell; `Bash(git *)`, `Bash(gh *)`, `gh api` y `gh pr merge` siguen
-fuera de la superficie compartida. Los comentarios inline se leen mediante
-`scripts/get-pr-comments.ps1`; responder o resolver conversaciones no está
-autorizado. Las escrituras en `scripts/` y `.claude/` permanecen protegidas; el
-ruleset server-side de `main` no cubre las ramas `claude/*` de `origin` — alcance
-completo en [0008](decisiones/0008-proteccion-server-side-de-main.md#costos-conocidos).
-Las reglas locales pueden ampliar accidentalmente la política candidata, por lo
-que no cuentan como evidencia de su autonomía. Las preguntas y pruebas todavía
-abiertas viven en
+**Límites efectivos que una sesión nueva debe conocer.** Ningún flujo de Git,
+GitHub, shell, MCP o escritura pertenece a esta superficie. Las reglas locales
+no pueden usarse para convertirla en ejecutor ni como evidencia de autonomía.
+Las preguntas, la matriz por superficie y las pruebas frías pendientes viven en
 [Permisos y ejecución no interactiva](pendientes.md#permisos-y-ejecución-no-interactiva).
 
 **Consecuencia del modo `dontAsk`.** En ese modo `AskUserQuestion` queda

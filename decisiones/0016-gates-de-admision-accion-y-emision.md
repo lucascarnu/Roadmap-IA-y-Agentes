@@ -313,10 +313,15 @@ y ausencia de disparadores de 0015.
 
 ### Secuencia del roadmap
 
-**REGLA DE CONDUCTA.** La secuencia es: unidad 1; depuración de
-`.claude/settings.local.json` y baseline autorizada; unidades 2a, 2b y 3 bajo
-esa baseline; evaluación de las pull requests que ejercitaron el circuito; y
-descongelamiento.
+**REGLA DE CONDUCTA.** La secuencia es: unidad 1; baseline separada por cada
+superficie activa; unidades 2a, 2b y 3 bajo esas baselines; evaluación de las
+pull requests que ejercitaron el circuito; y descongelamiento. La evidencia de
+permisos de Codex se registra por su perfil, sandbox y aprobaciones efectivos;
+no se deriva de la política de Claude. Para Claude, la precondición conserva la
+depuración administrativa y reversible de `.claude/settings.local.json`, la
+política compartida de mínimo privilegio y una prueba desde sesión fría. Cada
+superficie Codex también requiere su propia prueba fría. Ninguna evidencia se
+transfiere entre superficies o vías.
 
 ### Reducción explícita
 

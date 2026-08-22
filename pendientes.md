@@ -78,10 +78,12 @@ divide en cuatro unidades:
    bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123).
 
 Entre la unidad 1 y las unidades de implementación se completa la
-[fase de aceptación de permisos](#permisos-y-ejecución-no-interactiva): primero
-se depura `.claude/settings.local.json` y se autoriza una baseline; 2a, 2b y 3
-se ejecutan bajo esa baseline. Después se evalúan las pull requests que
-ejercitaron el circuito y recién entonces se considera el descongelamiento.
+[fase de aceptación de permisos](#permisos-y-ejecución-no-interactiva): se
+establece y prueba una baseline separada para cada superficie activa. La higiene
+administrativa de `.claude/settings.local.json` pertenece sólo a Claude y no
+valida permisos de Codex. Las unidades 2a, 2b y 3 se ejecutan bajo las baselines
+correspondientes. Después se evalúan las pull requests que ejercitaron el
+circuito y recién entonces se considera el descongelamiento.
 
 La condición para reanudar nuevas unidades de `app/` es cobertura de efectos,
 no presencia nominal de una herramienta: contrato con mutaciones permitidas,
@@ -150,18 +152,19 @@ continuaciones**.
 
 #### Evidencia de maduración de la política compartida
 
-Las PR #118, #120 y #122 no se computan por ahora como evidencia de maduración.
-Que hayan corrido con `.claude/settings.local.json` presente queda
+Las PR #118, #120 y #122 no se computan por ahora como evidencia de maduración
+de Claude. Que hayan corrido con `.claude/settings.local.json` presente queda
 `NO_VERIFICADO` mientras no exista una referencia durable y accesible por PR;
-esta unidad no canoniza esa causa como hecho.
+esta unidad no canoniza esa causa como hecho. Las PR históricas de Claude no
+validan Codex, y las PR de Codex tampoco validan la política de Claude.
 
 **DECISION_REQUERIDA_DEL_DIRECTOR.** Se propone un mínimo de tres PR
 consecutivas que, entre las tres, cubran todas las filas requeridas mediante uno
 de estos estados. Adoptar ese mínimo es una decisión futura del Director y no
 bloquea el cierre de la Unidad 1:
 
-- `CAPACIDAD_EJERCIDA`: la superficie gobernada por
-  `.claude/settings.json` ejecutó la acción y dejó evidencia.
+- `CAPACIDAD_EJERCIDA`: la superficie activa declarada ejecutó la acción bajo su
+  propia baseline y dejó evidencia.
 - `DELEGACION_PREVISTA_Y_EJERCIDA`: el diseño previó la delegación y se demostró
   la transición completa —detección de la falta de capacidad, relevo correcto,
   ejecución por la vía autorizada y estado remoto final observado— sin confundir
@@ -298,10 +301,11 @@ son las capacidades que al circuito todavía le faltan.
   no tiene crédito cargado y no se intenta por inercia; su estado por vía se
   detalla abajo. Queda pendiente el **Re-request review** que GitHub ofrece
   después de nuevos commits en una PR ya revisada.
-- **`gh pr edit` no está autorizado por la política compartida.** Hoy funciona
-  por la regla amplia de `.claude/settings.local.json`. Al depurar ese archivo,
-  el circuito pierde la capacidad de solicitar revisiones y de actualizar cuerpos
-  de pull request, salvo que se agregue al `allow` compartido.
+- **`gh pr edit` pertenecía al workflow histórico de Claude y no forma parte de
+  su superficie actual de especialista.** Su uso anterior dependía de la regla
+  amplia de `.claude/settings.local.json`; después de la limpieza queda fuera por
+  diseño. Solicitar revisiones o actualizar cuerpos se delega a una superficie
+  Codex autorizada y no se agrega al `allow` de Claude.
 - Diseñar la espera: consultar estado **sin polling agresivo**, con timeout y
   reintentos razonables. Las latencias observadas están en `0007`.
 - **Falta un mecanismo autorizado de espera y reintento** para estados remotos.
@@ -687,7 +691,7 @@ crea política canónica.
 **Estado: PARCIAL.** Una automatización desatendida no puede quedar bloqueada por
 prompts de permisos.
 
-#### Permisos de edición
+#### Evidencia histórica: permisos de edición
 
 Hecho observado: en la sesión de la [verificación histórica de
 permisos](historia/pendientes-resueltos-pre-mvp.md#permisos-y-ejecución-no-interactiva--evidencia-histórica),
@@ -703,7 +707,7 @@ intervención del usuario. Queda pendiente evaluar la forma segura de habilitar
 edición no interactiva dentro de la política completa de permisos; todavía no se
 aplica ninguna configuración.
 
-#### Diferencia entre Bash y PowerShell
+#### Evidencia histórica: diferencia entre Bash y PowerShell
 
 Hecho observado: existe una regla persistida `PowerShell(git push *)`, pero el
 push de la rama de aquella investigación se ejecutó **mediante Bash**.
@@ -718,61 +722,34 @@ pendiente diseñar una política segura y suficientemente determinista.
 
 #### Estado actual
 
-La política compartida ya vive en `.claude/settings.json`, en estado **CANDIDATA
-/ EN PRUEBA**. Lo que sigue abierto:
+La baseline se evalúa por superficie activa; no se mezclan vías ni se hereda
+evidencia entre roles que compartan proveedor.
 
-El confinamiento fuerte del sistema operativo queda reclasificado como
-**endurecimiento posterior al MVP** conforme a
-[0015](decisiones/0015-sobre-operativo-del-mvp-local-supervisado.md). Esta
-reclasificación alcanza sólo ese objetivo prospectivo: los fallos operativos de
-permisos, continuidad, ejecución no interactiva y gates enumerados a
-continuación conservan su prioridad vigente y no pasan a ser posteriores al
-MVP.
+| Superficie | Baseline durable | Evidencia viva disponible | Prueba fría pendiente |
+| --- | --- | --- | --- |
+| Codex — Ejecutor Principal, raíz | `AGENTS.md`; perfil, sandbox y aprobaciones efectivos de la sesión | Rama, commit, push y PR sin aprobación manual observados en PR #124 y #126 | Identidad positiva/negativa, lectura, escritura, Git y GitHub desde una sesión nueva |
+| Codex — Arquitecto / Lead, `.agentes/arquitecto/` | Adapter cercano y `ARQUITECTO.md`; permisos efectivos registrados por sesión | Identidad y cierre remoto durable observados en PR #125/#126 | Matriz completa de identidad, lectura, escritura y red desde una sesión nueva |
+| Codex — Consultor / Auditor, `.consultor/` | Adapter cercano y `CONSULTOR.md`; sin transferencia de permisos desde otros Codex | Identidad activa observada; no se presume escritura general | Identidad positiva/negativa, lectura y ausencia de mutación no autorizada desde una sesión nueva |
+| Claude — Especialista bajo demanda | `CLAUDE.md` y `.claude/settings.json`, sin shell, edición, Git/GitHub ni MCP | Política versionada y documentación reconsultada; no equivale a prueba operativa | Sesión nueva después de la limpieza local: Read/Grep/Web permitidos y mutaciones denegadas sin prompts |
 
-- Registrar como **bloqueo de automatización** cualquier solicitud interactiva
-  inesperada dentro de un flujo que debería ser autónomo.
-- **Depurar `.claude/settings.local.json`**, que conserva reglas amplias, muertas
-  y redundantes. Recién después se puede probar la política compartida sin
-  contaminación local. Nunca recurrir a modos globales de bypass.
-- `defaultMode: dontAsk` desde `.claude/settings.json` está **PROBADO
-  LOCALMENTE**: en una sesión nueva y limpia, sin `settings.local.json`, un
-  comando autorizado se ejecutó, uno no autorizado se denegó solo y no hubo
-  prompts. Era la hipótesis central de la política. Falta **validarlo
-  operativamente**, con varias pull requests reales consecutivas dentro del
-  circuito normal; no volver a probar el modo.
-- **Volver a una rama `claude/*` existente no está autorizado.** La política
-  permite crear ramas `claude/*` y volver a `main`, pero no regresar a una rama
-  de trabajo ya creada. Observado durante la PR #9.
-- **Reconciliar una rama contra `main` tampoco está autorizado.** `git merge` no
-  figura en la política compartida: la reconciliación de la PR #10 funcionó por
-  la regla amplia `PowerShell(git *)` de `.claude/settings.local.json`. Al
-  depurar ese archivo, el circuito pierde la capacidad de **reconciliar por
-  merge**, que es un paso normal cuando hay más de una PR abierta. Rebasar no se
-  pierde porque nunca estuvo disponible: `PowerShell(git rebase*)` está en el
-  `deny` de la política compartida, que prevalece sobre cualquier `allow`. Hace
-  falta una capacidad compartida y acotada; no se resuelve ahora.
-- **`git branch -d claude/*` fue denegado** al terminar la PR #9, pese a existir
-  una regla `allow` que aparentemente lo cubre, y la rama local no pudo
-  limpiarse de forma autónoma. La denegación es un **hecho observado**. Como
-  **hipótesis todavía no probada**, podría deberse a una colisión con el `deny`
-  de `git branch -D*` si el emparejamiento de patrones no distingue mayúsculas.
-  Diseñar una prueba controlada antes de tocar ninguna regla.
-- **Wrapper seguro de push: propuesta pendiente, no decisión.** Un script
-  versionado que publique la rama actual sin aceptar flags ni refspecs
-  eliminaría la clase entera de escapes por comodín, en lugar de enumerarlos.
-  Reevaluar **después** del cambio de ejecutor: otro ejecutor puede tener otro
-  modelo de permisos y volverlo innecesario.
-- **Resolver hilos de review y ejecutar el merge quedan fuera de la superficie
-  autorizada de Claude.** El cierre de la PR #10 lo confirmó: resolver un hilo
-  exige la API GraphQL, con `gh api` denegado, y `gh pr merge` está en el `deny`
-  de la política compartida. Hoy esos pasos requieren otra herramienta o la
-  interfaz de GitHub. `0008` ya registra el primero como costo conocido; `0013`
-  define el gate de integración y deja claro que la limitación de una herramienta
-  no crea una aprobación humana obligatoria.
+**Capas ampliadoras verificadas ausentes — 2026-08-22.** En user settings,
+`permissions.allow` está vacío; no existen archivos o registro managed,
+`.mcp.json`, hooks de Claude, alias Git, `core.hooksPath` ni hooks Git activos.
+La evidencia es local a esta máquina y fecha, no una garantía permanente.
 
-**Criterio de aceptación.** Completar varias PR reales consecutivas sin que el
-usuario tenga que aprobar **comandos ni ediciones** durante el circuito normal.
-Todavía no se cumple.
+**Limpieza administrativa pendiente con rollback.** El
+`.claude/settings.local.json` vigente contiene únicamente `permissions.allow`.
+Después de integrar esta baseline, el Director conserva una copia recuperable,
+retira esa ampliación local y ejecuta la prueba fría. Si la prueba o el arranque
+fallan por la limpieza, restaura la copia y registra la divergencia; no amplía la
+política compartida ni usa modos globales de bypass.
+
+Una solicitud interactiva inesperada dentro de un flujo declarado autónomo
+sigue siendo bloqueo de automatización. El criterio de aceptación exige
+evidencia fría por cada superficie y varias PR reales bajo su propia baseline;
+todavía no se cumple. [0015](decisiones/0015-sobre-operativo-del-mvp-local-supervisado.md)
+sigue aceptando la ausencia de confinamiento fuerte: esta política de permisos
+no configura un sandbox de sistema operativo ni cambia ese riesgo aceptado.
 
 ### Observaciones menores del instrumental de confinamiento
 
