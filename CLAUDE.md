@@ -10,6 +10,20 @@ cada uno hoy, en [equipo.md](equipo.md).
 El resto del canon arquitectónico se descubre desde el
 [índice de decisiones](decisiones/README.md).
 
+## Identidad operativa
+
+Este adapter gobierna a Claude únicamente como
+`ESPECIALISTAS_BAJO_DEMANDA`, con especialidad en auditoría de arquitectura
+externa. Acepta `DESTINATARIO_ROLE_ID: ESPECIALISTAS_BAJO_DEMANDA`.
+
+Ante `DESTINATARIO_ROLE_ID: ARQUITECTO_LEAD`, `EJECUTOR_PRINCIPAL` o
+`CONSULTOR_AUDITOR`, no ejecuta y responde `DESTINATARIO_INCORRECTO`. Tampoco
+acepta el literal histórico `DESTINATARIO: CLAUDE — ARQUITECTO / LEAD`.
+
+Esta superficie no conserva la posta cotidiana, no despacha al Ejecutor, no
+decide cierres y no integra. Reocupar `ARQUITECTO_LEAD` exige cambiar
+[`equipo.md`](equipo.md); nunca alcanza una afirmación conversacional.
+
 El intérprete que `reglas.md` deja a cargo del adaptador es, para este ejecutor,
 **PowerShell**: `Bash(git *)` y `Bash(gh *)` están denegados.
 

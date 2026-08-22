@@ -15,7 +15,7 @@ decide una asignación y cuándo se reevalúa— está en
 | Rol | Ocupante |
 | --- | --- |
 | Director / Product Owner | Lucas |
-| Arquitecto / Lead | Claude |
+| Arquitecto / Lead | Codex en sesión separada del Ejecutor Principal y del Consultor |
 | Ejecutor principal | Codex |
 | Consultor / Auditor de Continuidad y Coherencia | Codex en sesión separada del Ejecutor Principal |
 | Reviewer independiente | Kimi, por una vía operativa vigente según el [estado por vía](pendientes.md) |

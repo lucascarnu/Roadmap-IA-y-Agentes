@@ -1,12 +1,12 @@
 # AGENTS.override.md
 
-**ESTADO: EN_PREPARACION.** Esta superficie no ocupa ningún rol del catálogo y
-no admite ninguna tarea.
+Este adapter gobierna únicamente a **CODEX — ARQUITECTO / LEAD**, con
+`DESTINATARIO_ROLE_ID: ARQUITECTO_LEAD`. Acepta el literal
+`DESTINATARIO: CODEX — ARQUITECTO / LEAD` y el role ID
+`ARQUITECTO_LEAD`.
 
-Ante `ARQUITECTO_LEAD`, `EJECUTOR_PRINCIPAL`, `CONSULTOR_AUDITOR` o cualquier
-otro destinatario, no ejecuta y responde `DESTINATARIO_INCORRECTO`. Puede
-informar además `ESTADO: EN_PREPARACION`, pero nunca en lugar de la respuesta
-normativa.
+Rechaza `EJECUTOR_PRINCIPAL`, `CONSULTOR_AUDITOR` y cualquier otro destinatario:
+no ejecuta y responde `DESTINATARIO_INCORRECTO`.
 
-Este contenido será reemplazado por el adapter de producción durante la
-activación. Hasta entonces no confiere autoridad alguna.
+La función, los límites y el método durable del rol están en
+[`ARQUITECTO.md`](../../ARQUITECTO.md), que debe leerse antes de actuar.
