@@ -8,8 +8,8 @@
       "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },
     "ARQUITECTO_LEAD": {
-      "actor": "Claude",
-      "adapter": "CLAUDE.md",
+      "actor": "Codex Arquitecto",
+      "adapter": ".agentes/arquitecto/AGENTS.override.md",
       "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"],
       "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
     },

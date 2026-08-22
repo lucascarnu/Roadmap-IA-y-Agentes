@@ -816,6 +816,82 @@ durable es
 La segunda congelación es la vigente y alcanza únicamente a nuevas unidades de
 `app/`; no anula el desarrollo previo del MVP.
 
+### Relevo de Arquitecto / Lead y reorganización futura
+
+**Estado: ABIERTO. Clasificación temporal: PRE-MVP.**
+
+**Relevo del Arquitecto y reorganización futura — NUEVO_APORTE.** El relevo del
+ocupante de `ARQUITECTO_LEAD` se prepara mediante
+`T-CUTOVER-ARQUITECTO-001`. Este primer incremento crea la superficie en
+cuarentena, el método durable y el mapa de identidad; la activación queda fuera
+de su alcance. Una migración futura del
+Ejecutor o del Consultor a `.agentes/<rol>/` queda como candidato no bloqueante,
+sin compromiso de ejecución, y no condiciona este cutover. Requeriría una unidad
+y una decisión nuevas.
+
+Si en el futuro se crea o migra una superficie bajo `.agentes/<rol>/`, debe tener
+identidad y reglas durables mediante un adapter reconocido; un perfil de permisos
+durable, explícito y de mínimo privilegio según su función; y una prueba desde
+sesión fría de identidad positiva y negativa, lectura, escritura y red efectivas.
+Para Consultor y Arquitecto se conserva la restricción de escritura general salvo
+una necesidad diseñada y autorizada. Durante cada ensayo, el ocupante actual
+permanece activo y disponible, sin archivarlo, desactivarlo, reemplazarlo ni
+deshacerlo. El cutover sólo ocurre después de evidencia aprobada y una
+confirmación explícita y separada del Director. Estas condiciones no obligan a
+mover a los ocupantes actuales.
+
+**Issue #123 y PR #124 — EXTENSION_DE_EXISTENTE.** Ambos objetos permanecen
+pausados; esta referencia registra sólo ese estado y no reproduce sus gates,
+unidades ni contenido.
+
+**POC-APPSERVER-001 y diseño A3 — NUEVO_APORTE.** Ambos permanecen pausados y
+deben retomarse únicamente mediante una unidad autorizada.
+
+**Convergencia de diseño y auditoría — EXTENSION_DE_EXISTENTE.** Antes de
+iniciar la implementación, `T-CUTOVER-ARQUITECTO-001` produjo cuatro diseños y
+una enmienda. Las primeras
+objeciones fueron materiales; después, la auditoría derivó en optimización
+recursiva del protocolo. El aprendizaje refuerza el método vigente del Consultor:
+una propuesta independiente, una auditoría adversarial y luego aceptar, dividir
+el alcance o bloquear según la evidencia. Queda pendiente evaluar en la línea de
+gates una detección de ciclos de rediseño sin avance material, sin fijar un
+máximo rígido de rondas.
+
+**Nota de reconciliación.** Al retomar PR #124, el estado de pausa registrado
+acá debe fundirse con la sección que esa PR introduce, sin duplicar la línea de
+gates ni la depuración de `.claude/settings.local.json`.
+
+### Evaluación futura de arquitectura agéntica con estado compartido durable
+
+**Estado: ABIERTO. Clasificación temporal: PRE-MVP. NO BLOQUEANTE para los gates
+y el MVP.** Su origen es el chat “Explicar arquitectura de agentes” y la
+verificación primaria posterior. Este registro no constituye una migración ni
+autoriza instalar gAIOS, pm-claude-skills, AI Brain Starter o Graphify.
+
+El momento candidato para evaluarlo es después de cerrar los gates críticos y
+antes de expandir ampliamente el MVP. El objetivo es comparar la arquitectura
+vigente con un canon neutral al proveedor, filesystem/Git como estado compartido
+durable, foco actual, promoción de aprendizajes, adapters reemplazables y una
+visualización derivada de solo lectura.
+
+**Invariantes.** `.agentes/` se reserva para adapters y superficies; el canon
+permanece neutral al proveedor; los ensayos externos se aíslan en `laboratorio/`;
+en Windows no se usan symlinks sin evidencia y diseño propios; y no se duplican
+`vision.md`, `reglas.md`, `decisiones/` ni `pendientes.md`.
+
+**Primeros candidatos a evaluar — expresamente no son decisiones:** una vista
+breve del foco vigente, la promoción explícita de aprendizajes y, posteriormente,
+un visualizador de solo lectura.
+
+**Fuentes primarias verificadas:** [gAIOS — AGENTS.md](https://github.com/alirezarezvani/gaios/blob/dev/AGENTS.md),
+[pm-claude-skills — Showcase](https://github.com/mohitagw15856/pm-claude-skills/blob/main/docs/SHOWCASE.md),
+[AI Brain Starter](https://github.com/mycelium-hq/ai-brain-starter) y
+[Graphify](https://github.com/Graphify-Labs/graphify).
+
+**Criterio de cierre futuro.** Comparar el canon actual y la evidencia de pull
+requests reales, y decidir si se adopta, se rechaza o se pilotea un incremento
+mínimo.
+
 ## Para medir durante las primeras PR del MVP
 
 Los asuntos de esta sección necesitan evidencia real durante las primeras pull

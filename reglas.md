@@ -148,10 +148,12 @@ conversacional no determina el rol. Si no puede identificar el adapter o el
 destinatario no coincide, no ejecuta nada y responde
 `DESTINATARIO_INCORRECTO`.
 
-Valores previstos: `CLAUDE — ARQUITECTO / LEAD`, `CODEX — EJECUTOR PRINCIPAL`,
+Valores previstos activos: `CODEX — ARQUITECTO / LEAD`,
+`CODEX — EJECUTOR PRINCIPAL`,
 `CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA` y
-`CUALQUIER_EJECUTOR_AUTORIZADO`. No es un sistema de identidades: es una
-protección contra pegar el prompt en la sesión equivocada.
+`CUALQUIER_EJECUTOR_AUTORIZADO`. `CLAUDE — ARQUITECTO / LEAD` se conserva como
+literal histórico que los adapters deben rechazar. No es un sistema de
+identidades: es una protección contra pegar el prompt en la sesión equivocada.
 
 `CUALQUIER_EJECUTOR_AUTORIZADO` se usa cuando la tarea no depende materialmente
 de quién la ejecute. En ese caso no se cancela por identidad, pero la firma final
