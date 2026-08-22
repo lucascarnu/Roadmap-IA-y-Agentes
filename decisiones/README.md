@@ -22,6 +22,7 @@ Registro de decisiones arquitectónicas, una por archivo.
 - [0013 — Delegar cierre operativo y merge rutinario](0013-delegar-cierre-operativo-y-merge-rutinario.md)
 - [0014 — Clases de cambio y verificaciones exigidas](0014-clases-de-cambio-y-verificaciones-exigidas.md)
 - [0015 — Sobre operativo del MVP local supervisado](0015-sobre-operativo-del-mvp-local-supervisado.md)
+- [0016 — Gates de admisión, acción y emisión](0016-gates-de-admision-accion-y-emision.md)
 
 La política gobernante que concreta cómo produce evidencia el rol Reviewer está
 en [reviewer-policy.md](../reviewer-policy.md). La asignación vigente de roles no

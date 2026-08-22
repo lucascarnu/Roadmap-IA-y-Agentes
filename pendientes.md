@@ -56,6 +56,134 @@ pero el modo de falla al superar el límite es silencioso: un hijo existente pue
 no encontrarse y duplicarse. Disparador para corregirlo: superar los 80 Issues, o
 antes si aparece un hijo duplicado.
 
+### Línea de gates de admisión, acción y emisión
+
+**Estado: ABIERTO. Clasificación: PRE_MVP.** La
+[decisión 0016](decisiones/0016-gates-de-admision-accion-y-emision.md) fija la
+arquitectura documental de tres gates sobre un contrato único. La línea se
+divide en cuatro unidades:
+
+1. **Unidad 1 — decisión.** Registra la separación entre gate mecánico,
+   validación posterior y regla de conducta, el catálogo durable de roles y las
+   condiciones de las unidades siguientes.
+2. **Unidad 2a — contrato.** Separa catálogo y registro operacional, incorpora
+   `role_id`, ejecuta el cutover compatible de aliases y resuelve la admisión de
+   perfiles que necesiten `modo: ejecucion` sin promover la evidencia de
+   confinamiento.
+3. **Unidad 2b — motor.** Implementa admisión, acción y emisión en los canales
+   controlados, incluido el preflight documental, la matriz de dependencias y
+   el transporte PC/iPad.
+4. **Unidad 3 — verificación y guía.** Incorpora fixtures, pruebas negativas,
+   QA de superficies y `guias/construccion-de-gates.md`; destila allí la
+   bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123).
+
+Entre la unidad 1 y las unidades de implementación se completa la
+[fase de aceptación de permisos](#permisos-y-ejecución-no-interactiva): primero
+se depura `.claude/settings.local.json` y se autoriza una baseline; 2a, 2b y 3
+se ejecutan bajo esa baseline. Después se evalúan las pull requests que
+ejercitaron el circuito y recién entonces se considera el descongelamiento.
+
+La condición para reanudar nuevas unidades de `app/` es cobertura de efectos,
+no presencia nominal de una herramienta: contrato con mutaciones permitidas,
+estado final esperado, acciones prohibidas, observadores y postcondiciones para
+todos los efectos materiales. También deben estar cerradas las unidades 1 a 3,
+satisfecha la fase de permisos y ausentes los disparadores de `0015`. Un efecto
+material `NO_OBSERVABLE` mantiene la unidad congelada o exige validación humana
+específica. Cerrar los tres gates no prueba que el sobre operativo limite el
+daño como conjunto; ese riesgo aceptado sigue abierto.
+
+#### Requisitos nuevos de la línea
+
+Los siguientes tres requisitos son nuevos. Se implementan en la unidad 2b, se
+prueban y documentan en la unidad 3 y su aprendizaje se incorpora a la bitácora:
+
+- **Preflight de cobertura documental e impacto:** inventaría canon, fuentes,
+  enumeraciones, consumidores directos, schemas, validadores, pruebas,
+  invariantes y contenido congelado antes de arbitrar o emitir.
+- **Transporte PC/iPad por tipo de campo:** separa zonas normalizables de zonas
+  exactas u opacas, con canonicalización específica y fixtures reales de ambas
+  superficies.
+- **Cierre general de dependencias materiales:** produce una matriz por
+  destinatario y exige un paquete mínimo suficiente y accesible para ejecutar,
+  revisar, auditar, arbitrar o validar sin reconstruir la conversación.
+
+Estos requisitos **no alteran el inventario original de veinticuatro
+continuaciones**.
+
+#### Inventario completo de las veinticuatro continuaciones
+
+**Absorbidas — 18**
+
+- **Unidad 1:**
+  - 5. Ambigüedad de `0014` sobre QA.
+  - 22. Atribución local de las dos citas en `0015`.
+  - 23. Remisión de `0015` a `pendientes.md` para el estado operativo de
+    `app/`.
+- **Unidad 2a:**
+  - 6. Regresión de `salida_requerida` en v2.
+  - 14. El manifiesto debe incluir al productor.
+  - 17. Reproducibilidad mediante congelamiento de todos los productores.
+  - 18. Blob Git como anclaje portable frente a CRLF/LF.
+  - 20. El registro de intento debe identificar el request exacto.
+  - 21. La exclusividad requiere una ruta determinista.
+- **Unidad 2b:**
+  - 10. Comparar el prompt transportado contra el autorizado.
+  - 13. Detectar ampliaciones silenciosas por reglas locales.
+  - 15. Conservar el vínculo entre artefacto contractual y sobre.
+  - 24. Incluir copia congelada de fuentes externas materiales.
+- **Unidad 3:**
+  - 3. Semántica de `Stop` y paridad de superficies.
+  - 8. Anomalía de timestamp repetido en una firma.
+  - 9. Clasificación incorrecta de la PR #120.
+  - 16. Las pruebas de componentes no cubren fallos entre componentes.
+  - 19. Las expectativas de pruebas negativas deben derivarse de una fuente
+    verificable.
+
+**Fuera o activas — 6**
+
+1. Telemetría de dos modelos en una invocación.
+2. Camino Codex del schema proyectado todavía no ejercido.
+4. Pregunta falsable sobre `app-server` y SDK.
+7. Defecto de privacidad de la PR #115, en unidad propia.
+11. Sobre operativo todavía no probado como conjunto.
+12. Criterio de aceptación de permisos, activo en su fase administrativa.
+
+#### Evidencia de maduración de la política compartida
+
+Las PR #118, #120 y #122 no se computan por ahora como evidencia de maduración.
+Que hayan corrido con `.claude/settings.local.json` presente queda
+`NO_VERIFICADO` mientras no exista una referencia durable y accesible por PR;
+esta unidad no canoniza esa causa como hecho.
+
+**DECISION_REQUERIDA_DEL_DIRECTOR.** Se propone un mínimo de tres PR
+consecutivas que, entre las tres, cubran todas las filas requeridas mediante uno
+de estos estados. Adoptar ese mínimo es una decisión futura del Director y no
+bloquea el cierre de la Unidad 1:
+
+- `CAPACIDAD_EJERCIDA`: la superficie gobernada por
+  `.claude/settings.json` ejecutó la acción y dejó evidencia.
+- `DELEGACION_PREVISTA_Y_EJERCIDA`: el diseño previó la delegación y se demostró
+  la transición completa —detección de la falta de capacidad, relevo correcto,
+  ejecución por la vía autorizada y estado remoto final observado— sin confundir
+  un `401` o una denegación con un gate de producto fallido.
+- `LIMITE_DECLARADO_NO_SATISFACE_CRITERIO`: se declaró el límite sin demostrar
+  la delegación. No cuenta.
+
+Las filas son: preparación y publicación de la PR; consulta y tratamiento del
+resultado de review; reconciliación o cierre remoto; ausencia de solicitudes
+interactivas inesperadas; ausencia de dependencia de
+`.claude/settings.local.json`; y baseline y fuentes gobernantes efectivamente
+observadas.
+
+Una acción ejecutada exclusivamente por el Ejecutor, otro conector o el Director
+no cubre la fila como `CAPACIDAD_EJERCIDA`. El Arquitecto Codex demostró cierre
+remoto durable en las PR [#125](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/125)
+y [#126](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/126), que quedan
+como evidencia candidata posterior. En la PR #126, el coordinador falló después
+del merge y el Arquitecto completó únicamente la restitución por fast-forward.
+Estas PR no se computan retroactivamente como maduración sin evaluar todas las
+filas, y este registro no crea un gate nuevo.
+
 ### Enforcement mecánico de las devoluciones
 
 **Estado: ABIERTO. Clasificación: PRE_MVP.** Integra la línea de emisión y
@@ -694,13 +822,13 @@ La segunda congelación es la vigente y alcanza únicamente a nuevas unidades de
 
 ### Relevo de Arquitecto / Lead y reorganización futura
 
-**Estado: ABIERTO. Clasificación temporal: PRE-MVP.**
+**Estado: CERRADO para el relevo; ABIERTO y NO BLOQUEANTE para una posible
+reorganización futura. Clasificación temporal: PRE-MVP.**
 
 **Relevo del Arquitecto y reorganización futura — NUEVO_APORTE.** El relevo del
-ocupante de `ARQUITECTO_LEAD` se prepara mediante
-`T-CUTOVER-ARQUITECTO-001`. Este primer incremento crea la superficie en
-cuarentena, el método durable y el mapa de identidad; la activación queda fuera
-de su alcance. Una migración futura del
+ocupante de `ARQUITECTO_LEAD` mediante `T-CUTOVER-ARQUITECTO-001` terminó en la
+PR [#125](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/125), y Codex
+quedó activo según [equipo.md](equipo.md). Una migración futura del
 Ejecutor o del Consultor a `.agentes/<rol>/` queda como candidato no bloqueante,
 sin compromiso de ejecución, y no condiciona este cutover. Requeriría una unidad
 y una decisión nuevas.
@@ -716,10 +844,6 @@ deshacerlo. El cutover sólo ocurre después de evidencia aprobada y una
 confirmación explícita y separada del Director. Estas condiciones no obligan a
 mover a los ocupantes actuales.
 
-**Issue #123 y PR #124 — EXTENSION_DE_EXISTENTE.** Ambos objetos permanecen
-pausados; esta referencia registra sólo ese estado y no reproduce sus gates,
-unidades ni contenido.
-
 **POC-APPSERVER-001 y diseño A3 — NUEVO_APORTE.** Ambos permanecen pausados y
 deben retomarse únicamente mediante una unidad autorizada.
 
@@ -732,10 +856,6 @@ una propuesta independiente, una auditoría adversarial y luego aceptar, dividir
 el alcance o bloquear según la evidencia. Queda pendiente evaluar en la línea de
 gates una detección de ciclos de rediseño sin avance material, sin fijar un
 máximo rígido de rondas.
-
-**Nota de reconciliación.** Al retomar PR #124, el estado de pausa registrado
-acá debe fundirse con la sección que esa PR introduce, sin duplicar la línea de
-gates ni la depuración de `.claude/settings.local.json`.
 
 ### Evaluación futura de arquitectura agéntica con estado compartido durable
 

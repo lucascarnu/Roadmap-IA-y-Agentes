@@ -80,11 +80,15 @@ a arbitrar:
 - exposición de servicios a Internet;
 - ampliación material del alcance o del daño posible.
 
+**Atribución local — decisión del Director:**
+
 > «Una escritura, ejecución o modificación inesperada fuera del workspace y de las raíces operativas expresamente autorizadas obliga a detener esa vía y arbitrar si debe reabrirse el confinamiento fuerte.»
 
 No cuentan como escape las lecturas legítimas ni el uso de temporales, cachés o
 rutas declaradas previamente como parte del sobre. Esto no se convierte en una
 lista blanca interminable de accesos normales.
+
+**Atribución local — decisión del Director:**
 
 > «Una solicitud interactiva inesperada dentro de un flujo declarado no interactivo detiene ese flujo y exige arbitraje. Reabre el confinamiento fuerte cuando implique ampliación de privilegios, elevación, cambio material de superficie o demuestre que el modelo de supervisión ya no limita suficientemente el daño.»
 
@@ -106,6 +110,9 @@ comunicada en sesión y no tenía registro durable independiente anterior;
 
 La segunda congelación es la vigente. No anula el desarrollo previo del MVP:
 alcanza únicamente a nuevas unidades de `app/`.
+
+El estado operativo vigente se mantiene en
+[Estado de nuevas unidades de `app/`](../pendientes.md#estado-de-nuevas-unidades-de-app).
 
 ## Relación con el canon
 
