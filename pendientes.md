@@ -737,6 +737,37 @@ máximo rígido de rondas.
 acá debe fundirse con la sección que esa PR introduce, sin duplicar la línea de
 gates ni la depuración de `.claude/settings.local.json`.
 
+### Evaluación futura de arquitectura agéntica con estado compartido durable
+
+**Estado: ABIERTO. Clasificación temporal: PRE-MVP. NO BLOQUEANTE para los gates
+y el MVP.** Su origen es el chat “Explicar arquitectura de agentes” y la
+verificación primaria posterior. Este registro no constituye una migración ni
+autoriza instalar gAIOS, pm-claude-skills, AI Brain Starter o Graphify.
+
+El momento candidato para evaluarlo es después de cerrar los gates críticos y
+antes de expandir ampliamente el MVP. El objetivo es comparar la arquitectura
+vigente con un canon neutral al proveedor, filesystem/Git como estado compartido
+durable, foco actual, promoción de aprendizajes, adapters reemplazables y una
+visualización derivada de solo lectura.
+
+**Invariantes.** `.agentes/` se reserva para adapters y superficies; el canon
+permanece neutral al proveedor; los ensayos externos se aíslan en `laboratorio/`;
+en Windows no se usan symlinks sin evidencia y diseño propios; y no se duplican
+`vision.md`, `reglas.md`, `decisiones/` ni `pendientes.md`.
+
+**Primeros candidatos a evaluar — expresamente no son decisiones:** una vista
+breve del foco vigente, la promoción explícita de aprendizajes y, posteriormente,
+un visualizador de solo lectura.
+
+**Fuentes primarias verificadas:** [gAIOS — AGENTS.md](https://github.com/alirezarezvani/gaios/blob/dev/AGENTS.md),
+[pm-claude-skills — Showcase](https://github.com/mohitagw15856/pm-claude-skills/blob/main/docs/SHOWCASE.md),
+[AI Brain Starter](https://github.com/mycelium-hq/ai-brain-starter) y
+[Graphify](https://github.com/Graphify-Labs/graphify).
+
+**Criterio de cierre futuro.** Comparar el canon actual y la evidencia de pull
+requests reales, y decidir si se adopta, se rechaza o se pilotea un incremento
+mínimo.
+
 ## Para medir durante las primeras PR del MVP
 
 Los asuntos de esta sección necesitan evidencia real durante las primeras pull
