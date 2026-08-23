@@ -19,8 +19,6 @@ import { GOVERNING_CONTEXT_V2 } from "./handoff-contract-v2.mjs";
 const execFileAsync = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HEAD = "a".repeat(40);
-const CONTRACT_HASH = "b".repeat(64);
-const MANIFEST_HASH = "c".repeat(64);
 const REQUEST = "request v2 delivery";
 const OUTPUT = "Informe contractual completo";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -45,9 +43,11 @@ function fixture(overrides = {}) {
     mutaciones_permitidas: [], operaciones_permitidas: [], acciones_prohibidas: ["integrar"], rollback: { strategy: "NO_APLICA", reference: "sin efectos" }, postcondiciones: [], disparadores_0015: [], impacto_economico: { tipo: "no_aplica" }, reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
     transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD"], estado_canonico: { accion_anterior: { id: "a", descripcion: "Anterior" }, evidencia_cierre: { tipo: "COMMIT", referencia: "x", head_o_historial: HEAD }, proxima_accion: { id: "b", descripcion: "Siguiente" }, head_reconciliacion: HEAD }, operaciones_delegadas_a_humanos: [],
   };
+  const contractHash = sha256(Buffer.from(JSON.stringify(contract)));
   const producerChain = PRODUCERS.profiles.manual.map((item) => ({ profile_id: "manual", ...item, head_sha: HEAD, ...GIT_SOURCES[item.path] }));
-  const manifest = { artifact_id: contract.artifact_id, head_sha: HEAD, contract_sha256: CONTRACT_HASH, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: REQUEST_HASH, bytes: Buffer.byteLength(REQUEST), content: REQUEST }, producer_chain: producerChain, sources: [...producerChain.map(({ path, head_sha, git_blob_oid, sha256: hash, bytes }) => ({ kind: "versioned", path, head_sha, git_blob_oid, sha256: hash, bytes })), { kind: "versioned", path: "reglas.md", head_sha: HEAD, ...GIT_SOURCES["reglas.md"] }] };
-  const attempt = { attempt_id: "attempt:ARTIFACT-DELIVERY:001", transport_real_id: "TRANSPORT-REAL-001", artifact_id: contract.artifact_id, request_sha256: REQUEST_HASH, request_bytes: Buffer.byteLength(REQUEST), target: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" }, head_sha: HEAD, manifest_sha256: MANIFEST_HASH, salida_requerida: contract.salida_requerida };
+  const manifest = { artifact_id: contract.artifact_id, head_sha: HEAD, contract_sha256: contractHash, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: REQUEST_HASH, bytes: Buffer.byteLength(REQUEST), content: REQUEST }, producer_chain: producerChain, sources: [...producerChain.map(({ path, head_sha, git_blob_oid, sha256: hash, bytes }) => ({ kind: "versioned", path, head_sha, git_blob_oid, sha256: hash, bytes })), { kind: "versioned", path: "reglas.md", head_sha: HEAD, ...GIT_SOURCES["reglas.md"] }] };
+  const manifestHash = sha256(Buffer.from(JSON.stringify(manifest)));
+  const attempt = { attempt_id: "attempt:ARTIFACT-DELIVERY:001", transport_real_id: "TRANSPORT-REAL-001", artifact_id: contract.artifact_id, request_sha256: REQUEST_HASH, request_bytes: Buffer.byteLength(REQUEST), target: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" }, head_sha: HEAD, manifest_sha256: manifestHash, salida_requerida: contract.salida_requerida };
   const binding = { attempt_id: attempt.attempt_id, transport_real_id: attempt.transport_real_id, artifact_id: attempt.artifact_id, request_sha256: attempt.request_sha256, request_bytes: attempt.request_bytes, manifest_sha256: attempt.manifest_sha256, head_sha: attempt.head_sha, target_role_id: attempt.target.role_id, target_surface_id: attempt.target.surface_id, output_ref: "output.txt", output_sha256: OUTPUT_HASH, output_bytes: Buffer.byteLength(OUTPUT) };
   const result = { handoff_version: "2", binding, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "high", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "delivery-v2", via_evaluada: "fixture", fecha: "2026-08-23" } };
   const receipt = { attempt_id: attempt.attempt_id, transport_real_id: attempt.transport_real_id, artifact_id: attempt.artifact_id, request_sha256: attempt.request_sha256, request_bytes: attempt.request_bytes, target_role_id: attempt.target.role_id, target_surface_id: attempt.target.surface_id, manifest_sha256: attempt.manifest_sha256, head_sha: attempt.head_sha, output_ref: binding.output_ref, output_sha256: binding.output_sha256, output_bytes: binding.output_bytes };
@@ -55,7 +55,7 @@ function fixture(overrides = {}) {
 }
 
 function dependencies(deliveryPackage) {
-  return { catalog: CATALOG, registry: REGISTRY, producers: PRODUCERS, head_sha: HEAD, contract_sha256: CONTRACT_HASH, manifest_sha256: MANIFEST_HASH, git_sources: GIT_SOURCES, sha256: (value) => sha256(Buffer.from(value)), resolveCanonicalReference: () => true, resolveEvidence: (evidence, head) => evidence.head_o_historial === head };
+  return { catalog: CATALOG, registry: REGISTRY, producers: PRODUCERS, head_sha: deliveryPackage.attempt.head_sha, contract_sha256: deliveryPackage.manifest.contract_sha256, manifest_sha256: deliveryPackage.attempt.manifest_sha256, git_sources: GIT_SOURCES, sha256: (value) => sha256(Buffer.from(value)), resolveCanonicalReference: () => true, resolveEvidence: (evidence, head) => evidence.head_o_historial === head };
 }
 
 async function temporaryRoot(t) {
@@ -72,6 +72,13 @@ async function phases(root, deliveryPackage) {
   const deliveryDir = deliveryLedgerPathV2(root, deliveryPackage.attempt.attempt_id, deliveryPackage.attempt.transport_real_id);
   const files = (await readdir(deliveryDir)).filter((name) => /^state-/.test(name)).sort();
   return Promise.all(files.map(async (name) => JSON.parse(await readFile(join(deliveryDir, name), "utf8")).phase));
+}
+
+async function writeCliInputs(root, data) {
+  const paths = { package: join(root, "package.json"), contract: join(root, "contract.json"), manifest: join(root, "manifest.json"), output: join(root, "output.txt"), resolution: join(root, "resolution.json"), receipt: join(root, "receipt.json") };
+  await writeFile(paths.package, JSON.stringify({ attempt: data.attempt, result: data.result })); await writeFile(paths.contract, JSON.stringify(data.contract)); await writeFile(paths.manifest, JSON.stringify(data.manifest)); await writeFile(paths.output, data.output.content);
+  await writeFile(paths.resolution, JSON.stringify({ head_sha: data.attempt.head_sha, contract_sha256: data.manifest.contract_sha256, manifest_sha256: data.attempt.manifest_sha256, git_sources: GIT_SOURCES })); await writeFile(paths.receipt, JSON.stringify(data.receipt));
+  return ["--package", paths.package, "--contract", paths.contract, "--manifest", paths.manifest, "--output", paths.output, "--resolution", paths.resolution, "--receipt", paths.receipt];
 }
 
 test("U2B positivo invoca una vez y completa durablemente con receipt y salida válidos", async (t) => {
@@ -138,10 +145,17 @@ test("U2B receipt tardío queda append-only como AMBIGUEDAD_POSTERIOR sin reaper
   const finalState = await engine(root, counters, null).resume(data, dependencies(data)); assert.equal(finalState.phase, "ENTREGA_NO_CONFIRMADA"); assert.equal(counters.invocations, 1);
 });
 
+test("U2B receipt tardío exige el mismo binding durable del ledger", async (t) => {
+  const root = await temporaryRoot(t); const data = fixture(); const counters = { invocations: 0, reconciliations: 0 }; await engine(root, counters, null).start(data, dependencies(data));
+  const alternate = structuredClone(data); const otherHead = "d".repeat(40); alternate.contract.head_sha = otherHead; alternate.contract.estado_canonico.head_reconciliacion = otherHead; alternate.contract.estado_canonico.evidencia_cierre.head_o_historial = otherHead;
+  alternate.manifest.head_sha = otherHead; alternate.manifest.contract_sha256 = sha256(Buffer.from(JSON.stringify(alternate.contract))); for (const entry of alternate.manifest.producer_chain) entry.head_sha = otherHead; for (const source of alternate.manifest.sources) if (source.kind === "versioned") source.head_sha = otherHead;
+  const alternateManifestHash = sha256(Buffer.from(JSON.stringify(alternate.manifest))); alternate.attempt.head_sha = otherHead; alternate.attempt.manifest_sha256 = alternateManifestHash; alternate.result.binding.head_sha = otherHead; alternate.result.binding.manifest_sha256 = alternateManifestHash; alternate.receipt.head_sha = otherHead; alternate.receipt.manifest_sha256 = alternateManifestHash;
+  await assert.rejects(engine(root, counters, null).recordLateReceipt(alternate, dependencies(alternate), alternate.receipt), (error) => error.code === "DELIVERY_BINDING_NO_COINCIDE");
+});
+
 test("U2B dos procesos compiten por un único ledger y sólo uno invoca", async (t) => {
-  const root = await temporaryRoot(t); const data = fixture(); const packagePath = join(root, "package.json"); const receiptPath = join(root, "receipt.json");
-  await writeFile(packagePath, JSON.stringify(data)); await writeFile(receiptPath, JSON.stringify(data.receipt));
-  const cli = join(HERE, "delivery-v2-cli.mjs"); const ledgerRoot = join(root, "ledger"); const argv = [cli, "start", "--package", packagePath, "--receipt", receiptPath, "--root", ledgerRoot, "--timeout-ms", "100"];
+  const root = await temporaryRoot(t); const data = fixture(); const inputArgs = await writeCliInputs(root, data);
+  const cli = join(HERE, "delivery-v2-cli.mjs"); const ledgerRoot = join(root, "ledger"); const argv = [cli, "start", ...inputArgs, "--root", ledgerRoot, "--timeout-ms", "100"];
   const outcomes = await Promise.allSettled([execFileAsync(process.execPath, argv), execFileAsync(process.execPath, argv)]);
   assert.equal(outcomes.filter((item) => item.status === "fulfilled").length, 1);
   const rejected = outcomes.find((item) => item.status === "rejected"); assert.match(`${rejected.reason.stderr}`, /DELIVERY_REUTILIZADA/);
@@ -149,12 +163,18 @@ test("U2B dos procesos compiten por un único ledger y sólo uno invoca", async 
   assert.equal((await readdir(deliveryDir)).filter((name) => name === "outbound.json").length, 1);
 });
 
+test("U2B CLI compara bytes exactos con resolución externa antes de crear ledger", async (t) => {
+  const root = await temporaryRoot(t); const data = fixture(); const inputArgs = await writeCliInputs(root, data); const manifestIndex = inputArgs.indexOf("--manifest") + 1; await writeFile(inputArgs[manifestIndex], `${JSON.stringify(data.manifest)} `);
+  const ledgerRoot = join(root, "ledger"); const argv = [join(HERE, "delivery-v2-cli.mjs"), "start", ...inputArgs, "--root", ledgerRoot, "--timeout-ms", "100"];
+  await assert.rejects(execFileAsync(process.execPath, argv), (error) => /RESOLUCION_NO_COINCIDE/.test(`${error.stderr}`)); await assert.rejects(access(ledgerRoot), { code: "ENOENT" });
+});
+
 test("U2B dos resume cross-process serializan la reconciliación efectiva a uno", async (t) => {
   const root = await temporaryRoot(t); const data = fixture(); const ledgerRoot = join(root, "ledger"); const counters = { invocations: 0, reconciliations: 0 };
   const crashing = engine(ledgerRoot, counters, data.receipt, { fault: async (point) => { if (point === "after_invoke") throw new DeliveryV2Error("SIMULATED_CRASH", point); } });
   await assert.rejects(crashing.start(data, dependencies(data)), (error) => error.code === "SIMULATED_CRASH"); assert.equal(counters.invocations, 1); assert.equal(counters.reconciliations, 0);
-  const packagePath = join(root, "package.json"); const receiptPath = join(root, "receipt.json"); await writeFile(packagePath, JSON.stringify(data)); await writeFile(receiptPath, JSON.stringify(data.receipt));
-  const argv = [join(HERE, "delivery-v2-cli.mjs"), "resume", "--package", packagePath, "--receipt", receiptPath, "--root", ledgerRoot, "--timeout-ms", "100"];
+  const inputArgs = await writeCliInputs(root, data);
+  const argv = [join(HERE, "delivery-v2-cli.mjs"), "resume", ...inputArgs, "--root", ledgerRoot, "--timeout-ms", "100"];
   const outcomes = await Promise.allSettled([execFileAsync(process.execPath, argv), execFileAsync(process.execPath, argv)]);
   assert.ok(outcomes.some((item) => item.status === "fulfilled"));
   const deliveryDir = deliveryLedgerPathV2(ledgerRoot, data.attempt.attempt_id, data.attempt.transport_real_id);
@@ -168,6 +188,21 @@ test("U2B ledger corrupto o parcial falla cerrado antes de cualquier efecto", as
   await assert.rejects(crashing.start(data, dependencies(data)), (error) => error.code === "SIMULATED_CRASH");
   const deliveryDir = deliveryLedgerPathV2(root, data.attempt.attempt_id, data.attempt.transport_real_id); await writeFile(join(deliveryDir, "state-999999.json"), "{ parcial");
   await assert.rejects(engine(root, counters, data.receipt).resume(data, dependencies(data)), (error) => error.code === "LEDGER_CORRUPTO"); assert.deepEqual(counters, { invocations: 0, reconciliations: 0 });
+});
+
+test("U2B valida toda la cadena, continuidad e invariantes semánticas por fase", async (t) => {
+  const root = await temporaryRoot(t); const data = fixture(); const counters = { invocations: 0, reconciliations: 0 };
+  await engine(root, counters, data.receipt).start(data, dependencies(data));
+  const deliveryDir = deliveryLedgerPathV2(root, data.attempt.attempt_id, data.attempt.transport_real_id); const earlierPath = join(deliveryDir, "state-000002.json"); const earlier = JSON.parse(await readFile(earlierPath, "utf8")); earlier.invocation_returned_count = 1; await writeFile(earlierPath, JSON.stringify(earlier));
+  await assert.rejects(engine(root, counters, data.receipt).resume(data, dependencies(data)), (error) => error.code === "LEDGER_CORRUPTO"); assert.deepEqual(counters, { invocations: 1, reconciliations: 1 });
+
+  const other = fixture({ attempt: { ...fixture().attempt, attempt_id: "attempt:semantic-phase" } }); other.result = structuredClone(fixture().result); other.result.binding.attempt_id = other.attempt.attempt_id; other.receipt = { ...fixture().receipt, attempt_id: other.attempt.attempt_id }; const otherRoot = join(root, "other"); const otherCounters = { invocations: 0, reconciliations: 0 };
+  const crashing = engine(otherRoot, otherCounters, other.receipt, { fault: async (point) => { if (point === "after_prepare") throw new DeliveryV2Error("SIMULATED_CRASH", point); } }); await assert.rejects(crashing.start(other, dependencies(other)), (error) => error.code === "SIMULATED_CRASH");
+  const otherDir = deliveryLedgerPathV2(otherRoot, other.attempt.attempt_id, other.attempt.transport_real_id); const preparedPath = join(otherDir, "state-000001.json"); const prepared = JSON.parse(await readFile(preparedPath, "utf8")); prepared.invocation_intent_count = 1; prepared.invocation_returned_count = 1; await writeFile(preparedPath, JSON.stringify(prepared));
+  await assert.rejects(engine(otherRoot, otherCounters, other.receipt).resume(other, dependencies(other)), (error) => error.code === "LEDGER_CORRUPTO"); assert.deepEqual(otherCounters, { invocations: 0, reconciliations: 0 });
+
+  const gap = fixture({ attempt: { ...fixture().attempt, attempt_id: "attempt:sequence-gap" } }); gap.result = structuredClone(fixture().result); gap.result.binding.attempt_id = gap.attempt.attempt_id; gap.receipt = { ...fixture().receipt, attempt_id: gap.attempt.attempt_id }; const gapRoot = join(root, "gap"); const gapCounters = { invocations: 0, reconciliations: 0 }; const gapCrash = engine(gapRoot, gapCounters, gap.receipt, { fault: async (point) => { if (point === "after_prepare") throw new DeliveryV2Error("SIMULATED_CRASH", point); } }); await assert.rejects(gapCrash.start(gap, dependencies(gap)), (error) => error.code === "SIMULATED_CRASH");
+  const gapDir = deliveryLedgerPathV2(gapRoot, gap.attempt.attempt_id, gap.attempt.transport_real_id); const gapState = JSON.parse(await readFile(join(gapDir, "state-000001.json"), "utf8")); gapState.sequence = 3; gapState.phase = "EMISION_CLAIMED"; await writeFile(join(gapDir, "state-000003.json"), JSON.stringify(gapState)); await assert.rejects(engine(gapRoot, gapCounters, gap.receipt).resume(gap, dependencies(gap)), (error) => error.code === "LEDGER_CORRUPTO"); assert.deepEqual(gapCounters, { invocations: 0, reconciliations: 0 });
 });
 
 test("U2B recupera un lock de transición huérfano sin borrar su evidencia", async (t) => {

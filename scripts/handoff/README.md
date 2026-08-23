@@ -472,6 +472,12 @@ importa estos módulos ni escribe su ledger. El motor tampoco es productor de
 contratos o manifiestos, por lo que no se agregó al inventario de productores
 de 2a.
 
+El CLI recibe por separado el bundle de intento/resultado, los bytes exactos de
+contrato, manifiesto y salida, y la resolución externa de `head_sha` más metadata
+Git. Calcula los SHA-256 de contrato y manifiesto desde esos bytes y los compara
+con la resolución, el intento, el resultado y el manifiesto antes de crear el
+ledger; no acepta que el mismo bundle se autoafirme esos hashes.
+
 El intento fija `attempt_id`, `transport_real_id`, destinatario canónico,
 manifiesto, `head_sha` y `salida_requerida`. La ruta durable se deriva del
 SHA-256 del par ordenado `attempt_id + transport_real_id`, pero el ledger

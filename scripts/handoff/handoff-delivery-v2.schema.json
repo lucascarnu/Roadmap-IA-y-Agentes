@@ -13,7 +13,7 @@
     "invocation_intent_count": { "type": "integer", "minimum": 0, "maximum": 1 },
     "invocation_returned_count": { "type": "integer", "minimum": 0, "maximum": 1 },
     "reconciliation_count": { "type": "integer", "minimum": 0, "maximum": 1 },
-    "cause": { "oneOf": [{ "type": "null" }, { "enum": ["TIMEOUT", "INVOCACION_FALLIDA", "RECEIPT_INVALIDO", "SALIDA_CONTRACTUAL_INVALIDA"] }] },
+    "cause": { "oneOf": [{ "type": "null" }, { "enum": ["TIMEOUT", "INVOCACION_NO_OBSERVADA", "INVOCACION_FALLIDA", "RECEIPT_INVALIDO", "SALIDA_CONTRACTUAL_INVALIDA"] }] },
     "updated_at": { "type": "string", "minLength": 1 }
   },
   "$defs": {

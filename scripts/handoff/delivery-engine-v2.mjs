@@ -62,8 +62,29 @@ function validateLedgerState(state, expectedKey) {
   if (!/^[0-9a-f]{64}$/.test(state.binding.manifest_sha256) || !/^[0-9a-f]{40}$/.test(state.binding.head_sha) || deliveryKeyV2(state.binding.attempt_id, state.binding.transport_real_id) !== state.delivery_key) fail("LEDGER_CORRUPTO", "Hashes/binding de ledger inválidos");
   for (const counter of ["invocation_intent_count", "invocation_returned_count", "reconciliation_count"]) if (![0, 1].includes(state[counter])) fail("LEDGER_CORRUPTO", counter);
   if (state.invocation_returned_count > state.invocation_intent_count || (state.phase === "ENTREGA_NO_CONFIRMADA" ? !CAUSES.has(state.cause) : state.cause !== null)) fail("LEDGER_CORRUPTO", "Contadores o causa incompatibles");
-  if (["ENTREGA_CONFIRMADA", "HANDOFF_COMPLETE"].includes(state.phase) && state.reconciliation_count !== 1) fail("LEDGER_CORRUPTO", "Confirmación sin reconciliación");
+  const tuple = [state.invocation_intent_count, state.invocation_returned_count, state.reconciliation_count].join("");
+  if (state.phase === "PREPARADA" && tuple !== "000") fail("LEDGER_CORRUPTO", "PREPARADA con efectos");
+  if (state.phase === "EMISION_CLAIMED" && !["000", "100"].includes(tuple)) fail("LEDGER_CORRUPTO", "EMISION_CLAIMED incompatible");
+  if (state.phase === "RECONCILIANDO" && !["110", "001", "101", "111"].includes(tuple)) fail("LEDGER_CORRUPTO", "RECONCILIANDO incompatible");
+  if (["ENTREGA_CONFIRMADA", "HANDOFF_COMPLETE"].includes(state.phase) && !["101", "111"].includes(tuple)) fail("LEDGER_CORRUPTO", "Confirmación sin intención/reconciliación");
+  if (state.phase === "ENTREGA_NO_CONFIRMADA") {
+    if (state.cause === "INVOCACION_FALLIDA" && tuple !== "100") fail("LEDGER_CORRUPTO", "Fallo de invocación incompatible");
+    if (["TIMEOUT", "INVOCACION_NO_OBSERVADA", "RECEIPT_INVALIDO"].includes(state.cause) && state.reconciliation_count !== 1) fail("LEDGER_CORRUPTO", "Fallo de reconciliación incompatible");
+  }
   return state;
+}
+
+function validateTransition(previous, current) {
+  const allowed = {
+    PREPARADA: new Set(["EMISION_CLAIMED"]),
+    EMISION_CLAIMED: new Set(["EMISION_CLAIMED", "RECONCILIANDO", "ENTREGA_NO_CONFIRMADA"]),
+    RECONCILIANDO: new Set(["RECONCILIANDO", "ENTREGA_CONFIRMADA", "ENTREGA_NO_CONFIRMADA"]),
+    ENTREGA_CONFIRMADA: new Set(["HANDOFF_COMPLETE"]),
+    HANDOFF_COMPLETE: new Set(),
+    ENTREGA_NO_CONFIRMADA: new Set(),
+  };
+  if (!allowed[previous.phase]?.has(current.phase) || current.sequence !== previous.sequence + 1 || current.delivery_key !== previous.delivery_key || !sameBinding(current.binding, previous.binding)) fail("LEDGER_CORRUPTO", `Transición ${previous.phase}->${current.phase}`);
+  for (const counter of ["invocation_intent_count", "invocation_returned_count", "reconciliation_count"]) if (current[counter] < previous[counter]) fail("LEDGER_CORRUPTO", `Contador decreciente: ${counter}`);
 }
 
 export function deliveryKeyV2(attemptId, transportRealId) {
@@ -81,7 +102,16 @@ async function latestState(deliveryDir) {
   const names = (await readdir(deliveryDir)).filter((name) => /^state-\d{6}\.json$/.test(name)).sort();
   if (!names.length) fail("LEDGER_INCOMPLETO", `No hay estado durable en ${deliveryDir}`);
   try {
-    return validateLedgerState(JSON.parse(await readFile(join(deliveryDir, names.at(-1)), "utf8")), deliveryDir.split(/[\\/]/).at(-1));
+    const expectedKey = deliveryDir.split(/[\\/]/).at(-1); let previous;
+    for (let index = 0; index < names.length; index += 1) {
+      const expectedName = `state-${String(index + 1).padStart(6, "0")}.json`;
+      if (names[index] !== expectedName) fail("LEDGER_CORRUPTO", `Secuencia de archivos discontinua: ${names[index]}`);
+      const current = validateLedgerState(JSON.parse(await readFile(join(deliveryDir, names[index]), "utf8")), expectedKey);
+      if (current.sequence !== index + 1) fail("LEDGER_CORRUPTO", `sequence no coincide con ${names[index]}`);
+      if (previous) validateTransition(previous, current);
+      previous = current;
+    }
+    return previous;
   } catch (error) {
     if (error instanceof DeliveryV2Error) throw error;
     fail("LEDGER_CORRUPTO", "El último estado no es JSON válido", error);
@@ -211,6 +241,7 @@ export function createDeliveryEngineV2(options = {}) {
     } catch (error) {
       return terminalFailure(deliveryDir, state, error instanceof HandoffContractV2Error ? "RECEIPT_INVALIDO" : "SALIDA_CONTRACTUAL_INVALIDA");
     }
+    if (state.invocation_intent_count !== 1) return terminalFailure(deliveryDir, state, "INVOCACION_NO_OBSERVADA");
     state = await appendState(deliveryDir, state, { phase: "ENTREGA_CONFIRMADA" }, now);
     await fault("after_delivery_confirmed", { deliveryDir, state });
     return appendState(deliveryDir, state, { phase: "HANDOFF_COMPLETE" }, now);
@@ -265,6 +296,7 @@ export function createDeliveryEngineV2(options = {}) {
     const deliveryDir = deliveryLedgerPathV2(rootDir, deliveryPackage.attempt.attempt_id, deliveryPackage.attempt.transport_real_id);
     return withTransitionLock(deliveryDir, async () => {
       const state = await latestState(deliveryDir);
+      if (!sameBinding(state.binding, bindingFromAttempt(deliveryPackage.attempt))) fail("DELIVERY_BINDING_NO_COINCIDE", "El receipt tardío no coincide con el ledger");
       if (state.phase !== "ENTREGA_NO_CONFIRMADA") fail("RECEIPT_TARDIO_NO_APLICA", state.phase);
       try {
         validateDeliveryReceiptV2(receipt, deliveryPackage.attempt, deliveryPackage.result, outputBytes, sha256Bytes);
