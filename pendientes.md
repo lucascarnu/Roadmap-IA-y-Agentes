@@ -66,7 +66,7 @@ divide en cuatro unidades:
 1. **Unidad 1 — decisión.** Registra la separación entre gate mecánico,
    validación posterior y regla de conducta, el catálogo durable de roles y las
    condiciones de las unidades siguientes.
-2. **Unidad 2a — contrato.** **EN IMPLEMENTACIÓN en PR separada.** Separa
+2. **Unidad 2a — contrato.** **CERRADA e IMPLEMENTADA en [PR #131](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/131).** Separa
    catálogo y registro operacional, incorpora identidad canónica por `role_id`
    y `surface_id`, ejecuta el cutover compatible de aliases y resuelve la
    admisión supervisada de perfiles `manual` y `github_close` sin promover la
@@ -123,13 +123,13 @@ continuaciones**.
   - 22. Atribución local de las dos citas en `0015`.
   - 23. Remisión de `0015` a `pendientes.md` para el estado operativo de
     `app/`.
-- **Unidad 2a:**
-  - 6. Regresión de `salida_requerida` en v2.
-  - 14. El manifiesto debe incluir al productor.
-  - 17. Reproducibilidad mediante congelamiento de todos los productores.
-  - 18. Blob Git como anclaje portable frente a CRLF/LF.
-  - 20. El registro de intento debe identificar el request exacto.
-  - 21. La exclusividad requiere una ruta determinista.
+- **Unidad 2a — cerrada; aportes absorbidos por [PR #131](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/131):**
+  - 6. Regresión de `salida_requerida` en v2. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
+  - 14. El manifiesto debe incluir al productor. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
+  - 17. Reproducibilidad mediante congelamiento de todos los productores. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
+  - 18. Blob Git como anclaje portable frente a CRLF/LF. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
+  - 20. El registro de intento debe identificar el request exacto. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
+  - 21. La exclusividad requiere una ruta determinista. **CERRADO / ABSORBIDO por Unidad 2a en PR #131.**
 - **Unidad 2b:**
   - 10. Comparar el prompt transportado contra el autorizado.
   - 13. Detectar ampliaciones silenciosas por reglas locales.
