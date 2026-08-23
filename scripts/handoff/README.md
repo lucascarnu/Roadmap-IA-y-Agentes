@@ -402,9 +402,11 @@ por `poll`, `tick`, `processIssue` ni `invokeAgent`.
 
 La identidad canónica persistida usa exclusivamente `role_id` y `surface_id`.
 La frontera compatible acepta aliases exactos y encabezados con
-`DESTINATARIO_ROLE_ID`, y sólo proyecta el alias al producir una vista v1. El
-alias `codex` exige un par único de adapter y `cwd` efectivos. Los artefactos v1
-históricos permanecen legibles y no se reinterpretan como v2.
+`DESTINATARIO_ROLE_ID`. Su única proyección es el par heredado literal +
+`DESTINATARIO_ROLE_ID`; no convierte un contrato v2 completo en contrato v1.
+`salida_requerida` se valida de forma independiente en ambos contratos. El alias
+`codex` exige un par único de adapter y `cwd` efectivos. Los artefactos y el
+runtime v1 permanecen independientes, legibles y no se reinterpretan como v2.
 
 Los perfiles `manual` y `github_close` admiten ejecución supervisada; `puente`
 y `review` son sólo lectura. La admisión exige superficie exacta, baseline del
@@ -416,10 +418,20 @@ de `0015`. Esto no eleva el confinamiento: todas las superficies conservan
 [`handoff-manifest-v2.schema.json`](handoff-manifest-v2.schema.json),
 [`handoff-attempt-v2.schema.json`](handoff-attempt-v2.schema.json) y el inventario
 [`handoff-v2-producers.json`](handoff-v2-producers.json) fijan request exacto,
-productor, cadena de productores, fuentes, intento y binding del resultado. Un
-resolvedor externo inyecta `head_sha` y el mapa `path -> git_blob_oid`; el
-validador sólo compara esos valores. La ruta de exclusividad se deriva como
+productor, cadena de productores, fuentes, intento y binding del resultado. El
+cierre exige siempre manifiesto e intento y compara de extremo a extremo
+`attempt_id`, `artifact_id`, hash y bytes del request, hash del manifiesto y
+`head_sha`. Un resolvedor externo inyecta `head_sha` y el mapa
+`path -> { git_blob_oid, sha256, bytes }`; el validador compara los tres valores
+para cada fuente versionada y exige el conjunto exacto de productores. La ruta
+de exclusividad se deriva como
 `.handoff/v2/requests/<request_sha256>/lock`, pero 2a no crea el lock.
+
+Los schemas declaran la capa estructural y el módulo implementa la semántica
+pura fail closed; la conexión mecánica schema → semántica pertenece a 2b. El
+perfil `review` sigue siendo representable y read-only, pero el registro marca
+el intercambio de payload como `NO_AUTORIZADO` hasta que una política futura y
+explícita lo habilite. Esta unidad no diseña esa política.
 
 La validación cubre además `salida_requerida`, economía, delegaciones humanas,
 estado canónico, evidencia, decisiones, transiciones y firma. Los valores

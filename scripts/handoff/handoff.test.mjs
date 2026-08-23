@@ -19,8 +19,8 @@ import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./
 import { createNotifier } from "./notify.mjs";
 import {
   GOVERNING_CONTEXT_V2, HANDOFF_V2_DECISIONS, HANDOFF_V2_ROLE_IDS, HandoffContractV2Error,
-  exclusivityPathForRequest, projectContractV2ToV1, projectV1Alias,
-  resolveBoundaryIdentity, resolveCanonicalIdentity, validateAttemptV2,
+  exclusivityPathForRequest, projectLegacyIdentityHeader, projectV1Alias,
+  resolveBoundaryIdentity, resolveCanonicalIdentity, validateAttemptStructureV2, validateAttemptV2,
   validateContractV2, validateManifestV2, validateOperationalRegistry,
   validateProducerInventoryV2, validateResultV2, validateRoleCatalog,
 } from "./handoff-contract-v2.mjs";
@@ -2574,9 +2574,16 @@ const U2A_REGISTRY = JSON.parse(readFileSync(join(HERE, "actores.json"), "utf8")
 const U2A_PRODUCERS = JSON.parse(readFileSync(join(HERE, "handoff-v2-producers.json"), "utf8"));
 const U2A_HASH = "b".repeat(64);
 const U2A_MANIFEST_HASH = "c".repeat(64);
+const U2A_REQUEST = "request";
+const U2A_REQUEST_HASH = sha256(Buffer.from(U2A_REQUEST));
+const U2A_GIT_SOURCES = Object.freeze({
+  "scripts/handoff/handoff-contract-v2.mjs": { git_blob_oid: "1".repeat(40), sha256: "1".repeat(64), bytes: 101 },
+  "scripts/handoff/prompt-template.md": { git_blob_oid: "2".repeat(40), sha256: "2".repeat(64), bytes: 202 },
+  "reglas.md": { git_blob_oid: "3".repeat(40), sha256: "3".repeat(64), bytes: 303 },
+});
 
 function u2aDeps(overrides = {}) {
-  return { catalog: structuredClone(U2A_CATALOG), registry: structuredClone(U2A_REGISTRY), producers: structuredClone(U2A_PRODUCERS), contract_sha256: U2A_HASH, manifest_sha256: U2A_MANIFEST_HASH, resolveCanonicalReference: () => true, resolveEvidence: () => true, sha256: (value) => sha256(Buffer.from(value)), ...overrides };
+  return { catalog: structuredClone(U2A_CATALOG), registry: structuredClone(U2A_REGISTRY), producers: structuredClone(U2A_PRODUCERS), head_sha: HEAD, contract_sha256: U2A_HASH, manifest_sha256: U2A_MANIFEST_HASH, git_sources: structuredClone(U2A_GIT_SOURCES), resolveCanonicalReference: () => true, resolveEvidence: () => true, sha256: (value) => sha256(Buffer.from(value)), ...overrides };
 }
 
 function u2aContract(overrides = {}) {
@@ -2597,8 +2604,18 @@ function u2aExecution(overrides = {}) {
   return u2aContract({ modo: "ejecucion", mutaciones_permitidas: ["pendientes.md"], operaciones_permitidas: [{ tipo: "filesystem", objetivo: "pendientes.md" }], rollback: { strategy: "REVERTIR_COMMIT", reference: "commit de unidad" }, postcondiciones: [{ id: "tracked-clean", descripcion: "Árbol versionado limpio" }], ...overrides });
 }
 
-function u2aAttempt(overrides = {}) { return { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_HASH, request_bytes: 7, role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", head_sha: HEAD, manifest_sha256: U2A_MANIFEST_HASH, ...overrides }; }
-function u2aResult(overrides = {}) { return { handoff_version: "2", binding: { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_HASH, manifest_sha256: U2A_MANIFEST_HASH, head_sha: HEAD }, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "u2a", via_evaluada: "pura", fecha: "2026-08-23" }, ...overrides }; }
+function u2aManifest(overrides = {}) {
+  const profile = "manual";
+  const producer_chain = U2A_PRODUCERS.profiles[profile].map((item) => ({ profile_id: profile, ...item, head_sha: HEAD, ...U2A_GIT_SOURCES[item.path] }));
+  const sources = [
+    ...producer_chain.map(({ path, head_sha, git_blob_oid, sha256: sourceHash, bytes }) => ({ kind: "versioned", head_sha, path, git_blob_oid, sha256: sourceHash, bytes })),
+    { kind: "versioned", head_sha: HEAD, path: "reglas.md", ...U2A_GIT_SOURCES["reglas.md"] },
+    { kind: "generated", path: "request.txt", sha256: U2A_REQUEST_HASH, bytes: Buffer.byteLength(U2A_REQUEST), producer_id: "manual-contract-v2" },
+  ];
+  return { artifact_id: "ARTIFACT-U2A", head_sha: HEAD, contract_sha256: U2A_HASH, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: U2A_REQUEST_HASH, bytes: Buffer.byteLength(U2A_REQUEST), content: U2A_REQUEST }, sources, producer_chain, ...overrides };
+}
+function u2aAttempt(overrides = {}) { return { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", head_sha: HEAD, manifest_sha256: U2A_MANIFEST_HASH, ...overrides }; }
+function u2aResult(overrides = {}) { return { handoff_version: "2", binding: { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), manifest_sha256: U2A_MANIFEST_HASH, head_sha: HEAD }, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "u2a", via_evaluada: "pura", fecha: "2026-08-23" }, ...overrides }; }
 function u2aError(fn, code) { assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code); }
 
 test("U2A catálogo durable y registro operacional no derivan ocupantes", () => {
@@ -2622,6 +2639,8 @@ test("U2A identidad canónica y códigos fail closed", () => {
 test("U2A frontera de aliases exacta y canonical persistido", () => {
   const d = u2aDeps(); assert.deepEqual(resolveBoundaryIdentity("codex", { adapter: "AGENTS.md", cwd: "." }, d), { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" });
   assert.deepEqual(resolveBoundaryIdentity({ literal: "CODEX — ARQUITECTO / LEAD", DESTINATARIO_ROLE_ID: "ARQUITECTO_LEAD" }, {}, d), { role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" });
+  for (const alias of ["Kimi material-ajeno", "prefijo Kimi", "kimi", "Kimi-Reviewer", "CODEX — ARQUITECTO / LEAD material-extra"]) u2aError(() => resolveBoundaryIdentity(alias, {}, d), "ROL_NO_RESUELTO");
+  u2aError(() => resolveBoundaryIdentity({ literal: "Kimi", DESTINATARIO_ROLE_ID: "EJECUTOR_PRINCIPAL" }, {}, d), "ROL_INCOMPATIBLE");
   assert.equal(projectV1Alias({ role_id: "REVIEWER_INDEPENDIENTE", surface_id: "kimi-reviewer" }), "Kimi"); assert.doesNotMatch(JSON.stringify(u2aContract()), /"ejecutor"|Codex Arquitecto|"Claude"|"Kimi"/);
 });
 
@@ -2635,23 +2654,47 @@ test("U2A ejecución supervisada separa perfil y confinamiento", () => {
 test("U2A Director resuelve delegación y arbitraje, pero no ejecución", () => {
   const d = u2aDeps(); const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: HUMAN_REFERENCE_FOR_TEST, condicion_observable: "Decisión", actor_o_capacidad_requerida: "arbitraje_producto", naturaleza: "DECISION_MATERIAL" };
   assert.doesNotThrow(() => validateContractV2(u2aContract({ operaciones_delegadas_a_humanos: [op] }), d));
-  const next = { role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano", required_capabilities: ["arbitraje_producto"] }; assert.doesNotThrow(() => validateResultV2(u2aResult({ decision: "REQUIERE_ARBITRAJE", siguiente: next }), u2aContract(), d));
+  const next = { role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano", required_capabilities: ["arbitraje_producto"] }; assert.doesNotThrow(() => validateResultV2(u2aResult({ decision: "REQUIERE_ARBITRAJE", siguiente: next }), u2aContract(), d, u2aAttempt(), u2aManifest()));
   u2aError(() => resolveCanonicalIdentity({ role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano" }, d, { requireInvocable: true }), "OPERACION_NO_AUTORIZADA");
 });
 
 const HUMAN_REFERENCE_FOR_TEST = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
 test("U2A manifiesto, productores, blobs inyectados y request exacto", () => {
-  const d = u2aDeps(); const request = "pedido\r\n"; const requestHash = sha256(Buffer.from(request)); const blob = "d".repeat(40); const manifest = { artifact_id: "ARTIFACT-U2A", head_sha: HEAD, contract_sha256: U2A_HASH, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: requestHash, bytes: Buffer.byteLength(request), content: request }, sources: [{ kind: "versioned", head_sha: HEAD, path: "reglas.md", git_blob_oid: blob, sha256: sha256(Buffer.from("línea\r\n")), bytes: Buffer.byteLength("línea\r\n") }, { kind: "generated", path: "request.txt", sha256: requestHash, bytes: Buffer.byteLength(request), producer_id: "manual-contract-v2" }], producer_chain: U2A_PRODUCERS.profiles.manual.map((item) => ({ profile_id: "manual", ...item })) };
-  const injected = { ...d, head_sha: HEAD, git_blob_oids: { "reglas.md": blob } }; assert.equal(validateManifestV2(manifest, injected), manifest); assert.equal(validateProducerInventoryV2(U2A_PRODUCERS), U2A_PRODUCERS);
-  const boundAttempt = u2aAttempt({ request_sha256: requestHash, request_bytes: Buffer.byteLength(request) }); assert.doesNotThrow(() => validateAttemptV2(boundAttempt, injected, manifest));
-  const lfPackage = structuredClone(manifest); lfPackage.sources[0].sha256 = sha256(Buffer.from("línea\n")); lfPackage.sources[0].bytes = Buffer.byteLength("línea\n"); assert.doesNotThrow(() => validateManifestV2(lfPackage, injected));
-  u2aError(() => validateManifestV2({ ...manifest, request: { ...manifest.request, bytes: 1 } }, injected), "REQUEST_NO_COINCIDE"); u2aError(() => validateManifestV2(manifest, { ...injected, git_blob_oids: { "reglas.md": "e".repeat(40) } }), "BLOB_NO_COINCIDE");
+  const d = u2aDeps(); const manifest = u2aManifest(); assert.equal(validateManifestV2(manifest, d), manifest); assert.equal(validateProducerInventoryV2(U2A_PRODUCERS), U2A_PRODUCERS);
+  const omittedProducer = structuredClone(manifest); omittedProducer.producer_chain.pop(); u2aError(() => validateManifestV2(omittedProducer, d), "PRODUCTORES_NO_COINCIDEN");
+  const extraProducer = structuredClone(manifest); extraProducer.producer_chain.push(structuredClone(extraProducer.producer_chain[0])); u2aError(() => validateManifestV2(extraProducer, d), "PRODUCTORES_NO_COINCIDEN");
+  const omittedSource = structuredClone(manifest); omittedSource.sources = omittedSource.sources.filter((item) => item.path !== "scripts/handoff/prompt-template.md"); u2aError(() => validateManifestV2(omittedSource, d), "PRODUCTORES_NO_COINCIDEN");
+  const wrongBlob = structuredClone(manifest); wrongBlob.sources[0].git_blob_oid = "f".repeat(40); u2aError(() => validateManifestV2(wrongBlob, d), "BLOB_NO_COINCIDE");
+  const missingBlobMetadata = u2aDeps(); delete missingBlobMetadata.git_sources["scripts/handoff/handoff-contract-v2.mjs"].git_blob_oid; u2aError(() => validateManifestV2(manifest, missingBlobMetadata), "CAMPO_REQUERIDO_AUSENTE");
+  const wrongInjectedBlob = u2aDeps(); wrongInjectedBlob.git_sources["scripts/handoff/handoff-contract-v2.mjs"].git_blob_oid = "f".repeat(40); u2aError(() => validateManifestV2(manifest, wrongInjectedBlob), "BLOB_NO_COINCIDE");
+  const changedLineEndings = structuredClone(manifest); changedLineEndings.sources[0].sha256 = "e".repeat(64); changedLineEndings.sources[0].bytes += 1; u2aError(() => validateManifestV2(changedLineEndings, d), "BLOB_NO_COINCIDE");
+  const incompleteMap = u2aDeps(); delete incompleteMap.git_sources["scripts/handoff/prompt-template.md"]; u2aError(() => validateManifestV2(manifest, incompleteMap), "MAPA_GIT_INCOMPLETO");
+  const divergentMap = u2aDeps(); divergentMap.git_sources["reglas.md"].bytes += 1; u2aError(() => validateManifestV2(manifest, divergentMap), "BLOB_NO_COINCIDE");
+  u2aError(() => validateManifestV2({ ...manifest, request: { ...manifest.request, bytes: 1 } }, d), "REQUEST_NO_COINCIDE");
 });
 
-test("U2A intento, binding, exclusividad y salida v1", () => {
-  const d = u2aDeps(); const attempt = u2aAttempt(); assert.equal(validateAttemptV2(attempt, d), attempt); assert.equal(validateResultV2(u2aResult(), u2aContract(), d, attempt).estado, "COMPLETADO"); u2aError(() => validateResultV2(u2aResult({ binding: { ...u2aResult().binding, attempt_id: "otro" } }), u2aContract(), d, attempt), "RESULTADO_INTENTO_NO_COINCIDE");
-  assert.doesNotThrow(() => validateResultV2(u2aResult({ firma: { ...u2aResult().firma, ejecutor_real: "evidencia-no-identitaria" } }), u2aContract(), d, attempt));
-  assert.equal(exclusivityPathForRequest(U2A_HASH), `.handoff/v2/requests/${U2A_HASH}/lock`); const projected = projectContractV2ToV1(u2aContract()); assert.equal(projected.salida_requerida, "Estado, evidencia y firma."); assert.equal(projected.origen.ejecutor, "Codex Arquitecto");
+test("U2A intento, binding obligatorio, exclusividad y frontera heredada", () => {
+  const d = u2aDeps(); const attempt = u2aAttempt(); const manifest = u2aManifest(); assert.equal(validateAttemptStructureV2(attempt, d), attempt); u2aError(() => validateAttemptV2(attempt, d), "MANIFIESTO_REQUERIDO"); assert.equal(validateAttemptV2(attempt, d, manifest), attempt);
+  u2aError(() => validateResultV2(u2aResult(), u2aContract(), d), "INTENTO_REQUERIDO"); u2aError(() => validateResultV2(u2aResult(), u2aContract(), d, attempt), "MANIFIESTO_REQUERIDO"); assert.equal(validateResultV2(u2aResult(), u2aContract(), d, attempt, manifest).estado, "COMPLETADO");
+  for (const key of ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "manifest_sha256", "head_sha"]) { const result = u2aResult(); result.binding[key] = key === "request_bytes" ? 999 : "f".repeat(key.includes("sha") ? 64 : 1); u2aError(() => validateResultV2(result, u2aContract(), d, attempt, manifest), "RESULTADO_INTENTO_NO_COINCIDE"); }
+  const mismatchedAttempt = u2aAttempt({ request_bytes: 999 }); u2aError(() => validateAttemptV2(mismatchedAttempt, d, manifest), "INTENTO_INVALIDO"); assert.doesNotThrow(() => validateResultV2(u2aResult({ firma: { ...u2aResult().firma, ejecutor_real: "evidencia-no-identitaria" } }), u2aContract(), d, attempt, manifest));
+  assert.equal(exclusivityPathForRequest(U2A_HASH), `.handoff/v2/requests/${U2A_HASH}/lock`); assert.deepEqual(projectLegacyIdentityHeader({ role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" }), { literal: "Codex Arquitecto", DESTINATARIO_ROLE_ID: "ARQUITECTO_LEAD" }); assert.equal(validateContractV2(u2aContract(), d).salida_requerida, "Estado, evidencia y firma."); assert.equal(validateContract(contract(), BASE_CONFIG).salida_requerida.length > 0, true);
+});
+
+test("U2A review es representable sin autorizar dispatch de payload", () => {
+  const d = u2aDeps(); const reviewContract = u2aContract({ profile_id: "review", contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "reviewer-policy.md"], destinatario: { role_id: "REVIEWER_INDEPENDIENTE", surface_id: "kimi-reviewer", required_capabilities: ["review_independiente"] } });
+  assert.doesNotThrow(() => validateContractV2(reviewContract, d)); assert.equal(d.registry.surfaces["kimi-reviewer"].payload_sharing.status, "NO_AUTORIZADO");
+  u2aError(() => validateContractV2({ ...reviewContract, operaciones_permitidas: [{ tipo: "red", objetivo: "despachar payload" }] }, d), "OPERACION_NO_AUTORIZADA");
+});
+
+test("U2A shapes anidadas fallan con error contractual estable", () => {
+  const badCatalog = structuredClone(U2A_CATALOG); badCatalog.roles.ARQUITECTO_LEAD.capabilities = {}; u2aError(() => validateRoleCatalog(badCatalog), "CATALOGO_INVALIDO");
+  const badRegistry = structuredClone(U2A_REGISTRY); badRegistry.surfaces["codex-ejecutor"].authorization = null; u2aError(() => validateOperationalRegistry(badRegistry, U2A_CATALOG), "ESTRUCTURA_INVALIDA");
+  const badInventory = structuredClone(U2A_PRODUCERS); badInventory.profiles.manual[0] = null; u2aError(() => validateProducerInventoryV2(badInventory), "ESTRUCTURA_INVALIDA");
+  const badManifest = u2aManifest({ request: null }); u2aError(() => validateManifestV2(badManifest, u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateAttemptStructureV2(null, u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateContractV2(u2aContract({ operaciones_delegadas_a_humanos: [null] }), u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateResultV2(u2aResult({ firma: null }), u2aContract(), u2aDeps(), u2aAttempt(), u2aManifest()), "ESTRUCTURA_INVALIDA");
 });
 
 test("U2A schemas JSON válidos, pureza, desconexión y compatibilidad v1", () => {
