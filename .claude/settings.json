@@ -34,6 +34,7 @@
       "Read(~/.kube/**)",
       "Read(~/.docker/**)",
       "Read(~/.config/**)",
+      "Read(~/AppData/Roaming/GitHub CLI/**)",
       "Read(~/.claude/**)",
       "Read(~/.claude.json)",
       "Read(~/.codex/**)",

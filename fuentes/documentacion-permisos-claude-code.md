@@ -27,6 +27,21 @@ permisos, settings y uso de datos.
 - `https://code.claude.com/docs/en/settings`
 - `https://code.claude.com/docs/en/sandboxing`
 - `https://code.claude.com/docs/en/data-usage`
+- `https://cli.github.com/manual/gh_help_environment`
+
+## Ubicación de configuración de GitHub CLI en Windows
+
+**DOCUMENTADO — GitHub CLI.** `GH_CONFIG_DIR` define el directorio de
+configuración de `gh`. Si no está definido, GitHub CLI usa, en este orden,
+`$XDG_CONFIG_HOME/gh`, `$AppData/GitHub CLI` en Windows cuando `$AppData` está
+definido, o `$HOME/.config/gh`. La fuente es el
+[manual oficial de variables de entorno de GitHub CLI](https://cli.github.com/manual/gh_help_environment).
+
+**PROBADO LOCALMENTE — 2026-08-23.** Sin leer ni revelar el contenido de ningún
+archivo, se comprobó que
+`C:\Users\lucas\AppData\Roaming\GitHub CLI\hosts.yml` existe y que
+`C:\Users\lucas\.config\gh\hosts.yml` no existe. La política compartida protege
+la ruta efectiva mediante `Read(~/AppData/Roaming/GitHub CLI/**)`.
 
 ## Qué afirmaciones respalda
 

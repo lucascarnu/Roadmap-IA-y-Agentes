@@ -747,6 +747,9 @@ consideran probados por este cambio documental. El Arquitecto debe recibir
 evidencia desde una sesión Claude nueva que confirme la identidad positiva y
 negativa, consulta a dominios oficiales y no oficiales, denegación de shell,
 edición, escritura, agentes y MCP, y rechazo de cada familia de rutas sensibles.
+El probe exacto de credenciales de GitHub CLI es
+`~/AppData/Roaming/GitHub CLI/hosts.yml`; su aceptación exige **DENEGADO**, un
+mensaje de política y cero contenido.
 Debe registrar también cualquier prompt inesperado y qué herramientas quedan
 visibles. Hasta entonces el estado permanece **ABIERTO**; la política no equivale
 a sandbox de sistema operativo y conserva el riesgo residual de exfiltración de
