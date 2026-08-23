@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Handoff delivery ledger v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["delivery_version", "delivery_key", "sequence", "phase", "binding", "invocation_intent_count", "invocation_returned_count", "reconciliation_count", "cause", "updated_at"],
+  "properties": {
+    "delivery_version": { "const": "2" },
+    "delivery_key": { "$ref": "#/$defs/sha256" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "phase": { "enum": ["PREPARADA", "EMISION_CLAIMED", "RECONCILIANDO", "ENTREGA_CONFIRMADA", "HANDOFF_COMPLETE", "ENTREGA_NO_CONFIRMADA"] },
+    "binding": { "type": "object", "additionalProperties": false, "required": ["attempt_id", "transport_real_id", "target_role_id", "target_surface_id", "manifest_sha256", "head_sha"], "properties": { "attempt_id": { "type": "string", "minLength": 1 }, "transport_real_id": { "type": "string", "minLength": 1 }, "target_role_id": { "type": "string", "minLength": 1 }, "target_surface_id": { "type": "string", "minLength": 1 }, "manifest_sha256": { "$ref": "#/$defs/sha256" }, "head_sha": { "$ref": "#/$defs/sha40" } } },
+    "invocation_intent_count": { "type": "integer", "minimum": 0, "maximum": 1 },
+    "invocation_returned_count": { "type": "integer", "minimum": 0, "maximum": 1 },
+    "reconciliation_count": { "type": "integer", "minimum": 0, "maximum": 1 },
+    "cause": { "oneOf": [{ "type": "null" }, { "enum": ["TIMEOUT", "INVOCACION_FALLIDA", "RECEIPT_INVALIDO", "SALIDA_CONTRACTUAL_INVALIDA"] }] },
+    "updated_at": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "transport_real_id", "artifact_id", "request_sha256", "request_bytes", "target_role_id", "target_surface_id", "manifest_sha256", "head_sha", "output_ref", "output_sha256", "output_bytes"],
+      "properties": {
+        "attempt_id": { "type": "string", "minLength": 1 }, "transport_real_id": { "type": "string", "minLength": 1 }, "artifact_id": { "type": "string", "minLength": 1 },
+        "request_sha256": { "$ref": "#/$defs/sha256" }, "request_bytes": { "type": "integer", "minimum": 1 },
+        "target_role_id": { "type": "string", "minLength": 1 }, "target_surface_id": { "type": "string", "minLength": 1 },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" }, "head_sha": { "$ref": "#/$defs/sha40" },
+        "output_ref": { "type": "string", "minLength": 1 }, "output_sha256": { "$ref": "#/$defs/sha256" }, "output_bytes": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

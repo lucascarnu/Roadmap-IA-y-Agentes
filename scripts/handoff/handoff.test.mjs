@@ -22,7 +22,7 @@ import {
   exclusivityPathForRequest, projectLegacyIdentityHeader, projectV1Alias,
   resolveBoundaryIdentity, resolveCanonicalIdentity, validateAttemptStructureV2, validateAttemptV2,
   validateContractV2, validateManifestV2, validateOperationalRegistry,
-  validateProducerInventoryV2, validateResultV2, validateRoleCatalog,
+  validateDeliveryReceiptV2, validateProducerInventoryV2, validateResultV2, validateRoleCatalog,
 } from "./handoff-contract-v2.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -2614,8 +2614,10 @@ function u2aManifest(overrides = {}) {
   ];
   return { artifact_id: "ARTIFACT-U2A", head_sha: HEAD, contract_sha256: U2A_HASH, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: U2A_REQUEST_HASH, bytes: Buffer.byteLength(U2A_REQUEST), content: U2A_REQUEST }, sources, producer_chain, ...overrides };
 }
-function u2aAttempt(overrides = {}) { return { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", head_sha: HEAD, manifest_sha256: U2A_MANIFEST_HASH, ...overrides }; }
-function u2aResult(overrides = {}) { return { handoff_version: "2", binding: { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), manifest_sha256: U2A_MANIFEST_HASH, head_sha: HEAD }, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "u2a", via_evaluada: "pura", fecha: "2026-08-23" }, ...overrides }; }
+const U2B_OUTPUT = "Informe contractual completo";
+const U2B_OUTPUT_HASH = sha256(Buffer.from(U2B_OUTPUT));
+function u2aAttempt(overrides = {}) { return { attempt_id: "attempt-1", transport_real_id: "TRANSPORT-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), target: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" }, head_sha: HEAD, manifest_sha256: U2A_MANIFEST_HASH, salida_requerida: "Estado, evidencia y firma.", ...overrides }; }
+function u2aResult(overrides = {}) { return { handoff_version: "2", binding: { attempt_id: "attempt-1", transport_real_id: "TRANSPORT-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), manifest_sha256: U2A_MANIFEST_HASH, head_sha: HEAD, target_role_id: "EJECUTOR_PRINCIPAL", target_surface_id: "codex-ejecutor", output_ref: "output.txt", output_sha256: U2B_OUTPUT_HASH, output_bytes: Buffer.byteLength(U2B_OUTPUT) }, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "u2a", via_evaluada: "pura", fecha: "2026-08-23" }, ...overrides }; }
 function u2aError(fn, code) { assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code); }
 
 test("U2A catálogo durable y registro operacional no derivan ocupantes", () => {
@@ -2676,8 +2678,10 @@ test("U2A manifiesto, productores, blobs inyectados y request exacto", () => {
 test("U2A intento, binding obligatorio, exclusividad y frontera heredada", () => {
   const d = u2aDeps(); const attempt = u2aAttempt(); const manifest = u2aManifest(); assert.equal(validateAttemptStructureV2(attempt, d), attempt); u2aError(() => validateAttemptV2(attempt, d), "MANIFIESTO_REQUERIDO"); assert.equal(validateAttemptV2(attempt, d, manifest), attempt);
   u2aError(() => validateResultV2(u2aResult(), u2aContract(), d), "INTENTO_REQUERIDO"); u2aError(() => validateResultV2(u2aResult(), u2aContract(), d, attempt), "MANIFIESTO_REQUERIDO"); assert.equal(validateResultV2(u2aResult(), u2aContract(), d, attempt, manifest).estado, "COMPLETADO");
-  for (const key of ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "manifest_sha256", "head_sha"]) { const result = u2aResult(); result.binding[key] = key === "request_bytes" ? 999 : "f".repeat(key.includes("sha") ? 64 : 1); u2aError(() => validateResultV2(result, u2aContract(), d, attempt, manifest), "RESULTADO_INTENTO_NO_COINCIDE"); }
+  for (const key of ["attempt_id", "transport_real_id", "artifact_id", "request_sha256", "request_bytes", "manifest_sha256", "head_sha", "target_role_id", "target_surface_id"]) { const result = u2aResult(); result.binding[key] = key === "request_bytes" ? 999 : "f".repeat(key.includes("sha") ? 64 : 1); u2aError(() => validateResultV2(result, u2aContract(), d, attempt, manifest), "RESULTADO_INTENTO_NO_COINCIDE"); }
   const mismatchedAttempt = u2aAttempt({ request_bytes: 999 }); u2aError(() => validateAttemptV2(mismatchedAttempt, d, manifest), "INTENTO_INVALIDO"); assert.doesNotThrow(() => validateResultV2(u2aResult({ firma: { ...u2aResult().firma, ejecutor_real: "evidencia-no-identitaria" } }), u2aContract(), d, attempt, manifest));
+  const receipt = { attempt_id: attempt.attempt_id, transport_real_id: attempt.transport_real_id, artifact_id: attempt.artifact_id, request_sha256: attempt.request_sha256, request_bytes: attempt.request_bytes, target_role_id: attempt.target.role_id, target_surface_id: attempt.target.surface_id, manifest_sha256: attempt.manifest_sha256, head_sha: attempt.head_sha, output_ref: "output.txt", output_sha256: U2B_OUTPUT_HASH, output_bytes: Buffer.byteLength(U2B_OUTPUT) };
+  assert.equal(validateDeliveryReceiptV2(receipt, attempt, u2aResult(), Buffer.from(U2B_OUTPUT), (bytes) => sha256(Buffer.from(bytes))), receipt);
   assert.equal(exclusivityPathForRequest(U2A_HASH), `.handoff/v2/requests/${U2A_HASH}/lock`); assert.deepEqual(projectLegacyIdentityHeader({ role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" }), { literal: "Codex Arquitecto", DESTINATARIO_ROLE_ID: "ARQUITECTO_LEAD" }); assert.equal(validateContractV2(u2aContract(), d).salida_requerida, "Estado, evidencia y firma."); assert.equal(validateContract(contract(), BASE_CONFIG).salida_requerida.length > 0, true);
 });
 
@@ -2698,7 +2702,7 @@ test("U2A shapes anidadas fallan con error contractual estable", () => {
 });
 
 test("U2A schemas JSON válidos, pureza, desconexión y compatibilidad v1", () => {
-  for (const file of ["roles-catalog.schema.json", "operational-registry-v2.schema.json", "handoff-v2.schema.json", "handoff-result-v2.schema.json", "handoff-manifest-v2.schema.json", "handoff-attempt-v2.schema.json", "handoff-v2-producers.schema.json"]) assert.doesNotThrow(() => JSON.parse(readFileSync(join(HERE, file), "utf8")), file);
+  for (const file of ["roles-catalog.schema.json", "operational-registry-v2.schema.json", "handoff-v2.schema.json", "handoff-result-v2.schema.json", "handoff-manifest-v2.schema.json", "handoff-attempt-v2.schema.json", "handoff-delivery-v2.schema.json", "handoff-v2-producers.schema.json"]) assert.doesNotThrow(() => JSON.parse(readFileSync(join(HERE, file), "utf8")), file);
   const source = readFileSync(join(HERE, "handoff-contract-v2.mjs"), "utf8"); for (const forbidden of [/node:fs/, /node:child_process/, /node:http/, /node:https/, /\bfetch\s*\(/, /mkdir|writeFile|execFile|spawn/]) assert.doesNotMatch(source, forbidden);
   assert.doesNotMatch(poll.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/); assert.doesNotMatch(tick.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/); assert.doesNotMatch(invokeAgent.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/);
   const historical = contract(); assert.doesNotThrow(() => validateContract(historical, BASE_CONFIG)); u2aError(() => validateContractV2(historical, u2aDeps()), "CONTRATO_VERSION_NO_SOPORTADA");

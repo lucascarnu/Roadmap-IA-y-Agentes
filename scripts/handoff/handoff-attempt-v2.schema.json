@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Handoff attempt v2", "type": "object", "additionalProperties": false,
-  "required": ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "role_id", "surface_id", "head_sha", "manifest_sha256"],
-  "properties": { "attempt_id": { "type": "string", "minLength": 1 }, "artifact_id": { "type": "string", "minLength": 1 }, "request_sha256": { "$ref": "#/$defs/sha256" }, "request_bytes": { "type": "integer", "minimum": 1 }, "role_id": { "type": "string", "minLength": 1 }, "surface_id": { "type": "string", "minLength": 1 }, "head_sha": { "$ref": "#/$defs/sha40" }, "manifest_sha256": { "$ref": "#/$defs/sha256" } },
+  "required": ["attempt_id", "transport_real_id", "artifact_id", "request_sha256", "request_bytes", "target", "head_sha", "manifest_sha256", "salida_requerida"],
+  "properties": { "attempt_id": { "type": "string", "minLength": 1 }, "transport_real_id": { "type": "string", "minLength": 1 }, "artifact_id": { "type": "string", "minLength": 1 }, "request_sha256": { "$ref": "#/$defs/sha256" }, "request_bytes": { "type": "integer", "minimum": 1 }, "target": { "type": "object", "additionalProperties": false, "required": ["role_id", "surface_id"], "properties": { "role_id": { "type": "string", "minLength": 1 }, "surface_id": { "type": "string", "minLength": 1 } } }, "head_sha": { "$ref": "#/$defs/sha40" }, "manifest_sha256": { "$ref": "#/$defs/sha256" }, "salida_requerida": { "type": "string", "minLength": 1, "maxLength": 4000 } },
   "$defs": { "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
 }
