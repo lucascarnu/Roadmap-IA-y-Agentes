@@ -74,8 +74,13 @@ divide en cuatro unidades:
    sólo lectura, y deja runtime, efectos y locks para las unidades posteriores.
 3. **Unidad 2b — motor.** Implementa admisión, acción y emisión en los canales
    controlados, incluido el preflight documental, la matriz de dependencias y
-   el transporte PC/iPad. Su primera porción implementa el gate de posta real
-   definido abajo.
+   el transporte PC/iPad. La porción 2b.1 quedó como
+   `GATE_DE_SUBSISTEMA_IMPLEMENTADO` en la [PR #134](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/134):
+   implementa posta real, ledger, claim/CAS, reconciliación finita y receipt
+   tardío en el entrypoint controlado, sin adapter ni red real. La porción 2b.2
+   se publica en la [PR #135](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/pull/135)
+   como preflight de cobertura previo al ledger y al efecto; tampoco declara
+   validación operativa.
 4. **Unidad 3 — verificación y guía.** Incorpora fixtures, pruebas negativas,
    QA de superficies y `guias/construccion-de-gates.md`; destila allí la
    bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123),
@@ -128,6 +133,23 @@ prueban y documentan en la unidad 3 y su aprendizaje se incorpora a la bitácora
 
 Estos requisitos **no alteran el inventario original de veinticuatro
 continuaciones**.
+
+**Estado de 2b.2.** La PR #135 implementa un modo separado `start-covered` con
+política externa versionada por `profile_id + artifact_type`, evidencia exacta
+de HEAD/tree/blob/búsquedas y un `coverage_binding` opcional en intento,
+manifiesto y ledger. `start`, `resume` y `late-receipt` de 2b.1 conservan lectura
+histórica sin migración ni reinterpretación. Una fuente clasificada
+`REQUERIDO_PARA_LA_TAREA` o `REFERENCIA_DURABLE_RESOLUBLE` inaccesible bloquea
+con `FUENTE_MATERIAL_NO_ACCESIBLE`; sólo `CONTEXTO_NO_NECESARIO` permite
+continuar inaccesible.
+
+La evidencia de 2b.2 es sintética y determinista: prueba el gate de subsistema,
+conjuntos exactos, contenido congelado, conteos, hechos, decisiones y
+compatibilidad de ledgers, pero no fixtures reales ni superficies. Por eso el
+estado es `GATE_DE_SUBSISTEMA_IMPLEMENTADO` dentro de la PR y
+`GATE_OPERATIVO_VALIDADO` permanece `NO_PROBADO`. La matriz general por
+audiencia, callers/adapters/red, PC/iPad y la validación posterior de Unidad 3
+siguen pendientes; esta porción no descongela `app/`.
 
 #### Inventario completo de las veinticuatro continuaciones
 
