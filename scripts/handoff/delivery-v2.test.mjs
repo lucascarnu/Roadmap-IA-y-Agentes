@@ -30,6 +30,7 @@ const CATALOG = JSON.parse(await readFile(join(HERE, "roles.catalog.json"), "utf
 const REGISTRY = JSON.parse(await readFile(join(HERE, "actores.json"), "utf8"));
 const PRODUCERS = JSON.parse(await readFile(join(HERE, "handoff-v2-producers.json"), "utf8"));
 const COVERAGE_POLICY_BYTES = await readFile(join(HERE, "handoff-coverage-policy-v2.json"), "utf8");
+const COVERAGE_POLICY_AUTHORITY = { sha256: sha256(Buffer.from(COVERAGE_POLICY_BYTES)), bytes: Buffer.byteLength(COVERAGE_POLICY_BYTES) };
 const GIT_SOURCES = {
   "scripts/handoff/handoff-contract-v2.mjs": { git_blob_oid: "1".repeat(40), sha256: "1".repeat(64), bytes: 101 },
   "scripts/handoff/prompt-template.md": { git_blob_oid: "2".repeat(40), sha256: "2".repeat(64), bytes: 202 },
@@ -106,7 +107,7 @@ function coveredFixture({ contextAccessible = false } = {}) {
     },
   };
   const expected = { profile_id: policy.profile_id, artifact_type: policy.artifact_type, head_sha: HEAD, artifact_id: data.attempt.artifact_id, attempt_id: data.attempt.attempt_id, transport_real_id: data.attempt.transport_real_id };
-  const binding = validateCoveragePreflightV2({ policyBytes: COVERAGE_POLICY_BYTES, evidence, expected }).binding;
+  const binding = validateCoveragePreflightV2({ policyBytes: COVERAGE_POLICY_BYTES, authorizedPolicy: COVERAGE_POLICY_AUTHORITY, evidence, expected }).binding;
   data.manifest.coverage_binding = structuredClone(binding); data.attempt.coverage_binding = structuredClone(binding); refreshManifestBinding(data);
   data.coverage = { policyBytes: COVERAGE_POLICY_BYTES, evidence, expected, binding };
   return data;
@@ -336,6 +337,13 @@ test("U2B2 start-covered valida preflight externo antes del claim y persiste bin
 });
 
 test("U2B2 política gobierna conjuntos exactos y rechaza omisiones, extras y colisiones antes del ledger", async (t) => {
+  const weakened = JSON.parse(COVERAGE_POLICY_BYTES);
+  for (const category of COVERAGE_CATEGORIES) weakened.policies[0].requirements[category] = [];
+  weakened.policies[0].models = { counts: [], facts: [], decisions: [] };
+  assert.throws(
+    () => validateCoveragePreflightV2({ policyBytes: JSON.stringify(weakened), authorizedPolicy: COVERAGE_POLICY_AUTHORITY, evidence: {}, expected: coveredFixture().coverage.expected }),
+    (error) => error.code === "COVERAGE_POLICY_NO_AUTORIZADA",
+  );
   for (const category of COVERAGE_CATEGORIES) {
     await rejectCoveredCli(t, `missing-${category}`, (data) => { data.coverage.evidence.artifact_inventory[category].pop(); });
     await rejectCoveredCli(t, `extra-${category}`, (data) => { data.coverage.evidence.artifact_inventory[category].push(`extra-${category}`); });
@@ -344,6 +352,7 @@ test("U2B2 política gobierna conjuntos exactos y rechaza omisiones, extras y co
   await rejectCoveredCli(t, "source-duplicada", (data) => { data.coverage.evidence.source_access.push(structuredClone(data.coverage.evidence.source_access[0])); });
   await rejectCoveredCli(t, "policy-id-colisionado", (data) => { const policy = JSON.parse(data.coverage.policyBytes); policy.policies[0].requirements.canon.push(structuredClone(policy.policies[0].requirements.canon[0])); data.coverage.policyBytes = JSON.stringify(policy); });
   await rejectCoveredCli(t, "policy-equivocada", (data) => { const policy = JSON.parse(data.coverage.policyBytes); policy.policies[0].profile_id = "github_close"; data.coverage.policyBytes = JSON.stringify(policy); });
+  await rejectCoveredCli(t, "policy-mismos-clave-minimos-debilitados", (data) => { const policy = JSON.parse(data.coverage.policyBytes); for (const category of COVERAGE_CATEGORIES) policy.policies[0].requirements[category] = []; policy.policies[0].models = { counts: [], facts: [], decisions: [] }; data.coverage.policyBytes = JSON.stringify(policy); });
   await rejectCoveredCli(t, "resolucion-ajena", (data) => { data.coverage.evidence.resolution_target.attempt_id = "attempt-ajeno"; });
 });
 
@@ -361,7 +370,7 @@ test("U2B2 tree, blobs y búsquedas externas quedan ligados exactamente", async 
 
 test("U2B2 fuentes y modelos fallan cerrados salvo contexto explícitamente no necesario", async (t) => {
   const allowed = coveredFixture(); const context = allowed.coverage.evidence.source_access.find((item) => item.classification === "CONTEXTO_NO_NECESARIO"); assert.equal(context.accessible, false);
-  assert.doesNotThrow(() => validateCoveragePreflightV2({ policyBytes: allowed.coverage.policyBytes, evidence: allowed.coverage.evidence, expected: allowed.coverage.expected, declaredBinding: allowed.coverage.binding }));
+  assert.doesNotThrow(() => validateCoveragePreflightV2({ policyBytes: allowed.coverage.policyBytes, authorizedPolicy: COVERAGE_POLICY_AUTHORITY, evidence: allowed.coverage.evidence, expected: allowed.coverage.expected, declaredBinding: allowed.coverage.binding }));
   await rejectCoveredCli(t, "fuente-material-inaccesible", (data) => { data.coverage.evidence.source_access.find((item) => item.requirement_id === "consumer-engine").accessible = false; });
   await rejectCoveredCli(t, "conteo-no-reconciliado", (data) => { data.coverage.evidence.assessments.counts[0].reconciled = false; });
   await rejectCoveredCli(t, "conteo-distinto", (data) => { data.coverage.evidence.assessments.counts[0].observed += 1; });

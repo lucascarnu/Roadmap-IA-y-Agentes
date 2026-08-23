@@ -545,6 +545,9 @@ el artefacto evaluado— fija conjuntos mínimos de canon, enumeraciones,
 productores, consumidores, schemas, validadores, tests e invariantes. No se
 agrega al inventario `handoff-v2-producers.json`: es una autoridad de admisión
 leída por el preflight, no un productor del contrato o manifiesto histórico.
+El CLI ancla esa autoridad a los bytes del archivo versionado que acompaña al
+entrypoint y rechaza una política suministrada distinta aunque conserve la misma
+clave o recalcule bindings coherentes con mínimos debilitados.
 
 El resolvedor externo aporta evidencia con HEAD, árbol Git, blobs, contenido
 congelado y resultados estructurados de búsqueda según

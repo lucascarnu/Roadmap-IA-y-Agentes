@@ -97,15 +97,21 @@ function validateModels(policy, assessments, requirementIds) {
   }
 }
 
-export function validateCoveragePreflightV2({ policyBytes, evidence, expected, declaredBinding } = {}) {
+export function validateCoveragePreflightV2({ policyBytes, authorizedPolicy, evidence, expected, declaredBinding } = {}) {
   if (typeof policyBytes !== "string" || !policyBytes.length || !object(expected)) fail("COVERAGE_ESTRUCTURA_INVALIDA", "inputs");
+  exact(authorizedPolicy, ["sha256", "bytes"], "authorized policy");
+  const suppliedPolicyBuffer = Buffer.from(policyBytes, "utf8");
+  if (!sha(authorizedPolicy.sha256, 64) || !Number.isInteger(authorizedPolicy.bytes) || authorizedPolicy.bytes < 1
+    || authorizedPolicy.sha256 !== hash(suppliedPolicyBuffer) || authorizedPolicy.bytes !== suppliedPolicyBuffer.byteLength) {
+    fail("COVERAGE_POLICY_NO_AUTORIZADA", "Los bytes de política no coinciden con la autoridad durable");
+  }
   let document; try { document = JSON.parse(policyBytes); } catch { fail("COVERAGE_POLICY_INVALIDA", "JSON inválido"); }
   validatePolicyDocument(document);
   exact(expected, ["profile_id", "artifact_type", "head_sha", "artifact_id", "attempt_id", "transport_real_id"], "expected target");
   const candidates = document.policies.filter((entry) => entry.profile_id === expected.profile_id && entry.artifact_type === expected.artifact_type);
   if (candidates.length !== 1) fail("COVERAGE_POLICY_NO_RESUELTA", `${expected.profile_id}/${expected.artifact_type}`);
   const policy = candidates[0];
-  const policyBuffer = Buffer.from(policyBytes, "utf8"); const policySha256 = hash(policyBuffer);
+  const policyBuffer = suppliedPolicyBuffer; const policySha256 = hash(policyBuffer);
 
   const evidenceKeys = ["evidence_version", "canonicalization_version", "profile_id", "artifact_type", "head_sha", "git_tree_oid", "policy_sha256", "policy_bytes", "resolution_target", "artifact_inventory", "source_access", "tree_entries", "search_results", "assessments"];
   exact(evidence, evidenceKeys, "coverage evidence");

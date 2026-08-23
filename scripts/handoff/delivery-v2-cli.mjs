@@ -146,8 +146,10 @@ async function main() {
   let coverageVerification;
   if (parsed.operation === "start-covered") {
     const policyBytes = await raw(parsed["coverage-policy"]); const evidence = await json(parsed["coverage-evidence"]);
+    const authorizedPolicyBytes = await raw(join(HERE, "handoff-coverage-policy-v2.json"));
+    const authorizedPolicy = { sha256: sha256(Buffer.from(authorizedPolicyBytes, "utf8")), bytes: Buffer.byteLength(authorizedPolicyBytes, "utf8") };
     try {
-      coverageVerification = validateCoveragePreflightV2({ policyBytes, evidence, declaredBinding: deliveryPackage.attempt?.coverage_binding, expected: { profile_id: deliveryPackage.contract.profile_id, artifact_type: deliveryPackage.attempt?.coverage_binding?.artifact_type, head_sha: resolution.head_sha, artifact_id: deliveryPackage.attempt.artifact_id, attempt_id: deliveryPackage.attempt.attempt_id, transport_real_id: deliveryPackage.attempt.transport_real_id } });
+      coverageVerification = validateCoveragePreflightV2({ policyBytes, authorizedPolicy, evidence, declaredBinding: deliveryPackage.attempt?.coverage_binding, expected: { profile_id: deliveryPackage.contract.profile_id, artifact_type: deliveryPackage.attempt?.coverage_binding?.artifact_type, head_sha: resolution.head_sha, artifact_id: deliveryPackage.attempt.artifact_id, attempt_id: deliveryPackage.attempt.attempt_id, transport_real_id: deliveryPackage.attempt.transport_real_id } });
     } catch (error) {
       if (error instanceof HandoffCoverageV2Error) throw new DeliveryV2Error(error.code, error.message, error);
       throw error;

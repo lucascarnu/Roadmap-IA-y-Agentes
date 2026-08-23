@@ -135,7 +135,7 @@ Estos requisitos **no alteran el inventario original de veinticuatro
 continuaciones**.
 
 **Estado de 2b.2.** La PR #135 implementa un modo separado `start-covered` con
-política externa versionada por `profile_id + artifact_type`, evidencia exacta
+política externa versionada y anclada por bytes por `profile_id + artifact_type`, evidencia exacta
 de HEAD/tree/blob/búsquedas y un `coverage_binding` opcional en intento,
 manifiesto y ledger. `start`, `resume` y `late-receipt` de 2b.1 conservan lectura
 histórica sin migración ni reinterpretación. Una fuente clasificada
