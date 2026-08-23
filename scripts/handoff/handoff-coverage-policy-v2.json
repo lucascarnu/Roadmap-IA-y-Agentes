@@ -1,0 +1,53 @@
+{
+  "document_version": "1",
+  "policies": [
+    {
+      "profile_id": "manual",
+      "artifact_type": "handoff_delivery_v2",
+      "version": "1",
+      "requirements": {
+        "canon": [
+          { "id": "canon-reglas", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "reglas.md", "search": { "query": "GATE MECÁNICO", "expected_matches": ["reglas.md"] } },
+          { "id": "canon-0016", "classification": "REFERENCIA_DURABLE_RESOLUBLE", "locator": "decisiones/0016-gates-de-admision-accion-y-emision.md", "search": { "query": "Preflight de cobertura documental e impacto", "expected_matches": ["decisiones/0016-gates-de-admision-accion-y-emision.md"] } }
+        ],
+        "enumerations": [
+          { "id": "enum-delivery-phases", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-delivery-v2.schema.json", "search": { "query": "HANDOFF_COMPLETE", "expected_matches": ["scripts/handoff/handoff-delivery-v2.schema.json", "scripts/handoff/delivery-engine-v2.mjs"] } }
+        ],
+        "producers": [
+          { "id": "producer-inventory", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-v2-producers.json", "search": { "query": "manual-contract-v2", "expected_matches": ["scripts/handoff/handoff-v2-producers.json"] } }
+        ],
+        "consumers": [
+          { "id": "consumer-cli", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/delivery-v2-cli.mjs", "search": { "query": "createDeliveryEngineV2", "expected_matches": ["scripts/handoff/delivery-v2-cli.mjs"] } },
+          { "id": "consumer-engine", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/delivery-engine-v2.mjs", "search": { "query": "validateResultV2", "expected_matches": ["scripts/handoff/delivery-engine-v2.mjs"] } }
+        ],
+        "schemas": [
+          { "id": "schema-attempt", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-attempt-v2.schema.json", "search": { "query": "manifest_sha256", "expected_matches": ["scripts/handoff/handoff-attempt-v2.schema.json"] } },
+          { "id": "schema-manifest", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-manifest-v2.schema.json", "search": { "query": "producer_chain", "expected_matches": ["scripts/handoff/handoff-manifest-v2.schema.json"] } },
+          { "id": "schema-delivery", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-delivery-v2.schema.json", "search": { "query": "delivery_key", "expected_matches": ["scripts/handoff/handoff-delivery-v2.schema.json"] } }
+        ],
+        "validators": [
+          { "id": "validator-contract", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-contract-v2.mjs", "search": { "query": "validateAttemptV2", "expected_matches": ["scripts/handoff/handoff-contract-v2.mjs"] } },
+          { "id": "validator-coverage", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/handoff-coverage-v2.mjs", "search": { "query": "validateCoveragePreflightV2", "expected_matches": ["scripts/handoff/handoff-coverage-v2.mjs"] } }
+        ],
+        "tests": [
+          { "id": "test-delivery", "classification": "REQUERIDO_PARA_LA_TAREA", "locator": "scripts/handoff/delivery-v2.test.mjs", "search": { "query": "start-covered", "expected_matches": ["scripts/handoff/delivery-v2.test.mjs"] } }
+        ],
+        "invariants": [
+          { "id": "invariant-historical-v2", "classification": "REFERENCIA_DURABLE_RESOLUBLE", "locator": "scripts/handoff/README.md", "search": { "query": "runtime v1", "expected_matches": ["scripts/handoff/README.md"] } },
+          { "id": "contexto-claude-no-necesario", "classification": "CONTEXTO_NO_NECESARIO", "locator": "CLAUDE.md", "search": { "query": "ESPECIALISTAS_BAJO_DEMANDA", "expected_matches": [] } }
+        ]
+      },
+      "models": {
+        "counts": [
+          { "id": "consumer-count", "expected": 2, "evidence_requirement_ids": ["consumer-cli", "consumer-engine"] }
+        ],
+        "facts": [
+          { "id": "runtime-v1-disconnected", "evidence_requirement_ids": ["consumer-cli", "consumer-engine", "invariant-historical-v2"] }
+        ],
+        "decisions": [
+          { "id": "keep-handoff-version-2", "evidence_requirement_ids": ["schema-attempt", "schema-manifest", "schema-delivery"] }
+        ]
+      }
+    }
+  ]
+}
