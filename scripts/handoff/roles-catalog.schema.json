@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Durable role catalog", "type": "object", "additionalProperties": false,
+  "required": ["version", "normative_source", "roles"],
+  "properties": { "version": { "const": "1" }, "normative_source": { "type": "string", "minLength": 1 }, "roles": { "type": "object", "minProperties": 7, "maxProperties": 7, "additionalProperties": { "$ref": "#/$defs/role" } } },
+  "$defs": { "role": { "type": "object", "additionalProperties": false, "required": ["canonical_name", "capabilities", "incompatibilities"], "properties": { "canonical_name": { "type": "string", "minLength": 1 }, "capabilities": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "incompatibilities": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } } } } }
+}

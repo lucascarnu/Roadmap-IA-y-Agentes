@@ -1,35 +1,47 @@
 {
-  "version": "1",
-  "roles": {
-    "DIRECTOR_PRODUCT_OWNER": {
-      "actor": "Lucas",
-      "adapter": "reglas.md",
-      "capacidades": ["arbitraje_producto", "autorizacion_economica", "accion_fisica"],
-      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+  "version": "2",
+  "surfaces": {
+    "director-humano": {
+      "role_id": "DIRECTOR_PRODUCT_OWNER", "assignment_ref": "equipo.md", "adapter": "reglas.md", "cwd": ".", "surface_type": "HUMAN_ENDPOINT", "invocable": false,
+      "observed_capabilities": ["intencion_producto", "arbitraje_producto", "autorizacion_economica", "accion_fisica"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["delegacion_humana", "arbitraje"] }, "authentication": { "status": "NO_APLICA", "routes": [] }, "compatibility": { "status": "COMPATIBLE", "operations": ["delegacion_humana", "arbitraje"] },
+      "operational_profile": { "profile_id": "humano", "evidence": "OBSERVADO" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "endpoint humano no invocable", "source": "decisiones/0016-gates-de-admision-accion-y-emision.md" }
     },
-    "ARQUITECTO_LEAD": {
-      "actor": "Codex Arquitecto",
-      "adapter": ".agentes/arquitecto/AGENTS.override.md",
-      "capacidades": ["arbitraje", "arquitectura", "gate_integracion", "github_lectura"],
-      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    "codex-arquitecto": {
+      "role_id": "ARQUITECTO_LEAD", "assignment_ref": "equipo.md", "adapter": ".agentes/arquitecto/AGENTS.override.md", "cwd": ".agentes/arquitecto", "surface_type": "CODEX_DESKTOP", "invocable": true,
+      "observed_capabilities": ["arquitectura", "clasificacion_materialidad", "coordinacion_evidencia", "cierre_tecnico", "github_lectura", "github_cierre"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["solo_lectura", "ejecucion", "github", "github_cierre"] }, "authentication": { "status": "AUTENTICADA", "routes": ["github", "github_cierre"] }, "compatibility": { "status": "COMPATIBLE", "operations": ["solo_lectura", "ejecucion", "github", "github_cierre"] },
+      "operational_profile": { "profile_id": "github_close", "evidence": "PROBADO_EN_PR_125_126" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "cierre remoto supervisado", "source": "pendientes.md#permisos-y-ejecucion-no-interactiva" }
     },
-    "EJECUTOR_PRINCIPAL": {
-      "actor": "Codex",
-      "adapter": "AGENTS.md",
-      "capacidades": ["filesystem", "git", "github", "red", "ejecucion"],
-      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    "codex-ejecutor": {
+      "role_id": "EJECUTOR_PRINCIPAL", "assignment_ref": "equipo.md", "adapter": "AGENTS.md", "cwd": ".", "surface_type": "CODEX_DESKTOP", "invocable": true,
+      "observed_capabilities": ["implementacion", "prueba_observable", "publicacion", "filesystem", "git", "github", "red", "ejecucion"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["solo_lectura", "ejecucion", "git", "github", "red", "filesystem"] }, "authentication": { "status": "AUTENTICADA", "routes": ["github", "git"] }, "compatibility": { "status": "COMPATIBLE", "operations": ["solo_lectura", "ejecucion", "git", "github", "red", "filesystem"] },
+      "operational_profile": { "profile_id": "manual", "evidence": "PROBADO_EN_PR_124_126" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "rama commit push y PR supervisados", "source": "pendientes.md#permisos-y-ejecucion-no-interactiva" }
     },
-    "CONSULTOR_AUDITOR": {
-      "actor": "Codex Consultor",
-      "adapter": "CONSULTOR.md",
-      "capacidades": ["auditoria_continuidad", "reconciliacion"],
-      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    "codex-consultor": {
+      "role_id": "CONSULTOR_AUDITOR", "assignment_ref": "equipo.md", "adapter": ".consultor/AGENTS.override.md", "cwd": ".consultor", "surface_type": "CODEX_DESKTOP", "invocable": true,
+      "observed_capabilities": ["auditoria_continuidad", "reconciliacion", "propuesta_para_arbitraje", "solo_lectura"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["solo_lectura"] }, "authentication": { "status": "NO_APLICA", "routes": [] }, "compatibility": { "status": "COMPATIBLE", "operations": ["solo_lectura"] },
+      "operational_profile": { "profile_id": "puente", "evidence": "OBSERVADO" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "auditoria read-only y conducta fail closed", "source": "pendientes.md#permisos-y-ejecucion-no-interactiva" }
     },
-    "REVIEWER_INDEPENDIENTE": {
-      "actor": "Kimi",
-      "adapter": "reviewer-policy.md",
-      "capacidades": ["review_independiente"],
-      "confinamiento": { "mecanismo": "NO_CONFIGURADO", "evidencia": "NO_PROBADO" }
+    "kimi-reviewer": {
+      "role_id": "REVIEWER_INDEPENDIENTE", "assignment_ref": "equipo.md", "adapter": "reviewer-policy.md", "cwd": ".", "surface_type": "EXTERNAL_REVIEWER", "invocable": true,
+      "observed_capabilities": ["review_independiente", "hallazgos", "solo_lectura"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["solo_lectura"] }, "authentication": { "status": "AUTENTICADA", "routes": ["review"] }, "compatibility": { "status": "COMPATIBLE", "operations": ["solo_lectura", "review"] },
+      "operational_profile": { "profile_id": "review", "evidence": "PROBADO_LOCALMENTE" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "review independiente read-only", "source": "pendientes.md" }
+    },
+    "claude-especialista": {
+      "role_id": "ESPECIALISTAS_BAJO_DEMANDA", "assignment_ref": "equipo.md", "adapter": "CLAUDE.md", "cwd": ".", "surface_type": "CLAUDE_CODE", "invocable": true,
+      "observed_capabilities": ["especialidad_bajo_demanda", "solo_lectura", "web"],
+      "authorization": { "status": "AUTORIZADO", "operations": ["solo_lectura", "web"] }, "authentication": { "status": "NO_APLICA", "routes": [] }, "compatibility": { "status": "COMPATIBLE", "operations": ["solo_lectura", "web"] },
+      "operational_profile": { "profile_id": "puente", "evidence": "PROBADO_EN_SESION_FRIA" }, "confinement": { "mechanism": "NO_CONFIGURADO", "evidence": "NO_PROBADO" },
+      "provenance": { "date": "2026-08-23", "scope": "especialista read-only", "source": "pendientes.md#permisos-y-ejecucion-no-interactiva" }
     }
   }
 }

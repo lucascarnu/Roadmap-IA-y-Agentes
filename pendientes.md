@@ -66,10 +66,12 @@ divide en cuatro unidades:
 1. **Unidad 1 — decisión.** Registra la separación entre gate mecánico,
    validación posterior y regla de conducta, el catálogo durable de roles y las
    condiciones de las unidades siguientes.
-2. **Unidad 2a — contrato.** Separa catálogo y registro operacional, incorpora
-   `role_id`, ejecuta el cutover compatible de aliases y resuelve la admisión de
-   perfiles que necesiten `modo: ejecucion` sin promover la evidencia de
-   confinamiento.
+2. **Unidad 2a — contrato.** **EN IMPLEMENTACIÓN en PR separada.** Separa
+   catálogo y registro operacional, incorpora identidad canónica por `role_id`
+   y `surface_id`, ejecuta el cutover compatible de aliases y resuelve la
+   admisión supervisada de perfiles `manual` y `github_close` sin promover la
+   evidencia `NO_PROBADO` de confinamiento. Mantiene `puente` y `review` en
+   sólo lectura, y deja runtime, efectos y locks para las unidades posteriores.
 3. **Unidad 2b — motor.** Implementa admisión, acción y emisión en los canales
    controlados, incluido el preflight documental, la matriz de dependencias y
    el transporte PC/iPad.
