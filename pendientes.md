@@ -293,18 +293,28 @@ La comprobación de coincidencia es la que cierra el defecto 1: si el informe
 declara incluir un JSON u otro artefacto y aparece vacío, incompleto o distinto
 del persistido, el gate impide la emisión.
 
-**Posta real — REQUISITO / REGLA PENDIENTE DE IMPLEMENTACIÓN; no es un gate
-mecánico vigente.** `ENTREGA_CONFIRMADA` exige una única invocación real con
+**Posta real — requisito de [0016](decisiones/0016-gates-de-admision-accion-y-emision.md)
+especializado en este [enforcement mecánico de las devoluciones](#enforcement-mecánico-de-las-devoluciones),
+sin crear una regla genérica duplicada.** Su clasificación depende de la
+superficie: en un canal controlado es `GATE_MECANICO` pendiente de implementación
+en la Unidad 2b, porque la emisión puede interceptarse; en chat libre es
+`VALIDACION_POSTERIOR` más `REGLA_DE_CONDUCTA` transitoria mientras no exista
+enforcement. Ninguna de las dos superficies tiene hoy el gate implementado y el
+incidente observado permanece abierto.
+
+En ambas superficies, `ENTREGA_CONFIRMADA` exige una única invocación real con
 `TRANSPORTE_REAL_ID` y que el receptor procese ese mismo identificador.
-`HANDOFF_COMPLETE` exige además la salida humana o contractual requerida. Si
-falta cualquiera de esas condiciones, el estado es `ENTREGA_NO_CONFIRMADA` y
-bloquea marcar ready, integrar e iniciar la unidad siguiente.
+`HANDOFF_COMPLETE` exige además la salida humana o contractual requerida. Un
+final local o `ENVIADO_A` sin invocación real y procesamiento del mismo
+`TRANSPORTE_REAL_ID` produce `ENTREGA_NO_CONFIRMADA` y bloquea marcar ready,
+integrar e iniciar la unidad siguiente.
 
 Después de observar terminal o idle, el emisor reconcilia una sola vez, con
-timeout finito y sin retry ciego. Implementar este gate es la primera porción de
-la Unidad 2b; la Unidad 3 agrega el fixture negativo en el que un final local sin
-transporte falla. Hasta que ambas porciones existan y pasen sus pruebas, esta
-regla describe el requisito aceptado pero no permite afirmar enforcement
+timeout finito y sin retry ciego. Este requisito queda
+`PENDIENTE_DE_IMPLEMENTACION` como primera porción de la Unidad 2b; la Unidad 3
+debe cubrir fixtures positivo y negativo, incluido el caso exacto de final local
+o `ENVIADO_A` sin transporte real y procesamiento del identificador. Hasta que
+esas porciones existan y pasen sus pruebas, no puede afirmarse enforcement
 mecánico.
 
 **Deduplicación.** No hay ningún asunto previo sobre plantillas ni formato de
