@@ -729,8 +729,15 @@ evidencia entre roles que compartan proveedor.
 | --- | --- | --- | --- |
 | Codex — Ejecutor Principal, raíz | `AGENTS.md`; perfil, sandbox y aprobaciones efectivos de la sesión | Rama, commit, push y PR sin aprobación manual observados en PR #124 y #126 | Identidad positiva/negativa, lectura, escritura, Git y GitHub desde una sesión nueva |
 | Codex — Arquitecto / Lead, `.agentes/arquitecto/` | Adapter cercano y `ARQUITECTO.md`; permisos efectivos registrados por sesión | Identidad y cierre remoto durable observados en PR #125/#126 | Matriz completa de identidad, lectura, escritura y red desde una sesión nueva |
-| Codex — Consultor / Auditor, `.consultor/` | Adapter cercano y `CONSULTOR.md`; sin transferencia de permisos desde otros Codex | Identidad activa observada; no se presume escritura general | Identidad positiva/negativa, lectura y ausencia de mutación no autorizada desde una sesión nueva |
-| Claude — Especialista bajo demanda | `CLAUDE.md` y `.claude/settings.json`, sin shell, edición, Git/GitHub ni MCP | Política versionada y documentación reconsultada; no equivale a prueba operativa | Sesión nueva después de la limpieza local: Read/Grep/Web permitidos y mutaciones denegadas sin prompts |
+| Codex — Consultor / Auditor, `.consultor/` | Adapter cercano y `CONSULTOR.md`; Terminal/PowerShell respeta la raíz declarada, pero `fileChange` no comparte ese enforcement | La prueba fría mostró el sandbox de Terminal y que `fileChange` atravesó la raíz superior; el control vigente fuera de `.consultor/` es conducta fail closed, no aislamiento fuerte | Reprobe corregido: ante una ruta exterior debe rechazar por conducta sin realizar ningún tool call |
+| Claude — Especialista bajo demanda | `CLAUDE.md` y `.claude/settings.json`, sin shell, edición, Git/GitHub ni MCP | Prueba fría: identidades negativas, Read/Grep/Web permitidos, y WebFetch no oficial y Edit denegados; además expuso mutadores y auxiliares no permitidos | Reprobe de la corrección explícita de `deny`, sin prompts ni capacidades nuevas |
+
+**Detalle de la prueba fría de Claude.** Además de las cuatro herramientas
+permitidas, la sesión expuso `Write`, `Monitor`, `Agent`, `Glob`, `Skill`,
+`CronCreate`, `CronDelete`, `CronList`, `RemoteTrigger`, `SendMessage`,
+`NotebookEdit`, `EnterWorktree`, `ExitWorktree`, `ScheduleWakeup`, `TaskOutput` y
+`TaskStop`. La política ahora los deniega explícitamente por nombre desnudo; la
+corrección queda pendiente de reprobe.
 
 **Capas ampliadoras verificadas ausentes — 2026-08-22.** En user settings,
 `permissions.allow` está vacío; no existen archivos o registro managed,

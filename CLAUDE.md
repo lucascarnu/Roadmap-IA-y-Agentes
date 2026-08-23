@@ -38,6 +38,11 @@ retira shell, edición, MCP y cualquier capacidad permanente de workflow, y sól
 permite `WebSearch` como búsqueda web general y `WebFetch` únicamente para los
 dominios oficiales explícitos de `.claude/settings.json`.
 
+La lista explícita de `deny` cubre los mutadores y las herramientas auxiliares
+observados en la prueba fría. `defaultMode: dontAsk` sigue cerrando cualquier
+herramienta futura que no esté permitida; esto no declara un sandbox del sistema
+operativo.
+
 Esta configuración es una política de herramientas, no un sandbox del sistema
 operativo ni evidencia de confinamiento fuerte.
 

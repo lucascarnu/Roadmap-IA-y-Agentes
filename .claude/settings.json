@@ -13,7 +13,23 @@
       "Edit(/**)",
       "Bash",
       "PowerShell",
-      "mcp__*"
+      "mcp__*",
+      "Write",
+      "Monitor",
+      "Agent",
+      "Glob",
+      "Skill",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "RemoteTrigger",
+      "SendMessage",
+      "NotebookEdit",
+      "EnterWorktree",
+      "ExitWorktree",
+      "ScheduleWakeup",
+      "TaskOutput",
+      "TaskStop"
     ]
   }
 }
