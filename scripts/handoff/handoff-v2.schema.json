@@ -1,96 +1,23 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Handoff contract v2",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario", "modo", "objeto_entrada", "objeto_producido", "mutaciones_permitidas", "operaciones_permitidas", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Handoff contract v2", "type": "object", "additionalProperties": false,
+  "required": ["handoff_version", "artifact_id", "tarea", "head_sha", "profile_id", "contexto_autorizado", "origen", "destinatario", "modo", "salida_requerida", "objeto_entrada", "objeto_producido", "mutaciones_permitidas", "operaciones_permitidas", "acciones_prohibidas", "rollback", "postcondiciones", "disparadores_0015", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"],
   "properties": {
-    "handoff_version": { "const": "2" },
-    "tarea": { "type": "string", "minLength": 1 },
-    "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "contexto_autorizado": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
-    "origen": {
-      "type": "object", "additionalProperties": false, "required": ["ejecutor", "rol"],
-      "properties": { "ejecutor": { "type": "string" }, "rol": { "type": "string" } }
-    },
-    "destinatario": { "$ref": "#/$defs/actorDescriptor" },
-    "modo": { "enum": ["solo_lectura", "ejecucion"] },
-    "objeto_entrada": { "$ref": "#/$defs/objectDescriptor" },
-    "objeto_producido": { "$ref": "#/$defs/objectDescriptor" },
-    "mutaciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-    "operaciones_permitidas": {
-      "type": "array", "items": {
-        "type": "object", "additionalProperties": false, "required": ["tipo", "objetivo"],
-        "properties": { "tipo": { "enum": ["git", "github", "red", "filesystem"] }, "objetivo": { "type": "string", "minLength": 1 } }
-      }
-    },
-    "impacto_economico": {
-      "oneOf": [
-        { "type": "object", "additionalProperties": false, "required": ["tipo"], "properties": { "tipo": { "const": "no_aplica" } } },
-        {
-          "type": "object", "additionalProperties": false,
-          "required": ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "politica_costo_indeterminado"],
-          "properties": {
-            "tipo": { "const": "aplica" }, "objetivo_economico": { "type": "string" }, "moneda": { "type": "string" },
-            "cap_acumulado": { "type": "number", "minimum": 0 }, "maximo_intento": { "type": "number", "minimum": 0 },
-            "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" }
-          }
-        }
-      ]
-    },
-    "reintentos": {
-      "type": "object", "additionalProperties": false, "required": ["maximos", "politica_costo_indeterminado"],
-      "properties": { "maximos": { "const": 0 }, "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" } }
-    },
-    "transiciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-    "estado_canonico": {
-      "type": "object", "additionalProperties": false,
-      "required": ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"],
-      "properties": {
-        "accion_anterior": { "$ref": "#/$defs/actionIdentity" },
-        "evidencia_cierre": {
-          "type": "object", "additionalProperties": false, "required": ["tipo", "referencia", "head_o_historial"],
-          "properties": {
-            "tipo": { "enum": ["PR_INTEGRADA", "COMMIT", "ARTEFACTO_CON_HASH", "RESULTADO_VALIDADO"] },
-            "referencia": { "type": "string" }, "head_o_historial": { "type": "string" }
-          }
-        },
-        "proxima_accion": { "$ref": "#/$defs/actionIdentity" },
-        "head_reconciliacion": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
-      }
-    },
-    "operaciones_delegadas_a_humanos": {
-      "type": "array", "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["categoria", "referencia_canonica", "condicion_observable", "actor_o_capacidad_requerida", "naturaleza"],
-        "properties": {
-          "categoria": { "enum": ["CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", "COSTO_RELEVANTE_O_PAYG", "PRIVACIDAD_O_SEGURIDAD_ACEPTADA", "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO", "ALTERNATIVAS_MATERIALES_NO_RESUELTAS_POR_EVIDENCIA", "CONTRADICCION_CON_INSTRUCCION_DEL_DIRECTOR", "EVIDENCIA_INSUFICIENTE_PARA_GATE_OBLIGATORIO", "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE"] },
-          "referencia_canonica": { "type": "string" }, "condicion_observable": { "type": "string" },
-          "actor_o_capacidad_requerida": { "type": "string" },
-          "naturaleza": { "enum": ["DECISION_MATERIAL", "ACCION_FISICA", "OPERACION_RUTINARIA"] },
-          "explicacion": { "type": "string" }
-        }
-      }
-    }
+    "handoff_version": { "const": "2" }, "artifact_id": { "type": "string", "minLength": 1 }, "tarea": { "type": "string", "minLength": 1 }, "head_sha": { "$ref": "#/$defs/sha40" }, "profile_id": { "enum": ["manual", "github_close", "puente", "review"] },
+    "contexto_autorizado": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }, "origen": { "$ref": "#/$defs/identity" }, "destinatario": { "$ref": "#/$defs/target" }, "modo": { "enum": ["solo_lectura", "ejecucion"] }, "salida_requerida": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "objeto_entrada": { "$ref": "#/$defs/objectDescriptor" }, "objeto_producido": { "$ref": "#/$defs/objectDescriptor" },
+    "mutaciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }, "operaciones_permitidas": { "type": "array", "items": { "$ref": "#/$defs/operation" } }, "acciones_prohibidas": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "rollback": { "type": "object", "additionalProperties": false, "required": ["strategy", "reference"], "properties": { "strategy": { "enum": ["NO_APLICA", "REVERTIR_COMMIT", "RESTAURAR_ESTADO"] }, "reference": { "type": "string" } } },
+    "postcondiciones": { "type": "array", "items": { "$ref": "#/$defs/objectDescriptor" } }, "disparadores_0015": { "type": "array", "maxItems": 0 },
+    "impacto_economico": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["tipo"], "properties": { "tipo": { "const": "no_aplica" } } }, { "type": "object", "additionalProperties": false, "required": ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "politica_costo_indeterminado"], "properties": { "tipo": { "const": "aplica" }, "objetivo_economico": { "type": "string" }, "moneda": { "type": "string" }, "cap_acumulado": { "type": "number", "minimum": 0 }, "maximo_intento": { "type": "number", "minimum": 0 }, "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" } } }] },
+    "reintentos": { "type": "object", "additionalProperties": false, "required": ["maximos", "politica_costo_indeterminado"], "properties": { "maximos": { "const": 0 }, "politica_costo_indeterminado": { "const": "DETENER_SIN_REINTENTO" } } }, "transiciones_permitidas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "estado_canonico": { "type": "object", "additionalProperties": false, "required": ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"], "properties": { "accion_anterior": { "$ref": "#/$defs/objectDescriptor" }, "evidencia_cierre": { "type": "object", "additionalProperties": false, "required": ["tipo", "referencia", "head_o_historial"], "properties": { "tipo": { "enum": ["PR_INTEGRADA", "COMMIT", "ARTEFACTO_CON_HASH", "RESULTADO_VALIDADO"] }, "referencia": { "type": "string" }, "head_o_historial": { "type": "string" } } }, "proxima_accion": { "$ref": "#/$defs/objectDescriptor" }, "head_reconciliacion": { "$ref": "#/$defs/sha40" } } },
+    "operaciones_delegadas_a_humanos": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["categoria", "referencia_canonica", "condicion_observable", "actor_o_capacidad_requerida", "naturaleza"], "properties": { "categoria": { "type": "string" }, "referencia_canonica": { "type": "string" }, "condicion_observable": { "type": "string" }, "actor_o_capacidad_requerida": { "type": "string" }, "naturaleza": { "enum": ["DECISION_MATERIAL", "ACCION_FISICA", "OPERACION_RUTINARIA"] }, "explicacion": { "type": "string" } } } }
   },
-  "allOf": [
-    {
-      "if": { "properties": { "modo": { "const": "solo_lectura" } }, "required": ["modo"] },
-      "then": { "properties": { "mutaciones_permitidas": { "maxItems": 0 } } }
-    }
-  ],
+  "allOf": [{ "if": { "properties": { "modo": { "const": "solo_lectura" } }, "required": ["modo"] }, "then": { "properties": { "mutaciones_permitidas": { "maxItems": 0 } } } }],
   "$defs": {
-    "actorDescriptor": {
-      "type": "object", "additionalProperties": false, "required": ["rol", "capacidades_requeridas"],
-      "properties": { "rol": { "type": "string" }, "capacidades_requeridas": { "type": "array", "uniqueItems": true, "items": { "type": "string" } } }
-    },
-    "actionIdentity": {
-      "type": "object", "additionalProperties": false, "required": ["id", "descripcion"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "descripcion": { "type": "string", "minLength": 1 } }
-    },
-    "objectDescriptor": {
-      "type": "object", "additionalProperties": false, "required": ["id", "descripcion"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "descripcion": { "type": "string", "minLength": 1 } }
-    }
+    "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "identity": { "type": "object", "additionalProperties": false, "required": ["role_id", "surface_id"], "properties": { "role_id": { "type": "string" }, "surface_id": { "type": "string" } } },
+    "target": { "type": "object", "additionalProperties": false, "required": ["role_id", "surface_id", "required_capabilities"], "properties": { "role_id": { "type": "string" }, "surface_id": { "type": "string" }, "required_capabilities": { "type": "array", "uniqueItems": true, "items": { "type": "string" } } } },
+    "objectDescriptor": { "type": "object", "additionalProperties": false, "required": ["id", "descripcion"], "properties": { "id": { "type": "string", "minLength": 1 }, "descripcion": { "type": "string", "minLength": 1 } } },
+    "operation": { "type": "object", "additionalProperties": false, "required": ["tipo", "objetivo"], "properties": { "tipo": { "enum": ["git", "github", "red", "filesystem"] }, "objetivo": { "type": "string", "minLength": 1 } } }
   }
 }

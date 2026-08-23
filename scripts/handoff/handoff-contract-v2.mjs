@@ -1,351 +1,148 @@
-export const GOVERNING_CONTEXT_V2 = Object.freeze([
-  "reglas.md",
-  "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md",
-  "equipo.md",
-  "decisiones/README.md",
-  "pendientes.md",
-]);
+export const GOVERNING_CONTEXT_V2 = Object.freeze(["reglas.md", "decisiones/0009-modelo-operativo-de-desarrollo-con-ia.md", "equipo.md", "decisiones/README.md", "pendientes.md"]);
+export const HANDOFF_V2_DECISIONS = Object.freeze(["SIN_OBJECIONES", "OBJECION_MATERIAL", "REQUIERE_ARBITRAJE", "BLOQUEADO_POR_LIMITE", "BLOQUEADO_POR_GATE"]);
+export const HANDOFF_V2_ROLE_IDS = Object.freeze(["DIRECTOR_PRODUCT_OWNER", "ARQUITECTO_LEAD", "EJECUTOR_PRINCIPAL", "REVIEWER_INDEPENDIENTE", "QA_VALIDACION", "CONSULTOR_AUDITOR", "ESPECIALISTAS_BAJO_DEMANDA"]);
+export const HANDOFF_V2_HUMAN_CATEGORIES = Object.freeze(["CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", "COSTO_RELEVANTE_O_PAYG", "PRIVACIDAD_O_SEGURIDAD_ACEPTADA", "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO", "ALTERNATIVAS_MATERIALES_NO_RESUELTAS_POR_EVIDENCIA", "CONTRADICCION_CON_INSTRUCCION_DEL_DIRECTOR", "EVIDENCIA_INSUFICIENTE_PARA_GATE_OBLIGATORIO", "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE"]);
+export const HANDOFF_V2_EVIDENCE_TYPES = Object.freeze(["PR_INTEGRADA", "COMMIT", "ARTEFACTO_CON_HASH", "RESULTADO_VALIDADO"]);
+export const CONFINEMENT_EVIDENCE = Object.freeze(["NO_PROBADO", "PROBADO_LOCALMENTE", "VALIDADO_OPERATIVAMENTE"]);
+export const PROFILE_MODES = Object.freeze({ manual: ["solo_lectura", "ejecucion"], github_close: ["solo_lectura", "ejecucion"], puente: ["solo_lectura"], review: ["solo_lectura"] });
 
-export const HANDOFF_V2_DECISIONS = Object.freeze([
-  "SIN_OBJECIONES",
-  "OBJECION_MATERIAL",
-  "REQUIERE_ARBITRAJE",
-  "BLOQUEADO_POR_LIMITE",
-  "BLOQUEADO_POR_GATE",
-]);
-
-export const HANDOFF_V2_HUMAN_CATEGORIES = Object.freeze([
-  "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION",
-  "COSTO_RELEVANTE_O_PAYG",
-  "PRIVACIDAD_O_SEGURIDAD_ACEPTADA",
-  "ACCION_IRREVERSIBLE_O_IMPACTO_EXTERNO",
-  "ALTERNATIVAS_MATERIALES_NO_RESUELTAS_POR_EVIDENCIA",
-  "CONTRADICCION_CON_INSTRUCCION_DEL_DIRECTOR",
-  "EVIDENCIA_INSUFICIENTE_PARA_GATE_OBLIGATORIO",
-  "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE",
-]);
-
-export const HANDOFF_V2_EVIDENCE_TYPES = Object.freeze([
-  "PR_INTEGRADA",
-  "COMMIT",
-  "ARTEFACTO_CON_HASH",
-  "RESULTADO_VALIDADO",
-]);
-
-export const CONFINEMENT_EVIDENCE = Object.freeze([
-  "NO_PROBADO",
-  "PROBADO_LOCALMENTE",
-  "VALIDADO_OPERATIVAMENTE",
-]);
-
-const DECISION_STATE = Object.freeze({
-  SIN_OBJECIONES: "COMPLETADO",
-  OBJECION_MATERIAL: "COMPLETADO",
-  REQUIERE_ARBITRAJE: "COMPLETADO",
-  BLOQUEADO_POR_LIMITE: "BLOQUEADO",
-  BLOQUEADO_POR_GATE: "BLOQUEADO",
+const DECISION_STATE = Object.freeze({ SIN_OBJECIONES: "COMPLETADO", OBJECION_MATERIAL: "COMPLETADO", REQUIERE_ARBITRAJE: "COMPLETADO", BLOQUEADO_POR_LIMITE: "BLOQUEADO", BLOQUEADO_POR_GATE: "BLOQUEADO" });
+const HUMAN_REFERENCE = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
+const PHYSICAL_REFERENCE = "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo";
+const SIGNATURE_KEYS = Object.freeze(["ejecutor_real", "entorno", "modelo_configurado", "modelo_efectivo", "esfuerzo_o_modo_configurado", "esfuerzo_o_modo_efectivo", "sujeto_evaluado", "via_evaluada", "fecha"]);
+const EXACT_ALIASES = Object.freeze({
+  "Codex Arquitecto": { role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" },
+  "Codex": { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" },
+  "Codex Consultor": { role_id: "CONSULTOR_AUDITOR", surface_id: "codex-consultor" },
+  "Claude": { role_id: "ESPECIALISTAS_BAJO_DEMANDA", surface_id: "claude-especialista" },
+  "Kimi": { role_id: "REVIEWER_INDEPENDIENTE", surface_id: "kimi-reviewer" },
+});
+const EXACT_HEADER_LITERALS = Object.freeze({
+  "CODEX — ARQUITECTO / LEAD": "Codex Arquitecto",
+  "CODEX — EJECUTOR PRINCIPAL": "Codex",
+  "CODEX — CONSULTOR / AUDITOR DE CONTINUIDAD Y COHERENCIA": "Codex Consultor",
+  "CLAUDE — ESPECIALISTAS BAJO DEMANDA": "Claude",
+  "KIMI — REVIEWER INDEPENDIENTE": "Kimi",
 });
 
-const HUMAN_CATEGORY_NATURE = Object.freeze(Object.fromEntries(
-  HANDOFF_V2_HUMAN_CATEGORIES.map((category) => [
-    category,
-    category === "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE" ? "ACCION_FISICA" : "DECISION_MATERIAL",
-  ]),
-));
+export class HandoffContractV2Error extends Error { constructor(code, message) { super(message); this.name = "HandoffContractV2Error"; this.code = code; } }
+function fail(code, message) { throw new HandoffContractV2Error(code, message); }
+function object(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function keys(value, required, allowed, label) { if (!object(value)) fail("ESTRUCTURA_INVALIDA", `${label} debe ser objeto`); const missing = required.filter((key) => !Object.hasOwn(value, key)); if (missing.length) fail("CAMPO_REQUERIDO_AUSENTE", `${label} omite: ${missing.join(", ")}`); const extras = Object.keys(value).filter((key) => !allowed.includes(key)); if (extras.length) fail("CAMPO_NO_ADMITIDO", `${label} contiene: ${extras.join(", ")}`); }
+function text(value, code, label) { if (typeof value !== "string" || !value.trim()) fail(code, `${label} debe ser texto no vacío`); }
+function relative(path) { if (typeof path !== "string" || !path || path.startsWith("/") || path.startsWith("\\")) return false; const normalized = path.replaceAll("\\", "/"); return !/^[A-Za-z]:\//.test(normalized) && !normalized.split("/").includes("..") && !normalized.includes("\0"); }
+function sha40(value) { return typeof value === "string" && /^[0-9a-f]{40}$/.test(value); }
+function sha256(value) { return typeof value === "string" && /^[0-9a-f]{64}$/.test(value); }
+function utf8Bytes(value) { return new TextEncoder().encode(value).byteLength; }
+function stringArray(value, code, label) { if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim()) || new Set(value).size !== value.length) fail(code, `${label} debe ser array único de strings no vacíos`); }
+function deps(input) { if (!object(input?.catalog) || !object(input.catalog.roles)) fail("CATALOGO_INVALIDO", "El catálogo durable debe inyectarse"); if (!object(input?.registry) || input.registry.version !== "2" || !object(input.registry.surfaces)) fail("REGISTRO_INVALIDO", "El registro operacional v2 debe inyectarse"); return input; }
 
-const HUMAN_CATEGORY_REFERENCE = Object.freeze(Object.fromEntries(
-  HANDOFF_V2_HUMAN_CATEGORIES.map((category) => [
-    category,
-    category === "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE"
-      ? "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo"
-      : "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director",
-  ]),
-));
-
-const SIGNATURE_KEYS = Object.freeze([
-  "ejecutor_real",
-  "entorno",
-  "modelo_configurado",
-  "modelo_efectivo",
-  "esfuerzo_o_modo_configurado",
-  "esfuerzo_o_modo_efectivo",
-  "sujeto_evaluado",
-  "via_evaluada",
-  "fecha",
-]);
-
-export class HandoffContractV2Error extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = "HandoffContractV2Error";
-    this.code = code;
-  }
+export function validateRoleCatalog(catalog) {
+  if (!object(catalog) || catalog.version !== "1" || !object(catalog.roles)) fail("CATALOGO_INVALIDO", "Catálogo inválido");
+  const actual = Object.keys(catalog.roles).sort(); const expected = [...HANDOFF_V2_ROLE_IDS].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) fail("CATALOGO_DERIVA", "El catálogo debe proyectar exactamente los siete roles de 0016");
+  for (const [role, entry] of Object.entries(catalog.roles)) { keys(entry, ["canonical_name", "capabilities", "incompatibilities"], ["canonical_name", "capabilities", "incompatibilities"], role); text(entry.canonical_name, "CATALOGO_INVALIDO", `${role}.canonical_name`); stringArray(entry.capabilities, "CATALOGO_INVALIDO", `${role}.capabilities`); stringArray(entry.incompatibilities, "CATALOGO_INVALIDO", `${role}.incompatibilities`); for (const forbidden of ["actor", "occupant", "provider", "model", "cwd", "adapter", "evidence"]) if (Object.hasOwn(entry, forbidden)) fail("CATALOGO_CONTAMINADO", `${role}.${forbidden}`); }
+  return catalog;
 }
 
-function fail(code, message) {
-  throw new HandoffContractV2Error(code, message);
+export function validateOperationalRegistry(registry, catalog) {
+  validateRoleCatalog(catalog); if (!object(registry) || registry.version !== "2" || !object(registry.surfaces)) fail("REGISTRO_INVALIDO", "Registro v2 inválido");
+  for (const [surfaceId, surface] of Object.entries(registry.surfaces)) {
+    const required = ["role_id", "assignment_ref", "adapter", "cwd", "surface_type", "invocable", "observed_capabilities", "authorization", "authentication", "compatibility", "operational_profile", "payload_sharing", "confinement", "provenance"];
+    keys(surface, required, required, surfaceId); if (!catalog.roles[surface.role_id]) fail("ROL_NO_RESUELTO", surface.role_id); if (surface.assignment_ref !== "equipo.md") fail("ASIGNACION_NO_CANONICA", surfaceId);
+    for (const field of ["adapter", "cwd", "surface_type"]) text(surface[field], "REGISTRO_INVALIDO", `${surfaceId}.${field}`); if (typeof surface.invocable !== "boolean") fail("REGISTRO_INVALIDO", `${surfaceId}.invocable`); stringArray(surface.observed_capabilities, "REGISTRO_INVALIDO", `${surfaceId}.observed_capabilities`);
+    keys(surface.authorization, ["status", "operations"], ["status", "operations"], `${surfaceId}.authorization`); stringArray(surface.authorization.operations, "REGISTRO_INVALIDO", `${surfaceId}.authorization.operations`); if (!['AUTORIZADO', 'NO_AUTORIZADO'].includes(surface.authorization.status)) fail("REGISTRO_INVALIDO", `${surfaceId}.authorization.status`);
+    keys(surface.authentication, ["status", "routes"], ["status", "routes"], `${surfaceId}.authentication`); stringArray(surface.authentication.routes, "REGISTRO_INVALIDO", `${surfaceId}.authentication.routes`); if (!['AUTENTICADA', 'NO_AUTENTICADA', 'NO_APLICA'].includes(surface.authentication.status)) fail("REGISTRO_INVALIDO", `${surfaceId}.authentication.status`);
+    keys(surface.compatibility, ["status", "operations"], ["status", "operations"], `${surfaceId}.compatibility`); stringArray(surface.compatibility.operations, "REGISTRO_INVALIDO", `${surfaceId}.compatibility.operations`); if (!['COMPATIBLE', 'INCOMPATIBLE'].includes(surface.compatibility.status)) fail("REGISTRO_INVALIDO", `${surfaceId}.compatibility.status`);
+    keys(surface.operational_profile, ["profile_id", "evidence"], ["profile_id", "evidence"], `${surfaceId}.operational_profile`); text(surface.operational_profile.profile_id, "REGISTRO_INVALIDO", `${surfaceId}.profile_id`); text(surface.operational_profile.evidence, "REGISTRO_INVALIDO", `${surfaceId}.profile.evidence`);
+    keys(surface.payload_sharing, ["status", "reference"], ["status", "reference"], `${surfaceId}.payload_sharing`); if (!['NO_APLICA', 'NO_AUTORIZADO', 'AUTORIZADO'].includes(surface.payload_sharing.status) || typeof surface.payload_sharing.reference !== "string" || (surface.payload_sharing.status === "NO_AUTORIZADO" && !surface.payload_sharing.reference.trim())) fail("REGISTRO_INVALIDO", `${surfaceId}.payload_sharing`);
+    keys(surface.confinement, ["mechanism", "evidence"], ["mechanism", "evidence"], `${surfaceId}.confinement`); if (surface.confinement.evidence !== "NO_PROBADO" || surface.confinement.mechanism !== "NO_CONFIGURADO") fail("CONFINAMIENTO_INVALIDO", surfaceId);
+    keys(surface.provenance, ["date", "scope", "source"], ["date", "scope", "source"], `${surfaceId}.provenance`); for (const field of ["date", "scope", "source"]) text(surface.provenance[field], "REGISTRO_INVALIDO", `${surfaceId}.provenance.${field}`);
+  }
+  return registry;
 }
 
-function isObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function surfacesFor(roleId, registry) { return Object.entries(registry.surfaces).filter(([, surface]) => surface.role_id === roleId); }
+export function resolveCanonicalIdentity(identity, dependencies = {}, options = {}) {
+  const d = deps(dependencies); validateRoleCatalog(d.catalog); validateOperationalRegistry(d.registry, d.catalog);
+  keys(identity, ["role_id", "surface_id"], ["role_id", "surface_id"], "identidad");
+  if (!d.catalog.roles[identity.role_id]) fail("ROL_NO_RESUELTO", identity.role_id);
+  if (!identity.surface_id) { const matches = surfacesFor(identity.role_id, d.registry); if (matches.length === 0) fail("ROL_NO_CONFIGURADO", identity.role_id); fail("ROL_AMBIGUO", `${identity.role_id} exige surface_id exacto`); }
+  const surface = d.registry.surfaces[identity.surface_id]; if (!surface) { if (surfacesFor(identity.role_id, d.registry).length === 0) fail("ROL_NO_CONFIGURADO", identity.role_id); fail("ROL_NO_RESUELTO", identity.surface_id); }
+  if (surface.role_id !== identity.role_id) fail("ROL_INCOMPATIBLE", `${identity.role_id}/${identity.surface_id}`);
+  if (options.requireInvocable && !surface.invocable) fail("OPERACION_NO_AUTORIZADA", `${identity.surface_id} no es invocable`);
+  return surface;
 }
 
-function requireKeys(value, keys, label) {
-  if (!isObject(value)) fail("ESTRUCTURA_INVALIDA", `${label} debe ser objeto`);
-  const missing = keys.filter((key) => !Object.hasOwn(value, key));
-  if (missing.length) fail("CAMPO_REQUERIDO_AUSENTE", `${label} omite: ${missing.join(", ")}`);
+export function resolveBoundaryIdentity(input, effective = {}, dependencies = {}) {
+  if (object(input) && input.role_id) { const identity = { role_id: input.role_id, surface_id: input.surface_id }; resolveCanonicalIdentity(identity, dependencies); return identity; }
+  let alias = typeof input === "string" ? input : input?.literal; const declaredRole = object(input) ? input.DESTINATARIO_ROLE_ID : undefined;
+  if (typeof alias !== "string" || !alias.trim()) fail("ROL_NO_RESUELTO", "Alias ausente"); alias = EXACT_HEADER_LITERALS[alias] ?? alias;
+  if (alias === "codex") {
+    const candidates = Object.entries(dependencies.registry?.surfaces ?? {}).filter(([, surface]) => surface.surface_type === "CODEX_DESKTOP" && surface.adapter === effective.adapter && surface.cwd === effective.cwd);
+    if (candidates.length !== 1) fail("ROL_AMBIGUO", "codex exige adapter y cwd efectivos únicos"); const [surface_id, surface] = candidates[0]; if (declaredRole && declaredRole !== surface.role_id) fail("ROL_INCOMPATIBLE", declaredRole); return { role_id: surface.role_id, surface_id };
+  }
+  const normalized = EXACT_ALIASES[alias]; if (!normalized) fail("ROL_NO_RESUELTO", alias); if (declaredRole && declaredRole !== normalized.role_id) fail("ROL_INCOMPATIBLE", declaredRole); return { ...normalized };
 }
+export function projectV1Alias(identity) { const entry = Object.entries(EXACT_ALIASES).find(([, value]) => value.role_id === identity.role_id && value.surface_id === identity.surface_id); if (!entry) fail("ROL_NO_RESUELTO", `${identity.role_id}/${identity.surface_id}`); return entry[0]; }
+export function projectLegacyIdentityHeader(identity) { return { literal: projectV1Alias(identity), DESTINATARIO_ROLE_ID: identity.role_id }; }
 
-function rejectExtras(value, keys, label) {
-  const extras = Object.keys(value).filter((key) => !keys.includes(key));
-  if (extras.length) fail("CAMPO_NO_ADMITIDO", `${label} contiene: ${extras.join(", ")}`);
+function validateTarget(target, context, dependencies, options = {}) {
+  keys(target, ["role_id", "surface_id", "required_capabilities"], ["role_id", "surface_id", "required_capabilities"], "destinatario"); if (!Array.isArray(target.required_capabilities)) fail("ESTRUCTURA_INVALIDA", "required_capabilities");
+  const surface = resolveCanonicalIdentity({ role_id: target.role_id, surface_id: target.surface_id }, dependencies, options); const missing = target.required_capabilities.filter((capability) => !surface.observed_capabilities.includes(capability)); if (missing.length) fail("CAPACIDAD_NO_DISPONIBLE", missing.join(", ")); if (!context.includes(surface.adapter)) fail("ADAPTER_FUERA_DE_CONTEXTO", surface.adapter); return surface;
 }
-
-function requireNonEmptyString(value, code, label) {
-  if (typeof value !== "string" || !value.trim()) fail(code, `${label} debe ser string no vacío`);
+function validateOperationReadiness(contract, surface) {
+  const modes = PROFILE_MODES[contract.profile_id]; if (!modes || !modes.includes(contract.modo) || surface.operational_profile.profile_id !== contract.profile_id) fail("ROL_INCOMPATIBLE", `${contract.profile_id}/${surface.operational_profile.profile_id}`);
+  if (contract.modo === "ejecucion" && (!surface.operational_profile.evidence || surface.operational_profile.evidence.startsWith("NO_"))) fail("CAPACIDAD_NO_DISPONIBLE", `baseline ${contract.profile_id}`);
+  const requiredOps = [...new Set([contract.modo, ...contract.operaciones_permitidas.map((item) => item.tipo)])];
+  if (surface.payload_sharing.status === "NO_AUTORIZADO" && contract.operaciones_permitidas.length) fail("OPERACION_NO_AUTORIZADA", surface.payload_sharing.reference || "payload externo sin política");
+  for (const operation of requiredOps) {
+    if (!surface.authorization.operations.includes(operation) || surface.authorization.status !== "AUTORIZADO") fail("OPERACION_NO_AUTORIZADA", operation);
+    if (!surface.compatibility.operations.includes(operation) || surface.compatibility.status !== "COMPATIBLE") fail("ROL_INCOMPATIBLE", operation);
+    if (surface.authentication.status === "NO_AUTENTICADA" || (surface.authentication.routes.includes(operation) && surface.authentication.status !== "AUTENTICADA")) fail("VIA_NO_AUTENTICADA", operation);
+  }
+  if (contract.modo === "ejecucion") { if (!surface.invocable) fail("OPERACION_NO_AUTORIZADA", "superficie no invocable"); if (!contract.mutaciones_permitidas.length && !contract.operaciones_permitidas.length) fail("OPERACION_NO_AUTORIZADA", "ejecución sin efectos declarados"); if (contract.rollback.strategy === "NO_APLICA" || !contract.postcondiciones.length) fail("OPERACION_NO_AUTORIZADA", "ejecución sin rollback/postcondición"); }
 }
-
-function safeRelativePath(path) {
-  if (typeof path !== "string" || !path || path.startsWith("/") || path.startsWith("\\")) return false;
-  const normalized = path.replaceAll("\\", "/");
-  return !/^[A-Za-z]:\//.test(normalized) && !normalized.split("/").includes("..") && !normalized.includes("\0");
-}
-
-function registry(dependencies) {
-  if (!isObject(dependencies?.actors) || !isObject(dependencies.actors.roles)) {
-    fail("ACTORES_INVALIDOS", "El registro de actores debe inyectarse explícitamente");
-  }
-  return dependencies.actors;
-}
-
-function validateConfinement(actor, role) {
-  requireKeys(actor, ["actor", "adapter", "capacidades", "confinamiento"], `actor ${role}`);
-  if (!Array.isArray(actor.capacidades)) fail("ACTORES_INVALIDOS", `${role}.capacidades debe ser array`);
-  requireKeys(actor.confinamiento, ["mecanismo", "evidencia"], `${role}.confinamiento`);
-  if (!CONFINEMENT_EVIDENCE.includes(actor.confinamiento.evidencia)) {
-    fail("CONFINAMIENTO_INVALIDO", `${role} declara evidencia de confinamiento inválida`);
-  }
-  requireNonEmptyString(actor.confinamiento.mecanismo, "CONFINAMIENTO_INVALIDO", `${role}.confinamiento.mecanismo`);
-}
-
-function resolveRole(role, requiredCapabilities, dependencies) {
-  const actor = registry(dependencies).roles[role];
-  if (!actor) fail("ROL_NO_RESUELTO", `Rol no configurado: ${role}`);
-  validateConfinement(actor, role);
-  const missing = requiredCapabilities.filter((capability) => !actor.capacidades.includes(capability));
-  if (missing.length) fail("CAPACIDAD_ESTATICA_AUSENTE", `${role} carece de: ${missing.join(", ")}`);
-  return actor;
-}
-
-function validateActorDescriptor(descriptor, authorizedContext, dependencies, label) {
-  requireKeys(descriptor, ["rol", "capacidades_requeridas"], label);
-  rejectExtras(descriptor, ["rol", "capacidades_requeridas"], label);
-  if (!Array.isArray(descriptor.capacidades_requeridas)) {
-    fail("ESTRUCTURA_INVALIDA", `${label}.capacidades_requeridas debe ser array`);
-  }
-  const actor = resolveRole(descriptor.rol, descriptor.capacidades_requeridas, dependencies);
-  if (!authorizedContext.includes(actor.adapter)) fail("ADAPTER_FUERA_DE_CONTEXTO", actor.adapter);
-  return actor;
-}
-
-function validateObjectDescriptor(value, label) {
-  requireKeys(value, ["id", "descripcion"], label);
-  rejectExtras(value, ["id", "descripcion"], label);
-  requireNonEmptyString(value.id, "OBJETO_INVALIDO", `${label}.id`);
-  requireNonEmptyString(value.descripcion, "OBJETO_INVALIDO", `${label}.descripcion`);
-}
-
-function validateEconomicImpact(impact) {
-  requireKeys(impact, ["tipo"], "impacto_economico");
-  if (impact.tipo === "no_aplica") {
-    rejectExtras(impact, ["tipo"], "impacto_economico");
-    return;
-  }
-  if (impact.tipo !== "aplica") fail("IMPACTO_ECONOMICO_INVALIDO", "tipo inválido");
-  const keys = [
-    "tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento",
-    "politica_costo_indeterminado",
-  ];
-  requireKeys(impact, keys, "impacto_economico");
-  rejectExtras(impact, keys, "impacto_economico");
-  requireNonEmptyString(impact.objetivo_economico, "IMPACTO_ECONOMICO_INVALIDO", "objetivo_economico");
-  requireNonEmptyString(impact.moneda, "IMPACTO_ECONOMICO_INVALIDO", "moneda");
-  for (const key of ["cap_acumulado", "maximo_intento"]) {
-    if (typeof impact[key] !== "number" || !Number.isFinite(impact[key]) || impact[key] < 0) {
-      fail("IMPACTO_ECONOMICO_INVALIDO", `${key} inválido`);
-    }
-  }
-  if (impact.maximo_intento > impact.cap_acumulado) {
-    fail("MAXIMO_INTENTO_EXCEDE_CAP", "El máximo del intento excede el cap acumulado autorizado");
-  }
-  if (impact.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") {
-    fail("POLITICA_COSTO_INDETERMINADO_INVALIDA", "Costo indeterminado debe detener sin reintento");
-  }
-}
-
-function validateDelegations(entries, dependencies) {
-  if (!Array.isArray(entries)) fail("ESTRUCTURA_INVALIDA", "operaciones_delegadas_a_humanos debe ser array");
-  if (typeof dependencies?.resolveCanonicalReference !== "function") {
-    fail("RESOLVER_REFERENCIA_REQUERIDO", "resolveCanonicalReference debe inyectarse explícitamente");
-  }
-  for (const entry of entries) {
-    const keys = [
-      "categoria", "referencia_canonica", "condicion_observable",
-      "actor_o_capacidad_requerida", "naturaleza", "explicacion",
-    ];
-    requireKeys(entry, keys.slice(0, 5), "operación delegada");
-    rejectExtras(entry, keys, "operación delegada");
-    if (!HANDOFF_V2_HUMAN_CATEGORIES.includes(entry.categoria)) {
-      fail("CATEGORIA_ESCALAMIENTO_INVALIDA", entry.categoria);
-    }
-    requireNonEmptyString(entry.condicion_observable, "CONDICION_OBSERVABLE_INVALIDA", "condicion_observable");
-    requireNonEmptyString(entry.actor_o_capacidad_requerida, "CAPACIDAD_REQUERIDA_INVALIDA", "actor_o_capacidad_requerida");
-    const actors = Object.entries(registry(dependencies).roles);
-    const staticallyResolvable = actors.some(([role, actor]) => (
-      role === entry.actor_o_capacidad_requerida
-      || actor.actor === entry.actor_o_capacidad_requerida
-      || actor.capacidades.includes(entry.actor_o_capacidad_requerida)
-    ));
-    if (!staticallyResolvable) {
-      fail("CAPACIDAD_ESTATICA_AUSENTE", entry.actor_o_capacidad_requerida);
-    }
-    if (dependencies.resolveCanonicalReference(entry.referencia_canonica) !== true) {
-      fail("REFERENCIA_CANONICA_NO_RESUELTA", entry.referencia_canonica);
-    }
-    if (entry.referencia_canonica !== HUMAN_CATEGORY_REFERENCE[entry.categoria]) {
-      fail("REFERENCIA_CANONICA_INCOMPATIBLE", entry.categoria);
-    }
-    if (entry.naturaleza === "OPERACION_RUTINARIA") {
-      fail("DELEGACION_RUTINARIA_PROHIBIDA", "Una operación rutinaria no se delega al Director");
-    }
-    if (HUMAN_CATEGORY_NATURE[entry.categoria] !== entry.naturaleza) {
-      fail("CATEGORIA_INCOMPATIBLE_CON_OPERACION", entry.categoria);
-    }
-  }
-}
-
-function validateCanonicalState(state, dependencies) {
-  const keys = ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"];
-  requireKeys(state, keys, "estado_canonico");
-  rejectExtras(state, keys, "estado_canonico");
-  validateObjectDescriptor(state.accion_anterior, "estado_canonico.accion_anterior");
-  validateObjectDescriptor(state.proxima_accion, "estado_canonico.proxima_accion");
-  if (state.accion_anterior.id === state.proxima_accion.id) {
-    fail("ESTADO_CANONICO_DIVERGENTE", "La próxima acción ya fue declarada cerrada");
-  }
-  requireKeys(state.evidencia_cierre, ["tipo", "referencia", "head_o_historial"], "evidencia_cierre");
-  rejectExtras(state.evidencia_cierre, ["tipo", "referencia", "head_o_historial"], "evidencia_cierre");
-  if (!HANDOFF_V2_EVIDENCE_TYPES.includes(state.evidencia_cierre.tipo)) {
-    fail("EVIDENCIA_CIERRE_INVALIDA", "Tipo de evidencia inválido");
-  }
-  if (typeof dependencies?.resolveEvidence !== "function") {
-    fail("RESOLVER_EVIDENCIA_REQUERIDO", "resolveEvidence debe inyectarse explícitamente");
-  }
-  if (dependencies.resolveEvidence(state.evidencia_cierre, state.head_reconciliacion) !== true) {
-    fail("EVIDENCIA_CIERRE_NO_RESUELTA", state.evidencia_cierre.referencia);
-  }
-  if (!/^[0-9a-f]{40}$/.test(state.head_reconciliacion ?? "")) {
-    fail("HEAD_RECONCILIACION_INVALIDO", "HEAD de reconciliación inválido");
-  }
-}
-
-function validateExecutionConfinement(contract, recipientActor) {
-  if (contract.modo !== "ejecucion") return;
-  const evidenceIndex = CONFINEMENT_EVIDENCE.indexOf(recipientActor.confinamiento.evidencia);
-  if (evidenceIndex < CONFINEMENT_EVIDENCE.indexOf("PROBADO_LOCALMENTE")) {
-    fail("CONFINAMIENTO_NO_PROBADO", `${contract.destinatario.rol} no tiene confinamiento PROBADO_LOCALMENTE`);
-  }
-}
+function descriptor(value, label) { keys(value, ["id", "descripcion"], ["id", "descripcion"], label); text(value.id, "OBJETO_INVALIDO", `${label}.id`); text(value.descripcion, "OBJETO_INVALIDO", `${label}.descripcion`); }
+function economic(value) { keys(value, ["tipo"], value?.tipo === "aplica" ? ["tipo", "objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "politica_costo_indeterminado"] : ["tipo"], "impacto_economico"); if (value.tipo === "no_aplica") return; if (value.tipo !== "aplica") fail("IMPACTO_ECONOMICO_INVALIDO", value.tipo); for (const key of ["objetivo_economico", "moneda", "cap_acumulado", "maximo_intento", "politica_costo_indeterminado"]) if (!Object.hasOwn(value, key)) fail("CAMPO_REQUERIDO_AUSENTE", key); if (value.maximo_intento > value.cap_acumulado) fail("MAXIMO_INTENTO_EXCEDE_CAP", "máximo excede cap"); }
+function canonicalState(value, dependencies) { keys(value, ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"], ["accion_anterior", "evidencia_cierre", "proxima_accion", "head_reconciliacion"], "estado_canonico"); descriptor(value.accion_anterior, "accion_anterior"); descriptor(value.proxima_accion, "proxima_accion"); if (value.accion_anterior.id === value.proxima_accion.id) fail("ESTADO_CANONICO_DIVERGENTE", value.accion_anterior.id); keys(value.evidencia_cierre, ["tipo", "referencia", "head_o_historial"], ["tipo", "referencia", "head_o_historial"], "evidencia_cierre"); if (!HANDOFF_V2_EVIDENCE_TYPES.includes(value.evidencia_cierre.tipo)) fail("EVIDENCIA_CIERRE_INVALIDA", "tipo"); text(value.evidencia_cierre.referencia, "EVIDENCIA_CIERRE_INVALIDA", "referencia"); text(value.evidencia_cierre.head_o_historial, "EVIDENCIA_CIERRE_INVALIDA", "head_o_historial"); if (!sha40(value.head_reconciliacion)) fail("HEAD_RECONCILIACION_INVALIDO", "head"); if (typeof dependencies.resolveEvidence !== "function" || dependencies.resolveEvidence(value.evidencia_cierre, value.head_reconciliacion) !== true) fail("EVIDENCIA_CIERRE_NO_RESUELTA", "evidencia"); }
+function delegations(entries, dependencies) { if (!Array.isArray(entries)) fail("ESTRUCTURA_INVALIDA", "delegaciones"); for (const entry of entries) { const required = ["categoria", "referencia_canonica", "condicion_observable", "actor_o_capacidad_requerida", "naturaleza"]; keys(entry, required, [...required, "explicacion"], "delegación"); if (!HANDOFF_V2_HUMAN_CATEGORIES.includes(entry.categoria)) fail("CATEGORIA_ESCALAMIENTO_INVALIDA", entry.categoria); if (entry.naturaleza === "OPERACION_RUTINARIA") fail("DELEGACION_RUTINARIA_PROHIBIDA", "rutina"); const expected = entry.categoria === "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE" ? PHYSICAL_REFERENCE : HUMAN_REFERENCE; if (entry.referencia_canonica !== expected || dependencies.resolveCanonicalReference?.(entry.referencia_canonica) !== true) fail("REFERENCIA_CANONICA_NO_RESUELTA", entry.referencia_canonica); const director = resolveCanonicalIdentity({ role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano" }, dependencies); if (!director.observed_capabilities.includes(entry.actor_o_capacidad_requerida)) fail("CAPACIDAD_NO_DISPONIBLE", entry.actor_o_capacidad_requerida); } }
 
 export function validateContractV2(contract, dependencies = {}) {
-  if (!isObject(contract)) fail("ESTRUCTURA_INVALIDA", "Contrato no es objeto");
-  if (contract.handoff_version !== "2") {
-    fail("CONTRATO_VERSION_NO_SOPORTADA", `handoff_version ${contract.handoff_version ?? "ausente"} no se migra ni reinterpreta`);
-  }
-  const keys = [
-    "handoff_version", "tarea", "head_sha", "contexto_autorizado", "origen", "destinatario",
-    "modo", "objeto_entrada", "objeto_producido", "mutaciones_permitidas", "operaciones_permitidas",
-    "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico",
-    "operaciones_delegadas_a_humanos",
-  ];
-  requireKeys(contract, keys, "contrato v2");
-  rejectExtras(contract, keys, "contrato v2");
-  requireNonEmptyString(contract.tarea, "TAREA_INVALIDA", "tarea");
-  if (!/^[0-9a-f]{40}$/.test(contract.head_sha ?? "")) fail("HEAD_INVALIDO", "head_sha inválido");
-  if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.some((path) => !safeRelativePath(path))) {
-    fail("CONTEXTO_INVALIDO", "contexto_autorizado inválido");
-  }
-  if (new Set(contract.contexto_autorizado).size !== contract.contexto_autorizado.length) {
-    fail("CONTEXTO_INVALIDO", "contexto_autorizado contiene duplicados");
-  }
-  const missingContext = GOVERNING_CONTEXT_V2.filter((path) => !contract.contexto_autorizado.includes(path));
-  if (missingContext.length) fail("CANON_GOBERNANTE_AUSENTE", missingContext.join(", "));
-  requireKeys(contract.origen, ["ejecutor", "rol"], "origen");
-  rejectExtras(contract.origen, ["ejecutor", "rol"], "origen");
-  const origin = resolveRole(contract.origen.rol, [], dependencies);
-  if (origin.actor !== contract.origen.ejecutor) fail("ORIGEN_NO_RESUELTO", "Actor y rol de origen no corresponden");
-  if (!contract.contexto_autorizado.includes(origin.adapter)) fail("ADAPTER_FUERA_DE_CONTEXTO", origin.adapter);
-  const recipient = validateActorDescriptor(contract.destinatario, contract.contexto_autorizado, dependencies, "destinatario");
-  if (!["solo_lectura", "ejecucion"].includes(contract.modo)) fail("MODO_INVALIDO", contract.modo);
-  validateExecutionConfinement(contract, recipient);
-  validateObjectDescriptor(contract.objeto_entrada, "objeto_entrada");
-  validateObjectDescriptor(contract.objeto_producido, "objeto_producido");
-  if (!Array.isArray(contract.mutaciones_permitidas) || contract.mutaciones_permitidas.some((path) => !safeRelativePath(path))) {
-    fail("MUTACIONES_INVALIDAS", "mutaciones_permitidas inválidas");
-  }
-  if (contract.modo === "solo_lectura" && contract.mutaciones_permitidas.length) {
-    fail("SOLO_LECTURA_CON_MUTACIONES", "solo_lectura no admite mutaciones versionadas");
-  }
-  if (!Array.isArray(contract.operaciones_permitidas)) fail("OPERACIONES_INVALIDAS", "operaciones_permitidas debe ser array");
-  for (const operation of contract.operaciones_permitidas) {
-    requireKeys(operation, ["tipo", "objetivo"], "operación permitida");
-    rejectExtras(operation, ["tipo", "objetivo"], "operación permitida");
-    if (!["git", "github", "red", "filesystem"].includes(operation.tipo)) fail("OPERACION_INVALIDA", operation.tipo);
-    requireNonEmptyString(operation.objetivo, "OPERACION_INVALIDA", "operación.objetivo");
-  }
-  validateEconomicImpact(contract.impacto_economico);
-  requireKeys(contract.reintentos, ["maximos", "politica_costo_indeterminado"], "reintentos");
-  rejectExtras(contract.reintentos, ["maximos", "politica_costo_indeterminado"], "reintentos");
-  if (contract.reintentos.maximos !== 0) fail("REINTENTOS_INVALIDOS", "v2 exige máximo cero");
-  if (contract.reintentos.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") {
-    fail("REINTENTOS_INVALIDOS", "Costo indeterminado debe detener sin reintento");
-  }
-  if (!Array.isArray(contract.transiciones_permitidas)) fail("TRANSICIONES_INVALIDAS", "transiciones_permitidas debe ser array");
-  validateDelegations(contract.operaciones_delegadas_a_humanos, dependencies);
-  validateCanonicalState(contract.estado_canonico, dependencies);
-  return contract;
+  deps(dependencies); if (!object(contract)) fail("ESTRUCTURA_INVALIDA", "Contrato no es objeto"); if (contract.handoff_version !== "2") fail("CONTRATO_VERSION_NO_SOPORTADA", "v1 no se reinterpreta");
+  const required = ["handoff_version", "artifact_id", "tarea", "head_sha", "profile_id", "contexto_autorizado", "origen", "destinatario", "modo", "salida_requerida", "objeto_entrada", "objeto_producido", "mutaciones_permitidas", "operaciones_permitidas", "acciones_prohibidas", "rollback", "postcondiciones", "disparadores_0015", "impacto_economico", "reintentos", "transiciones_permitidas", "estado_canonico", "operaciones_delegadas_a_humanos"];
+  keys(contract, required, required, "contrato v2"); text(contract.artifact_id, "OBJETO_INVALIDO", "artifact_id"); text(contract.tarea, "TAREA_INVALIDA", "tarea"); text(contract.salida_requerida, "SALIDA_REQUERIDA_INVALIDA", "salida_requerida"); if (!sha40(contract.head_sha)) fail("HEAD_INVALIDO", "head_sha");
+  if (!Array.isArray(contract.contexto_autorizado) || contract.contexto_autorizado.some((path) => !relative(path)) || new Set(contract.contexto_autorizado).size !== contract.contexto_autorizado.length) fail("CONTEXTO_INVALIDO", "contexto"); const missing = GOVERNING_CONTEXT_V2.filter((path) => !contract.contexto_autorizado.includes(path)); if (missing.length) fail("CANON_GOBERNANTE_AUSENTE", missing.join(", "));
+  const origin = resolveCanonicalIdentity(contract.origen, dependencies, { requireInvocable: false }); if (!contract.contexto_autorizado.includes(origin.adapter)) fail("ADAPTER_FUERA_DE_CONTEXTO", origin.adapter); const recipient = validateTarget(contract.destinatario, contract.contexto_autorizado, dependencies, { requireInvocable: true });
+  if (!Array.isArray(contract.mutaciones_permitidas) || contract.mutaciones_permitidas.some((path) => !relative(path))) fail("MUTACIONES_INVALIDAS", "mutaciones"); if (!Array.isArray(contract.operaciones_permitidas) || !Array.isArray(contract.acciones_prohibidas) || !Array.isArray(contract.postcondiciones) || !Array.isArray(contract.disparadores_0015)) fail("ESTRUCTURA_INVALIDA", "efectos"); if (contract.modo === "solo_lectura" && contract.mutaciones_permitidas.length) fail("SOLO_LECTURA_CON_MUTACIONES", "mutaciones"); if (contract.disparadores_0015.length) fail("DISPARADOR_0015_ACTIVO", contract.disparadores_0015.join(", "));
+  for (const item of contract.operaciones_permitidas) { keys(item, ["tipo", "objetivo"], ["tipo", "objetivo"], "operación"); if (!["git", "github", "red", "filesystem"].includes(item.tipo)) fail("OPERACION_NO_AUTORIZADA", item.tipo); text(item.objetivo, "OPERACION_NO_AUTORIZADA", "operación.objetivo"); } stringArray(contract.acciones_prohibidas, "ESTRUCTURA_INVALIDA", "acciones_prohibidas"); for (const item of contract.postcondiciones) descriptor(item, "postcondición"); keys(contract.rollback, ["strategy", "reference"], ["strategy", "reference"], "rollback"); validateOperationReadiness(contract, recipient);
+  descriptor(contract.objeto_entrada, "objeto_entrada"); descriptor(contract.objeto_producido, "objeto_producido"); economic(contract.impacto_economico); if (contract.reintentos?.maximos !== 0 || contract.reintentos?.politica_costo_indeterminado !== "DETENER_SIN_REINTENTO") fail("REINTENTOS_INVALIDOS", "v2 exige cero"); if (!Array.isArray(contract.transiciones_permitidas)) fail("TRANSICIONES_INVALIDAS", "transiciones"); delegations(contract.operaciones_delegadas_a_humanos, dependencies); canonicalState(contract.estado_canonico, dependencies); return contract;
 }
 
-export function validateResultV2(result, contract, dependencies = {}) {
-  if (!isObject(result)) fail("RESULTADO_INVALIDO", "Resultado no es objeto");
-  if (result.handoff_version !== "2") fail("CONTRATO_VERSION_NO_SOPORTADA", "Resultado no es v2");
-  const keys = ["handoff_version", "estado", "decision", "resumen", "evidencia", "archivos_leidos", "siguiente", "firma"];
-  requireKeys(result, keys, "resultado v2");
-  rejectExtras(result, keys, "resultado v2");
-  if (!HANDOFF_V2_DECISIONS.includes(result.decision)) fail("DECISION_INVALIDA", result.decision);
-  requireNonEmptyString(result.resumen, "RESUMEN_INVALIDO", "resumen");
-  if (DECISION_STATE[result.decision] !== result.estado) fail("DECISION_ESTADO_INCOMPATIBLE", "decision y estado no corresponden");
-  if (result.decision !== "SIN_OBJECIONES" && result.siguiente === null) fail("SIGUIENTE_REQUERIDO", "La decisión exige siguiente");
-  if (!Array.isArray(result.evidencia)) fail("EVIDENCIA_INVALIDA", "evidencia debe ser array");
-  for (const item of result.evidencia) {
-    requireKeys(item, ["archivo", "detalle"], "evidencia");
-    rejectExtras(item, ["archivo", "detalle"], "evidencia");
-    requireNonEmptyString(item.archivo, "EVIDENCIA_INVALIDA", "evidencia.archivo");
-    requireNonEmptyString(item.detalle, "EVIDENCIA_INVALIDA", "evidencia.detalle");
-  }
-  if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) {
-    fail("ARCHIVOS_LEIDOS_FUERA_DE_CONTEXTO", "archivos_leidos inválido");
-  }
-  if (result.siguiente !== null) {
-    const next = validateActorDescriptor(result.siguiente, contract.contexto_autorizado, dependencies, "siguiente");
-    if (result.decision === "REQUIERE_ARBITRAJE" && !next.capacidades.includes("arbitraje")) {
-      fail("SIGUIENTE_SIN_AUTORIDAD", "El siguiente no tiene capacidad de arbitraje");
-    }
-    const transition = `${result.estado}->${result.siguiente.rol}`;
-    if (!contract.transiciones_permitidas.includes(transition)) fail("TRANSICION_NO_PERMITIDA", transition);
-  }
-  requireKeys(result.firma, SIGNATURE_KEYS, "firma");
-  rejectExtras(result.firma, SIGNATURE_KEYS, "firma");
-  for (const key of SIGNATURE_KEYS) requireNonEmptyString(result.firma[key], "FIRMA_INCOMPLETA", key);
-  return result;
+export function validateResultV2(result, contract, dependencies = {}, attempt, manifest) {
+  validateContractV2(contract, dependencies); if (!object(result) || result.handoff_version !== "2") fail("CONTRATO_VERSION_NO_SOPORTADA", "resultado no v2"); const required = ["handoff_version", "binding", "estado", "decision", "resumen", "evidencia", "archivos_leidos", "siguiente", "firma"]; keys(result, required, required, "resultado v2");
+  if (!HANDOFF_V2_DECISIONS.includes(result.decision)) fail("DECISION_INVALIDA", result.decision); if (DECISION_STATE[result.decision] !== result.estado) fail("DECISION_ESTADO_INCOMPATIBLE", "estado"); if (result.decision !== "SIN_OBJECIONES" && result.siguiente === null) fail("SIGUIENTE_REQUERIDO", "siguiente");
+  if (!object(attempt)) fail("INTENTO_REQUERIDO", "El cierre exige attempt v2"); if (!object(manifest)) fail("MANIFIESTO_REQUERIDO", "El cierre exige manifest v2"); validateManifestV2(manifest, dependencies); validateAttemptV2(attempt, dependencies, manifest);
+  const bindingKeys = ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "manifest_sha256", "head_sha"]; keys(result.binding, bindingKeys, bindingKeys, "binding"); for (const key of bindingKeys) if (result.binding[key] !== attempt[key]) fail("RESULTADO_INTENTO_NO_COINCIDE", key);
+  if (!sha256(result.binding.request_sha256) || !sha256(result.binding.manifest_sha256) || !sha40(result.binding.head_sha)) fail("RESULTADO_INTENTO_NO_COINCIDE", "hashes de binding");
+  if (result.binding.artifact_id !== contract.artifact_id || result.binding.head_sha !== contract.head_sha) fail("RESULTADO_INTENTO_NO_COINCIDE", "contrato"); if (!Array.isArray(result.archivos_leidos) || result.archivos_leidos.some((path) => !contract.contexto_autorizado.includes(path))) fail("ARCHIVOS_LEIDOS_FUERA_DE_CONTEXTO", "archivos");
+  if (!Array.isArray(result.evidencia)) fail("EVIDENCIA_INVALIDA", "evidencia"); for (const item of result.evidencia) { keys(item, ["archivo", "detalle"], ["archivo", "detalle"], "evidencia"); text(item.archivo, "EVIDENCIA_INVALIDA", "archivo"); text(item.detalle, "EVIDENCIA_INVALIDA", "detalle"); }
+  if (result.siguiente !== null) { const next = validateTarget(result.siguiente, contract.contexto_autorizado, dependencies, { requireInvocable: result.decision !== "REQUIERE_ARBITRAJE" }); if (result.decision === "REQUIERE_ARBITRAJE" && next.role_id !== "DIRECTOR_PRODUCT_OWNER") fail("SIGUIENTE_SIN_AUTORIDAD", "arbitraje"); const transition = `${result.estado}->${result.siguiente.role_id}`; if (!contract.transiciones_permitidas.includes(transition)) fail("TRANSICION_NO_PERMITIDA", transition); }
+  keys(result.firma, SIGNATURE_KEYS, SIGNATURE_KEYS, "firma"); for (const key of SIGNATURE_KEYS) text(result.firma[key], "FIRMA_INCOMPLETA", key); return result;
 }
+
+export function validateProducerInventoryV2(inventory) { if (!object(inventory) || inventory.version !== "1" || !object(inventory.profiles)) fail("PRODUCTORES_INVALIDOS", "inventario"); if (JSON.stringify(Object.keys(inventory.profiles).sort()) !== JSON.stringify(Object.keys(PROFILE_MODES).sort())) fail("PRODUCTORES_INVALIDOS", "perfiles exactos"); for (const profile of Object.keys(PROFILE_MODES)) { const entries = inventory.profiles[profile]; if (!Array.isArray(entries) || !entries.length) fail("PRODUCTORES_INVALIDOS", profile); const ids = new Set(); const paths = new Set(); for (const entry of entries) { keys(entry, ["producer_id", "kind", "path"], ["producer_id", "kind", "path"], "productor"); text(entry.producer_id, "PRODUCTORES_INVALIDOS", "producer_id"); if (!["contract", "compatibility_boundary", "adapter"].includes(entry.kind) || ids.has(entry.producer_id) || paths.has(entry.path) || !relative(entry.path)) fail("PRODUCTORES_INVALIDOS", entry.producer_id); ids.add(entry.producer_id); paths.add(entry.path); } } return inventory; }
+function injectedGitMetadata(path, dependencies) { const metadata = dependencies.git_sources?.[path]; if (!object(metadata)) fail("MAPA_GIT_INCOMPLETO", path); keys(metadata, ["git_blob_oid", "sha256", "bytes"], ["git_blob_oid", "sha256", "bytes"], `git_sources.${path}`); if (!sha40(metadata.git_blob_oid) || !sha256(metadata.sha256) || !Number.isInteger(metadata.bytes) || metadata.bytes < 0) fail("MAPA_GIT_INCOMPLETO", path); return metadata; }
+export function validateManifestV2(manifest, dependencies = {}) {
+  const d = deps(dependencies); validateProducerInventoryV2(dependencies.producers); const required = ["artifact_id", "head_sha", "contract_sha256", "producer", "request", "sources", "producer_chain"]; keys(manifest, required, required, "manifiesto"); if (!sha40(manifest.head_sha) || dependencies.head_sha !== manifest.head_sha || !sha256(manifest.contract_sha256) || dependencies.contract_sha256 !== manifest.contract_sha256) fail("MANIFIESTO_INVALIDO", "hashes");
+  keys(manifest.producer, ["role_id", "surface_id", "adapter", "cwd"], ["role_id", "surface_id", "adapter", "cwd"], "producer"); const producerSurface = resolveCanonicalIdentity({ role_id: manifest.producer.role_id, surface_id: manifest.producer.surface_id }, d); if (producerSurface.adapter !== manifest.producer.adapter || producerSurface.cwd !== manifest.producer.cwd) fail("ROL_INCOMPATIBLE", "productor");
+  keys(manifest.request, ["sha256", "bytes", "content"], ["sha256", "bytes", "content"], "request"); if (!sha256(manifest.request.sha256) || typeof manifest.request.content !== "string" || manifest.request.bytes !== utf8Bytes(manifest.request.content) || typeof dependencies.sha256 !== "function" || dependencies.sha256(manifest.request.content) !== manifest.request.sha256) fail("REQUEST_NO_COINCIDE", "request exacto");
+  const profileId = producerSurface.operational_profile.profile_id; const expected = dependencies.producers.profiles[profileId]; if (!Array.isArray(manifest.producer_chain) || manifest.producer_chain.length !== expected.length) fail("PRODUCTORES_NO_COINCIDEN", "cantidad");
+  const expectedById = new Map(expected.map((item) => [item.producer_id, item])); const seenProducers = new Set(); for (const entry of manifest.producer_chain) { const chainKeys = ["profile_id", "producer_id", "kind", "path", "head_sha", "git_blob_oid", "sha256", "bytes"]; keys(entry, chainKeys, chainKeys, "producer_chain"); const expectedEntry = expectedById.get(entry.producer_id); if (!expectedEntry || seenProducers.has(entry.producer_id) || entry.profile_id !== profileId || entry.kind !== expectedEntry.kind || entry.path !== expectedEntry.path || entry.head_sha !== manifest.head_sha) fail("PRODUCTORES_NO_COINCIDEN", entry.producer_id); const injected = injectedGitMetadata(entry.path, dependencies); if (entry.git_blob_oid !== injected.git_blob_oid || entry.sha256 !== injected.sha256 || entry.bytes !== injected.bytes) fail("BLOB_NO_COINCIDE", entry.path); seenProducers.add(entry.producer_id); }
+  if (seenProducers.size !== expected.length) fail("PRODUCTORES_NO_COINCIDEN", "conjunto"); if (!Array.isArray(manifest.sources) || !manifest.sources.length) fail("FUENTE_INVALIDA", "sources"); const sourcePaths = new Set(); for (const source of manifest.sources) { if (!object(source) || sourcePaths.has(source.path) || !relative(source.path) || !sha256(source.sha256) || !Number.isInteger(source.bytes) || source.bytes < 0) fail("FUENTE_INVALIDA", source?.path ?? "shape"); sourcePaths.add(source.path); if (source.kind === "versioned") { keys(source, ["kind", "head_sha", "path", "git_blob_oid", "sha256", "bytes"], ["kind", "head_sha", "path", "git_blob_oid", "sha256", "bytes"], "source.versioned"); const injected = injectedGitMetadata(source.path, dependencies); if (source.head_sha !== manifest.head_sha || source.git_blob_oid !== injected.git_blob_oid || source.sha256 !== injected.sha256 || source.bytes !== injected.bytes) fail("BLOB_NO_COINCIDE", source.path); } else if (source.kind === "generated") { keys(source, ["kind", "path", "sha256", "bytes", "producer_id"], ["kind", "path", "sha256", "bytes", "producer_id"], "source.generated"); if (!expectedById.has(source.producer_id)) fail("PRODUCTOR_NO_RESUELTO", source.producer_id); } else fail("FUENTE_INVALIDA", source.kind); }
+  const producerPaths = new Set(expected.map((item) => item.path)); if (producerPaths.size !== expected.length || [...producerPaths].some((path) => !sourcePaths.has(path))) fail("PRODUCTORES_NO_COINCIDEN", "fuentes de productores");
+  return manifest;
+}
+export function validateAttemptStructureV2(attempt, dependencies = {}) { const required = ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "role_id", "surface_id", "head_sha", "manifest_sha256"]; keys(attempt, required, required, "intento"); text(attempt.attempt_id, "INTENTO_INVALIDO", "attempt_id"); text(attempt.artifact_id, "INTENTO_INVALIDO", "artifact_id"); if (!sha256(attempt.request_sha256) || !sha256(attempt.manifest_sha256) || !sha40(attempt.head_sha) || !Number.isInteger(attempt.request_bytes) || attempt.request_bytes < 1) fail("INTENTO_INVALIDO", "hash/bytes"); resolveCanonicalIdentity({ role_id: attempt.role_id, surface_id: attempt.surface_id }, dependencies, { requireInvocable: true }); return attempt; }
+export function validateAttemptV2(attempt, dependencies = {}, manifest) { validateAttemptStructureV2(attempt, dependencies); if (!object(manifest)) fail("MANIFIESTO_REQUERIDO", "El intento despachable exige manifest v2"); validateManifestV2(manifest, dependencies); if (attempt.artifact_id !== manifest.artifact_id || attempt.request_sha256 !== manifest.request.sha256 || attempt.request_bytes !== manifest.request.bytes || attempt.head_sha !== manifest.head_sha || attempt.manifest_sha256 !== dependencies.manifest_sha256) fail("INTENTO_INVALIDO", "binding con manifiesto"); return attempt; }
+export function exclusivityPathForRequest(requestSha256) { if (!sha256(requestSha256)) fail("REQUEST_INVALIDO", "sha256"); return `.handoff/v2/requests/${requestSha256}/lock`; }

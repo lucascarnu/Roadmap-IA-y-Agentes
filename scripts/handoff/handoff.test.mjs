@@ -18,8 +18,11 @@ import {
 import { buildWindowsCmdInvocation, observeAuthentication, runProcess } from "./env.mjs";
 import { createNotifier } from "./notify.mjs";
 import {
-  GOVERNING_CONTEXT_V2, HANDOFF_V2_DECISIONS, HandoffContractV2Error,
-  validateContractV2, validateResultV2,
+  GOVERNING_CONTEXT_V2, HANDOFF_V2_DECISIONS, HANDOFF_V2_ROLE_IDS, HandoffContractV2Error,
+  exclusivityPathForRequest, projectLegacyIdentityHeader, projectV1Alias,
+  resolveBoundaryIdentity, resolveCanonicalIdentity, validateAttemptStructureV2, validateAttemptV2,
+  validateContractV2, validateManifestV2, validateOperationalRegistry,
+  validateProducerInventoryV2, validateResultV2, validateRoleCatalog,
 } from "./handoff-contract-v2.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -359,7 +362,6 @@ test("runProcess no reintenta si el primer intento funciona en win32", () => {
   assert.equal(result.stdout, "codex-cli 0.147.0");
   assert.deepEqual(calls.map(({ command }) => command), ["codex"]);
 });
-
 test("runProcess reintenta una vez mediante cmd.exe ante ENOENT en win32", () => {
   const calls = [];
   const result = runProcess("codex", ["login", "status"], {
@@ -2567,212 +2569,137 @@ test("fallos de ntfy no alteran el resultado de poll", async () => {
   assert.match(httpLogs.join("\n"), /HTTP 500/);
 });
 
-const V2_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-v2.schema.json"), "utf8"));
-const V2_RESULT_SCHEMA = JSON.parse(readFileSync(join(HERE, "handoff-result-v2.schema.json"), "utf8"));
-const V2_ACTORS_FILE = JSON.parse(readFileSync(join(HERE, "actores.json"), "utf8"));
-const V2_DIRECTOR_REF = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
-const V2_PHYSICAL_REF = "pendientes.md#calibracion-experimental-de-profundidad-modelos-y-costo";
+const U2A_CATALOG = JSON.parse(readFileSync(join(HERE, "roles.catalog.json"), "utf8"));
+const U2A_REGISTRY = JSON.parse(readFileSync(join(HERE, "actores.json"), "utf8"));
+const U2A_PRODUCERS = JSON.parse(readFileSync(join(HERE, "handoff-v2-producers.json"), "utf8"));
+const U2A_HASH = "b".repeat(64);
+const U2A_MANIFEST_HASH = "c".repeat(64);
+const U2A_REQUEST = "request";
+const U2A_REQUEST_HASH = sha256(Buffer.from(U2A_REQUEST));
+const U2A_GIT_SOURCES = Object.freeze({
+  "scripts/handoff/handoff-contract-v2.mjs": { git_blob_oid: "1".repeat(40), sha256: "1".repeat(64), bytes: 101 },
+  "scripts/handoff/prompt-template.md": { git_blob_oid: "2".repeat(40), sha256: "2".repeat(64), bytes: 202 },
+  "reglas.md": { git_blob_oid: "3".repeat(40), sha256: "3".repeat(64), bytes: 303 },
+});
 
-function v2Actors(provenRoles = []) {
-  const roles = structuredClone(V2_ACTORS_FILE.roles);
-  for (const role of provenRoles) roles[role].confinamiento = { mecanismo: "SANDBOX_SINTETICO", evidencia: "PROBADO_LOCALMENTE" };
-  return { version: "1", roles };
+function u2aDeps(overrides = {}) {
+  return { catalog: structuredClone(U2A_CATALOG), registry: structuredClone(U2A_REGISTRY), producers: structuredClone(U2A_PRODUCERS), head_sha: HEAD, contract_sha256: U2A_HASH, manifest_sha256: U2A_MANIFEST_HASH, git_sources: structuredClone(U2A_GIT_SOURCES), resolveCanonicalReference: () => true, resolveEvidence: () => true, sha256: (value) => sha256(Buffer.from(value)), ...overrides };
 }
 
-function v2Deps(overrides = {}) {
-  return { actors: v2Actors(), resolveCanonicalReference: () => true, resolveEvidence: () => true, ...overrides };
-}
-
-function v2Contract(overrides = {}) {
+function u2aContract(overrides = {}) {
   return {
-    handoff_version: "2", tarea: "Validar contrato sintético.", head_sha: HEAD,
+    handoff_version: "2", artifact_id: "ARTIFACT-U2A", tarea: "Implementar una unidad sintética.", head_sha: HEAD, profile_id: "manual",
     contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "AGENTS.md"],
-    origen: { ejecutor: "Codex Arquitecto", rol: "ARQUITECTO_LEAD" },
-    destinatario: { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] },
-    modo: "solo_lectura",
-    objeto_entrada: { id: "entrada-u1a", descripcion: "Contrato sintético" },
-    objeto_producido: { id: "salida-u1a", descripcion: "Validación pura" },
-    mutaciones_permitidas: [], operaciones_permitidas: [],
-    impacto_economico: { tipo: "no_aplica" },
-    reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
-    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "BLOQUEADO->ARQUITECTO_LEAD"],
-    estado_canonico: {
-      accion_anterior: { id: "accion-cerrada", descripcion: "Acción anterior" },
-      evidencia_cierre: { tipo: "COMMIT", referencia: "commit-sintetico", head_o_historial: HEAD },
-      proxima_accion: { id: "accion-siguiente", descripcion: "Acción siguiente" }, head_reconciliacion: HEAD,
-    },
-    operaciones_delegadas_a_humanos: [], ...overrides,
+    origen: { role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" },
+    destinatario: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", required_capabilities: ["filesystem"] },
+    modo: "solo_lectura", salida_requerida: "Estado, evidencia y firma.", objeto_entrada: { id: "in", descripcion: "Entrada" }, objeto_producido: { id: "out", descripcion: "Salida" },
+    mutaciones_permitidas: [], operaciones_permitidas: [], acciones_prohibidas: ["integrar"], rollback: { strategy: "NO_APLICA", reference: "sin efectos" }, postcondiciones: [], disparadores_0015: [],
+    impacto_economico: { tipo: "no_aplica" }, reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
+    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD", "COMPLETADO->DIRECTOR_PRODUCT_OWNER", "BLOQUEADO->ARQUITECTO_LEAD"],
+    estado_canonico: { accion_anterior: { id: "a", descripcion: "Anterior" }, evidencia_cierre: { tipo: "COMMIT", referencia: "x", head_o_historial: HEAD }, proxima_accion: { id: "b", descripcion: "Siguiente" }, head_reconciliacion: HEAD }, operaciones_delegadas_a_humanos: [], ...overrides,
   };
 }
 
-function v2Result(overrides = {}) {
-  return {
-    handoff_version: "2", estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Contrato válido.",
-    evidencia: [{ archivo: "reglas.md", detalle: "Fixture sintético." }], archivos_leidos: ["reglas.md"], siguiente: null,
-    firma: {
-      ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "modelo-fixture", modelo_efectivo: "NO_OBSERVABLE",
-      esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "contrato v2",
-      via_evaluada: "validación pura", fecha: "2026-08-18",
-    }, ...overrides,
-  };
+function u2aExecution(overrides = {}) {
+  return u2aContract({ modo: "ejecucion", mutaciones_permitidas: ["pendientes.md"], operaciones_permitidas: [{ tipo: "filesystem", objetivo: "pendientes.md" }], rollback: { strategy: "REVERTIR_COMMIT", reference: "commit de unidad" }, postcondiciones: [{ id: "tracked-clean", descripcion: "Árbol versionado limpio" }], ...overrides });
 }
 
-function v2Error(fn, code) {
-  assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code);
+function u2aManifest(overrides = {}) {
+  const profile = "manual";
+  const producer_chain = U2A_PRODUCERS.profiles[profile].map((item) => ({ profile_id: profile, ...item, head_sha: HEAD, ...U2A_GIT_SOURCES[item.path] }));
+  const sources = [
+    ...producer_chain.map(({ path, head_sha, git_blob_oid, sha256: sourceHash, bytes }) => ({ kind: "versioned", head_sha, path, git_blob_oid, sha256: sourceHash, bytes })),
+    { kind: "versioned", head_sha: HEAD, path: "reglas.md", ...U2A_GIT_SOURCES["reglas.md"] },
+    { kind: "generated", path: "request.txt", sha256: U2A_REQUEST_HASH, bytes: Buffer.byteLength(U2A_REQUEST), producer_id: "manual-contract-v2" },
+  ];
+  return { artifact_id: "ARTIFACT-U2A", head_sha: HEAD, contract_sha256: U2A_HASH, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: U2A_REQUEST_HASH, bytes: Buffer.byteLength(U2A_REQUEST), content: U2A_REQUEST }, sources, producer_chain, ...overrides };
 }
+function u2aAttempt(overrides = {}) { return { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", head_sha: HEAD, manifest_sha256: U2A_MANIFEST_HASH, ...overrides }; }
+function u2aResult(overrides = {}) { return { handoff_version: "2", binding: { attempt_id: "attempt-1", artifact_id: "ARTIFACT-U2A", request_sha256: U2A_REQUEST_HASH, request_bytes: Buffer.byteLength(U2A_REQUEST), manifest_sha256: U2A_MANIFEST_HASH, head_sha: HEAD }, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "alto", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "u2a", via_evaluada: "pura", fecha: "2026-08-23" }, ...overrides }; }
+function u2aError(fn, code) { assert.throws(fn, (error) => error instanceof HandoffContractV2Error && error.code === code); }
 
-test("U1A representabilidad, versión y confinamiento", async (t) => {
-  await t.test("contrato de ejecución representable", () => {
-    const value = v2Contract({ modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
-    assert.equal(validateContractV2(value, v2Deps({ actors: v2Actors(["EJECUTOR_PRINCIPAL"]) })), value);
-  });
-  await t.test("contrato de solo lectura representable", () => {
-    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
-  });
-  await t.test("handoff_version 1 rechazado con código propio", () => {
-    v2Error(() => validateContractV2({ ...v2Contract(), handoff_version: "1" }, v2Deps()), "CONTRATO_VERSION_NO_SOPORTADA");
-  });
-  for (const [role, actor] of Object.entries(V2_ACTORS_FILE.roles)) {
-    await t.test(`ejecución rechazada para ${role} sin confinamiento probado`, () => {
-      const value = v2Contract({ destinatario: { rol: role, capacidades_requeridas: [] }, modo: "ejecucion", mutaciones_permitidas: ["x.md"] });
-      value.contexto_autorizado = [...new Set([...value.contexto_autorizado, actor.adapter])];
-      v2Error(() => validateContractV2(value, v2Deps()), "CONFINAMIENTO_NO_PROBADO");
-    });
-  }
-  await t.test("solo lectura rechaza mutaciones", () => {
-    v2Error(() => validateContractV2(v2Contract({ mutaciones_permitidas: ["x.md"] }), v2Deps()), "SOLO_LECTURA_CON_MUTACIONES");
-  });
+test("U2A catálogo durable y registro operacional no derivan ocupantes", () => {
+  assert.equal(validateRoleCatalog(U2A_CATALOG), U2A_CATALOG); assert.equal(validateOperationalRegistry(U2A_REGISTRY, U2A_CATALOG), U2A_REGISTRY);
+  assert.deepEqual(Object.keys(U2A_CATALOG.roles).sort(), [...HANDOFF_V2_ROLE_IDS].sort()); assert.doesNotMatch(JSON.stringify(U2A_CATALOG), /Codex|Claude|Kimi|Lucas|adapter|cwd/i);
+  assert.equal(U2A_REGISTRY.surfaces["codex-consultor"].adapter, ".consultor/AGENTS.override.md"); assert.equal(U2A_REGISTRY.surfaces["codex-consultor"].cwd, ".consultor");
+  assert.equal(Object.values(U2A_REGISTRY.surfaces).every((surface) => surface.confinement.evidence === "NO_PROBADO"), true); assert.equal(Object.values(U2A_REGISTRY.surfaces).some((surface) => Object.hasOwn(surface, "actor")), false);
 });
 
-test("U1A firma, decisión, estado y siguiente", async (t) => {
-  for (const key of V2_RESULT_SCHEMA.properties.firma.required) {
-    await t.test(`firma incompleta sin ${key}`, () => {
-      const result = v2Result(); delete result.firma[key];
-      v2Error(() => validateResultV2(result, v2Contract(), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
-    });
-  }
-  await t.test("decision completada con estado bloqueado", () => {
-    v2Error(() => validateResultV2(v2Result({ estado: "BLOQUEADO" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
-  });
-  await t.test("decision bloqueada con estado completado", () => {
-    v2Error(() => validateResultV2(v2Result({ decision: "BLOQUEADO_POR_GATE" }), v2Contract(), v2Deps()), "DECISION_ESTADO_INCOMPATIBLE");
-  });
-  for (const decision of HANDOFF_V2_DECISIONS.filter((item) => item !== "SIN_OBJECIONES")) {
-    await t.test(`${decision} exige siguiente`, () => {
-      const estado = decision.startsWith("BLOQUEADO") ? "BLOQUEADO" : "COMPLETADO";
-      v2Error(() => validateResultV2(v2Result({ decision, estado }), v2Contract(), v2Deps()), "SIGUIENTE_REQUERIDO");
-    });
-  }
-  await t.test("REQUIERE_ARBITRAJE exige capacidad de arbitraje", () => {
-    const siguiente = { rol: "EJECUTOR_PRINCIPAL", capacidades_requeridas: ["filesystem"] };
-    v2Error(() => validateResultV2(v2Result({ decision: "REQUIERE_ARBITRAJE", siguiente }), v2Contract(), v2Deps()), "SIGUIENTE_SIN_AUTORIDAD");
-  });
+test("U2A identidad canónica y códigos fail closed", () => {
+  const d = u2aDeps(); assert.equal(validateContractV2(u2aContract(), d).destinatario.surface_id, "codex-ejecutor");
+  u2aError(() => resolveCanonicalIdentity({ role_id: "PROVEEDOR_CODEX", surface_id: "codex-ejecutor" }, d), "ROL_NO_RESUELTO");
+  u2aError(() => resolveCanonicalIdentity({ role_id: "QA_VALIDACION", surface_id: "" }, d), "ROL_NO_CONFIGURADO");
+  u2aError(() => resolveCanonicalIdentity({ role_id: "ARQUITECTO_LEAD", surface_id: "codex-ejecutor" }, d), "ROL_INCOMPATIBLE");
+  u2aError(() => resolveBoundaryIdentity("codex", {}, d), "ROL_AMBIGUO");
+  u2aError(() => validateContractV2(u2aContract({ destinatario: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", required_capabilities: ["capacidad-ausente"] } }), d), "CAPACIDAD_NO_DISPONIBLE");
+  const unauthorized = u2aDeps(); unauthorized.registry.surfaces["codex-ejecutor"].authorization.status = "NO_AUTORIZADO"; u2aError(() => validateContractV2(u2aContract(), unauthorized), "OPERACION_NO_AUTORIZADA");
+  const unauthenticated = u2aDeps(); unauthenticated.registry.surfaces["codex-ejecutor"].authentication.status = "NO_AUTENTICADA"; u2aError(() => validateContractV2(u2aExecution({ operaciones_permitidas: [{ tipo: "github", objetivo: "PR" }] }), unauthenticated), "VIA_NO_AUTENTICADA");
 });
 
-test("U1A economía contractual sin ledger autodeclarado", async (t) => {
-  await t.test("no_aplica rechaza valores contradictorios", () => {
-    v2Error(() => validateContractV2(v2Contract({ impacto_economico: { tipo: "no_aplica", cap_acumulado: 1 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
-  });
-  const base = { tipo: "aplica", objetivo_economico: "review", moneda: "USD", cap_acumulado: 0.25, maximo_intento: 0.2, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" };
-  for (const key of ["objetivo_economico", "moneda", "cap_acumulado", "maximo_intento"]) {
-    await t.test(`aplica sin ${key}`, () => {
-      const impact = structuredClone(base); delete impact[key];
-      v2Error(() => validateContractV2(v2Contract({ impacto_economico: impact }), v2Deps()), "CAMPO_REQUERIDO_AUSENTE");
-    });
-  }
-  for (const key of ["acumulado_observable", "remanente"]) {
-    await t.test(`${key} no es autoritativo`, () => {
-      v2Error(() => validateContractV2(v2Contract({ impacto_economico: { ...base, [key]: 0.05 } }), v2Deps()), "CAMPO_NO_ADMITIDO");
-    });
-  }
+test("U2A frontera de aliases exacta y canonical persistido", () => {
+  const d = u2aDeps(); assert.deepEqual(resolveBoundaryIdentity("codex", { adapter: "AGENTS.md", cwd: "." }, d), { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" });
+  assert.deepEqual(resolveBoundaryIdentity({ literal: "CODEX — ARQUITECTO / LEAD", DESTINATARIO_ROLE_ID: "ARQUITECTO_LEAD" }, {}, d), { role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" });
+  for (const alias of ["Kimi material-ajeno", "prefijo Kimi", "kimi", "Kimi-Reviewer", "CODEX — ARQUITECTO / LEAD material-extra"]) u2aError(() => resolveBoundaryIdentity(alias, {}, d), "ROL_NO_RESUELTO");
+  u2aError(() => resolveBoundaryIdentity({ literal: "Kimi", DESTINATARIO_ROLE_ID: "EJECUTOR_PRINCIPAL" }, {}, d), "ROL_INCOMPATIBLE");
+  assert.equal(projectV1Alias({ role_id: "REVIEWER_INDEPENDIENTE", surface_id: "kimi-reviewer" }), "Kimi"); assert.doesNotMatch(JSON.stringify(u2aContract()), /"ejecutor"|Codex Arquitecto|"Claude"|"Kimi"/);
 });
 
-test("U1A actores, canon, delegación y estado canónico", async (t) => {
-  await t.test("actor resuelto por rol", () => {
-    const value = v2Contract(); assert.equal(validateContractV2(value, v2Deps()), value);
-  });
-  await t.test("adapter del actor obligatorio en contexto", () => {
-    const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((path) => path !== "AGENTS.md");
-    v2Error(() => validateContractV2(value, v2Deps()), "ADAPTER_FUERA_DE_CONTEXTO");
-  });
-  for (const path of GOVERNING_CONTEXT_V2) {
-    await t.test(`GOVERNING_CONTEXT exige ${path}`, () => {
-      const value = v2Contract(); value.contexto_autorizado = value.contexto_autorizado.filter((item) => item !== path);
-      v2Error(() => validateContractV2(value, v2Deps()), "CANON_GOBERNANTE_AUSENTE");
-    });
-  }
-  await t.test("operación rutinaria sin fundamento resoluble rechazada", () => {
-    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
-    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({ resolveCanonicalReference: () => false })), "REFERENCIA_CANONICA_NO_RESUELTA");
-  });
-  await t.test("operación rutinaria delegada aunque exista capacidad estática rechazada", () => {
-    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Rutina", actor_o_capacidad_requerida: "github", naturaleza: "OPERACION_RUTINARIA" };
-    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "DELEGACION_RUTINARIA_PROHIBIDA");
-  });
-  await t.test("capacidad estática inexistente se rechaza", () => {
-    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "capacidad-inventada", naturaleza: "ACCION_FISICA" };
-    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CAPACIDAD_ESTATICA_AUSENTE");
-  });
-  await t.test("categoría incompatible con operación rechazada", () => {
-    const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: V2_DIRECTOR_REF, condicion_observable: "Física", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
-    v2Error(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()), "CATEGORIA_INCOMPATIBLE_CON_OPERACION");
-  });
-  await t.test("acción física con categoría válida aceptada", () => {
-    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
-    assert.doesNotThrow(() => validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps()));
-  });
-  await t.test("identidad repetida produce ESTADO_CANONICO_DIVERGENTE", () => {
-    const value = v2Contract(); value.estado_canonico.proxima_accion.id = value.estado_canonico.accion_anterior.id;
-    v2Error(() => validateContractV2(value, v2Deps()), "ESTADO_CANONICO_DIVERGENTE");
-  });
-  await t.test("evidencia no resuelta invalida contrato", () => {
-    v2Error(() => validateContractV2(v2Contract(), v2Deps({ resolveEvidence: () => false })), "EVIDENCIA_CIERRE_NO_RESUELTA");
-  });
-  await t.test("resolvers son fakes inyectados", () => {
-    const calls = { ref: 0, evidence: 0 };
-    const op = { categoria: "ACCION_FISICA_O_AUTORIZACION_NO_AUTOMATIZABLE", referencia_canonica: V2_PHYSICAL_REF, condicion_observable: "Presencia", actor_o_capacidad_requerida: "accion_fisica", naturaleza: "ACCION_FISICA" };
-    validateContractV2(v2Contract({ operaciones_delegadas_a_humanos: [op] }), v2Deps({
-      resolveCanonicalReference: () => { calls.ref += 1; return true; }, resolveEvidence: () => { calls.evidence += 1; return true; },
-    }));
-    assert.deepEqual(calls, { ref: 1, evidence: 1 });
-  });
+test("U2A ejecución supervisada separa perfil y confinamiento", () => {
+  const d = u2aDeps(); const before = JSON.stringify(d.registry); assert.equal(validateContractV2(u2aExecution(), d).modo, "ejecucion"); assert.equal(JSON.stringify(d.registry), before);
+  const githubClose = u2aExecution({ profile_id: "github_close", contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "AGENTS.md"], destinatario: { role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto", required_capabilities: ["github_cierre"] }, mutaciones_permitidas: [], operaciones_permitidas: [{ tipo: "github", objetivo: "cerrar PR autorizada" }] }); assert.doesNotThrow(() => validateContractV2(githubClose, d));
+  const noBaseline = u2aDeps(); noBaseline.registry.surfaces["codex-ejecutor"].operational_profile.evidence = "NO_PROBADO"; u2aError(() => validateContractV2(u2aExecution(), noBaseline), "CAPACIDAD_NO_DISPONIBLE");
+  u2aError(() => validateContractV2(u2aExecution({ profile_id: "puente" }), d), "ROL_INCOMPATIBLE"); u2aError(() => validateContractV2(u2aExecution({ rollback: { strategy: "NO_APLICA", reference: "" } }), d), "OPERACION_NO_AUTORIZADA"); u2aError(() => validateContractV2(u2aExecution({ disparadores_0015: ["efecto material no observable"] }), d), "DISPARADOR_0015_ACTIVO");
 });
 
-test("U1A schemas, pureza y desconexión operativa", async (t) => {
-  await t.test("schemas y validadores comparten vocabulario", () => {
-    assert.deepEqual(V2_RESULT_SCHEMA.properties.decision.enum, [...HANDOFF_V2_DECISIONS]);
-    assert.deepEqual(V2_SCHEMA.properties.modo.enum, ["solo_lectura", "ejecucion"]);
-    const economic = V2_SCHEMA.properties.impacto_economico.oneOf[1].properties;
-    assert.equal(Object.hasOwn(economic, "acumulado_observable"), false);
-    assert.equal(Object.hasOwn(economic, "remanente"), false);
-    assert.equal(V2_SCHEMA.properties.reintentos.properties.maximos.const, 0);
-  });
-  await t.test("módulo v2 sin imports effectful", () => {
-    const source = readFileSync(join(HERE, "handoff-contract-v2.mjs"), "utf8");
-    for (const forbidden of [/node:fs/, /node:child_process/, /env\.mjs/, /notify\.mjs/, /node:http/, /node:https/, /\bfetch\s*\(/, /Date\.now\s*\(/, /new Date\s*\(/]) assert.doesNotMatch(source, forbidden);
-  });
-  await t.test("poll no referencia v2", () => assert.doesNotMatch(poll.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
-  await t.test("tick no referencia v2", () => assert.doesNotMatch(tick.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
-  await t.test("invokeAgent no referencia v2", () => assert.doesNotMatch(invokeAgent.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/));
-  await t.test("processIssue no referencia v2", () => {
-    const source = readFileSync(join(HERE, "handoff.mjs"), "utf8");
-    const start = source.indexOf("async function processIssue"); assert.notEqual(start, -1);
-    assert.doesNotMatch(source.slice(start, start + 7000), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/);
-    assert.doesNotMatch(source, /processIssueV2|executeV2Unit|acquireLeaseLock|heartbeatLeaseLock/);
-  });
+test("U2A Director resuelve delegación y arbitraje, pero no ejecución", () => {
+  const d = u2aDeps(); const op = { categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: HUMAN_REFERENCE_FOR_TEST, condicion_observable: "Decisión", actor_o_capacidad_requerida: "arbitraje_producto", naturaleza: "DECISION_MATERIAL" };
+  assert.doesNotThrow(() => validateContractV2(u2aContract({ operaciones_delegadas_a_humanos: [op] }), d));
+  const next = { role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano", required_capabilities: ["arbitraje_producto"] }; assert.doesNotThrow(() => validateResultV2(u2aResult({ decision: "REQUIERE_ARBITRAJE", siguiente: next }), u2aContract(), d, u2aAttempt(), u2aManifest()));
+  u2aError(() => resolveCanonicalIdentity({ role_id: "DIRECTOR_PRODUCT_OWNER", surface_id: "director-humano" }, d, { requireInvocable: true }), "OPERACION_NO_AUTORIZADA");
 });
 
-test("U1A guardas observables: cero red, procesos y mutaciones compartidas", (t) => {
-  const effects = { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 };
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => { effects.fetch += 1; throw new Error("fetch prohibido"); };
-  t.after(() => { globalThis.fetch = originalFetch; });
-  for (const [target, key, counter] of [[http, "request", "http"], [https, "request", "https"], [childProcess, "spawn", "spawn"], [childProcess, "spawnSync", "spawnSync"], [childProcess, "execFile", "execFile"], [childProcess, "execFileSync", "execFileSync"]]) {
-    t.mock.method(target, key, () => { effects[counter] += 1; throw new Error(`${key} prohibido`); });
-  }
-  validateContractV2(v2Contract(), v2Deps()); validateResultV2(v2Result(), v2Contract(), v2Deps());
-  assert.deepEqual(effects, { fetch: 0, http: 0, https: 0, spawn: 0, spawnSync: 0, execFile: 0, execFileSync: 0 });
-  const source = readFileSync(join(HERE, "handoff.test.mjs"), "utf8");
-  assert.match(source, /mkdtempSync\(join\(tmpdir\(\), "handoff-test-"\)\)/);
-  assert.doesNotMatch(source, /writeFileSync\((?:ROOT|HERE)/);
+const HUMAN_REFERENCE_FOR_TEST = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
+test("U2A manifiesto, productores, blobs inyectados y request exacto", () => {
+  const d = u2aDeps(); const manifest = u2aManifest(); assert.equal(validateManifestV2(manifest, d), manifest); assert.equal(validateProducerInventoryV2(U2A_PRODUCERS), U2A_PRODUCERS);
+  const omittedProducer = structuredClone(manifest); omittedProducer.producer_chain.pop(); u2aError(() => validateManifestV2(omittedProducer, d), "PRODUCTORES_NO_COINCIDEN");
+  const extraProducer = structuredClone(manifest); extraProducer.producer_chain.push(structuredClone(extraProducer.producer_chain[0])); u2aError(() => validateManifestV2(extraProducer, d), "PRODUCTORES_NO_COINCIDEN");
+  const omittedSource = structuredClone(manifest); omittedSource.sources = omittedSource.sources.filter((item) => item.path !== "scripts/handoff/prompt-template.md"); u2aError(() => validateManifestV2(omittedSource, d), "PRODUCTORES_NO_COINCIDEN");
+  const wrongBlob = structuredClone(manifest); wrongBlob.sources[0].git_blob_oid = "f".repeat(40); u2aError(() => validateManifestV2(wrongBlob, d), "BLOB_NO_COINCIDE");
+  const missingBlobMetadata = u2aDeps(); delete missingBlobMetadata.git_sources["scripts/handoff/handoff-contract-v2.mjs"].git_blob_oid; u2aError(() => validateManifestV2(manifest, missingBlobMetadata), "CAMPO_REQUERIDO_AUSENTE");
+  const wrongInjectedBlob = u2aDeps(); wrongInjectedBlob.git_sources["scripts/handoff/handoff-contract-v2.mjs"].git_blob_oid = "f".repeat(40); u2aError(() => validateManifestV2(manifest, wrongInjectedBlob), "BLOB_NO_COINCIDE");
+  const changedLineEndings = structuredClone(manifest); changedLineEndings.sources[0].sha256 = "e".repeat(64); changedLineEndings.sources[0].bytes += 1; u2aError(() => validateManifestV2(changedLineEndings, d), "BLOB_NO_COINCIDE");
+  const incompleteMap = u2aDeps(); delete incompleteMap.git_sources["scripts/handoff/prompt-template.md"]; u2aError(() => validateManifestV2(manifest, incompleteMap), "MAPA_GIT_INCOMPLETO");
+  const divergentMap = u2aDeps(); divergentMap.git_sources["reglas.md"].bytes += 1; u2aError(() => validateManifestV2(manifest, divergentMap), "BLOB_NO_COINCIDE");
+  u2aError(() => validateManifestV2({ ...manifest, request: { ...manifest.request, bytes: 1 } }, d), "REQUEST_NO_COINCIDE");
+});
+
+test("U2A intento, binding obligatorio, exclusividad y frontera heredada", () => {
+  const d = u2aDeps(); const attempt = u2aAttempt(); const manifest = u2aManifest(); assert.equal(validateAttemptStructureV2(attempt, d), attempt); u2aError(() => validateAttemptV2(attempt, d), "MANIFIESTO_REQUERIDO"); assert.equal(validateAttemptV2(attempt, d, manifest), attempt);
+  u2aError(() => validateResultV2(u2aResult(), u2aContract(), d), "INTENTO_REQUERIDO"); u2aError(() => validateResultV2(u2aResult(), u2aContract(), d, attempt), "MANIFIESTO_REQUERIDO"); assert.equal(validateResultV2(u2aResult(), u2aContract(), d, attempt, manifest).estado, "COMPLETADO");
+  for (const key of ["attempt_id", "artifact_id", "request_sha256", "request_bytes", "manifest_sha256", "head_sha"]) { const result = u2aResult(); result.binding[key] = key === "request_bytes" ? 999 : "f".repeat(key.includes("sha") ? 64 : 1); u2aError(() => validateResultV2(result, u2aContract(), d, attempt, manifest), "RESULTADO_INTENTO_NO_COINCIDE"); }
+  const mismatchedAttempt = u2aAttempt({ request_bytes: 999 }); u2aError(() => validateAttemptV2(mismatchedAttempt, d, manifest), "INTENTO_INVALIDO"); assert.doesNotThrow(() => validateResultV2(u2aResult({ firma: { ...u2aResult().firma, ejecutor_real: "evidencia-no-identitaria" } }), u2aContract(), d, attempt, manifest));
+  assert.equal(exclusivityPathForRequest(U2A_HASH), `.handoff/v2/requests/${U2A_HASH}/lock`); assert.deepEqual(projectLegacyIdentityHeader({ role_id: "ARQUITECTO_LEAD", surface_id: "codex-arquitecto" }), { literal: "Codex Arquitecto", DESTINATARIO_ROLE_ID: "ARQUITECTO_LEAD" }); assert.equal(validateContractV2(u2aContract(), d).salida_requerida, "Estado, evidencia y firma."); assert.equal(validateContract(contract(), BASE_CONFIG).salida_requerida.length > 0, true);
+});
+
+test("U2A review es representable sin autorizar dispatch de payload", () => {
+  const d = u2aDeps(); const reviewContract = u2aContract({ profile_id: "review", contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "reviewer-policy.md"], destinatario: { role_id: "REVIEWER_INDEPENDIENTE", surface_id: "kimi-reviewer", required_capabilities: ["review_independiente"] } });
+  assert.doesNotThrow(() => validateContractV2(reviewContract, d)); assert.equal(d.registry.surfaces["kimi-reviewer"].payload_sharing.status, "NO_AUTORIZADO");
+  u2aError(() => validateContractV2({ ...reviewContract, operaciones_permitidas: [{ tipo: "red", objetivo: "despachar payload" }] }, d), "OPERACION_NO_AUTORIZADA");
+});
+
+test("U2A shapes anidadas fallan con error contractual estable", () => {
+  const badCatalog = structuredClone(U2A_CATALOG); badCatalog.roles.ARQUITECTO_LEAD.capabilities = {}; u2aError(() => validateRoleCatalog(badCatalog), "CATALOGO_INVALIDO");
+  const badRegistry = structuredClone(U2A_REGISTRY); badRegistry.surfaces["codex-ejecutor"].authorization = null; u2aError(() => validateOperationalRegistry(badRegistry, U2A_CATALOG), "ESTRUCTURA_INVALIDA");
+  const badInventory = structuredClone(U2A_PRODUCERS); badInventory.profiles.manual[0] = null; u2aError(() => validateProducerInventoryV2(badInventory), "ESTRUCTURA_INVALIDA");
+  const badManifest = u2aManifest({ request: null }); u2aError(() => validateManifestV2(badManifest, u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateAttemptStructureV2(null, u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateContractV2(u2aContract({ operaciones_delegadas_a_humanos: [null] }), u2aDeps()), "ESTRUCTURA_INVALIDA");
+  u2aError(() => validateResultV2(u2aResult({ firma: null }), u2aContract(), u2aDeps(), u2aAttempt(), u2aManifest()), "ESTRUCTURA_INVALIDA");
+});
+
+test("U2A schemas JSON válidos, pureza, desconexión y compatibilidad v1", () => {
+  for (const file of ["roles-catalog.schema.json", "operational-registry-v2.schema.json", "handoff-v2.schema.json", "handoff-result-v2.schema.json", "handoff-manifest-v2.schema.json", "handoff-attempt-v2.schema.json", "handoff-v2-producers.schema.json"]) assert.doesNotThrow(() => JSON.parse(readFileSync(join(HERE, file), "utf8")), file);
+  const source = readFileSync(join(HERE, "handoff-contract-v2.mjs"), "utf8"); for (const forbidden of [/node:fs/, /node:child_process/, /node:http/, /node:https/, /\bfetch\s*\(/, /mkdir|writeFile|execFile|spawn/]) assert.doesNotMatch(source, forbidden);
+  assert.doesNotMatch(poll.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/); assert.doesNotMatch(tick.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/); assert.doesNotMatch(invokeAgent.toString(), /handoff-contract-v2|validateContractV2|handoff_version\s*===?\s*["']2/);
+  const historical = contract(); assert.doesNotThrow(() => validateContract(historical, BASE_CONFIG)); u2aError(() => validateContractV2(historical, u2aDeps()), "CONTRATO_VERSION_NO_SOPORTADA");
 });

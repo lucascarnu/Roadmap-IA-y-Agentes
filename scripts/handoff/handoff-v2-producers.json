@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "profiles": {
+    "manual": [{ "producer_id": "manual-contract-v2", "kind": "contract", "path": "scripts/handoff/handoff-contract-v2.mjs" }, { "producer_id": "manual-template-v1", "kind": "compatibility_boundary", "path": "scripts/handoff/prompt-template.md" }],
+    "github_close": [{ "producer_id": "github-close-contract-v2", "kind": "contract", "path": "scripts/handoff/handoff-contract-v2.mjs" }],
+    "puente": [{ "producer_id": "bridge-v1-readonly", "kind": "compatibility_boundary", "path": "scripts/handoff/handoff.mjs" }],
+    "review": [{ "producer_id": "review-policy", "kind": "adapter", "path": "reviewer-policy.md" }]
+  }
+}

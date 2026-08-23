@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "normative_source": "decisiones/0016-gates-de-admision-accion-y-emision.md#catalogo-durable-y-registro-operacional",
+  "roles": {
+    "DIRECTOR_PRODUCT_OWNER": { "canonical_name": "Director / Product Owner", "capabilities": ["intencion_producto", "prioridades", "restricciones", "presupuesto", "arbitraje_producto", "autorizacion_economica", "accion_fisica"], "incompatibilities": ["operador_tecnico_rutinario"] },
+    "ARQUITECTO_LEAD": { "canonical_name": "Arquitecto / Lead", "capabilities": ["arquitectura", "clasificacion_materialidad", "coordinacion_evidencia", "cierre_tecnico"], "incompatibilities": ["review_independiente_de_implementacion_propia", "qa_de_implementacion_propia"] },
+    "EJECUTOR_PRINCIPAL": { "canonical_name": "Ejecutor principal", "capabilities": ["implementacion", "prueba_observable", "publicacion"], "incompatibilities": ["arbitraje_cierre_propio", "review_independiente_de_implementacion_propia", "qa_de_implementacion_propia"] },
+    "REVIEWER_INDEPENDIENTE": { "canonical_name": "Reviewer independiente", "capabilities": ["review_independiente", "hallazgos"], "incompatibilities": ["diseno_de_cambio_revisado", "implementacion_de_cambio_revisado", "qa", "cierre_tecnico"] },
+    "QA_VALIDACION": { "canonical_name": "QA / Validación", "capabilities": ["ejecucion_comportamiento_objetivo", "validacion_operativa"], "incompatibilities": ["implementacion_de_cambio_validado"] },
+    "CONSULTOR_AUDITOR": { "canonical_name": "Consultor / Auditor de Continuidad y Coherencia", "capabilities": ["auditoria_continuidad", "reconciliacion", "propuesta_para_arbitraje"], "incompatibilities": ["decision_arquitectura", "implementacion", "review_independiente", "integracion", "creacion_gates"] },
+    "ESPECIALISTAS_BAJO_DEMANDA": { "canonical_name": "Especialistas bajo demanda", "capabilities": ["especialidad_bajo_demanda"], "incompatibilities": ["autoridad_heredada"] }
+  }
+}

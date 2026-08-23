@@ -384,21 +384,59 @@ reclamos locales. Ambos se crean con `mkdir`, que es atómico. Un `running` cuyo
 PID local ya no existe se recupera una vez. Si vuelve a quedar huérfano antes de
 persistir resultado, termina `handoff:blocked`.
 
-## U1A: contrato v2 y validación pura
+## Unidad 2a: contrato v2 y validación pura
 
-`handoff-contract-v2.mjs`, `handoff-v2.schema.json`,
-`handoff-result-v2.schema.json` y `actores.json` representan el contrato v2 y
-validan sus invariantes sin ejecutar el contrato. El módulo recibe por inyección
-el registro de actores, la resolución de referencias canónicas y la resolución
-de evidencia; no lee archivos, no consulta Git o GitHub, no invoca agentes y no
-está importado por `poll`, `tick`, `processIssue` ni `invokeAgent`.
+[`roles.catalog.json`](roles.catalog.json) proyecta los siete roles de `0016`
+sin ocupantes, proveedores ni evidencia operacional. [`actores.json`](actores.json)
+es, por separado, el registro v2 de superficies: referencia la asignación de
+`equipo.md` y declara adapter, `cwd`, capacidades observadas, autorización,
+autenticación, compatibilidad, perfil, confinamiento y procedencia. Sus formas
+están cerradas por [`roles-catalog.schema.json`](roles-catalog.schema.json) y
+[`operational-registry-v2.schema.json`](operational-registry-v2.schema.json).
 
-La validación cubre versión, canon gobernante, roles, adapters, capacidades,
-modos, mutaciones declaradas, objetos de entrada y salida, economía, reintentos,
-delegaciones humanas, estado canónico, evidencia, decisiones, transiciones y
-firma. Los valores `acumulado_observable` y `remanente` no son autoritativos en
-el contrato: el gasto histórico y el remanente deberán provenir del ledger
-durable del futuro runtime U1B.
+`handoff-contract-v2.mjs`, `handoff-v2.schema.json` y
+`handoff-result-v2.schema.json` validan las invariantes sin ejecutar contratos.
+El módulo recibe catálogo, registro y resoluciones observadas por inyección; no
+lee archivos, no consulta Git o GitHub, no invoca agentes y no está importado
+por `poll`, `tick`, `processIssue` ni `invokeAgent`.
+
+La identidad canónica persistida usa exclusivamente `role_id` y `surface_id`.
+La frontera compatible acepta aliases exactos y encabezados con
+`DESTINATARIO_ROLE_ID`. Su única proyección es el par heredado literal +
+`DESTINATARIO_ROLE_ID`; no convierte un contrato v2 completo en contrato v1.
+`salida_requerida` se valida de forma independiente en ambos contratos. El alias
+`codex` exige un par único de adapter y `cwd` efectivos. Los artefactos y el
+runtime v1 permanecen independientes, legibles y no se reinterpretan como v2.
+
+Los perfiles `manual` y `github_close` admiten ejecución supervisada; `puente`
+y `review` son sólo lectura. La admisión exige superficie exacta, baseline del
+perfil, capacidad, autorización, autenticación, compatibilidad, efectos,
+rollback, postcondiciones, cero reintentos y ausencia de disparadores materiales
+de `0015`. Esto no eleva el confinamiento: todas las superficies conservan
+`NO_CONFIGURADO / NO_PROBADO`.
+
+[`handoff-manifest-v2.schema.json`](handoff-manifest-v2.schema.json),
+[`handoff-attempt-v2.schema.json`](handoff-attempt-v2.schema.json) y el inventario
+[`handoff-v2-producers.json`](handoff-v2-producers.json) fijan request exacto,
+productor, cadena de productores, fuentes, intento y binding del resultado. El
+cierre exige siempre manifiesto e intento y compara de extremo a extremo
+`attempt_id`, `artifact_id`, hash y bytes del request, hash del manifiesto y
+`head_sha`. Un resolvedor externo inyecta `head_sha` y el mapa
+`path -> { git_blob_oid, sha256, bytes }`; el validador compara los tres valores
+para cada fuente versionada y exige el conjunto exacto de productores. La ruta
+de exclusividad se deriva como
+`.handoff/v2/requests/<request_sha256>/lock`, pero 2a no crea el lock.
+
+Los schemas declaran la capa estructural y el módulo implementa la semántica
+pura fail closed; la conexión mecánica schema → semántica pertenece a 2b. El
+perfil `review` sigue siendo representable y read-only, pero el registro marca
+el intercambio de payload como `NO_AUTORIZADO` hasta que una política futura y
+explícita lo habilite. Esta unidad no diseña esa política.
+
+La validación cubre además `salida_requerida`, economía, delegaciones humanas,
+estado canónico, evidencia, decisiones, transiciones y firma. Los valores
+`acumulado_observable` y `remanente` no son autoritativos: el gasto histórico y
+el remanente deberán provenir del ledger durable del futuro runtime.
 
 El resultado separa `resumen`, narrativo, de `decision`, mecánico. El vocabulario
 nuevo es `SIN_OBJECIONES`, `OBJECION_MATERIAL`, `REQUIERE_ARBITRAJE`,
@@ -411,11 +449,11 @@ Las delegaciones humanas usan las ocho categorías cerradas de `0013` y la
 acción física documentada en `pendientes.md`; una referencia inexistente, una
 categoría incompatible o una operación rutinaria delegada fallan cerradas.
 
-`actores.json` sólo declara el confinamiento conocido. Ningún actor actual tiene
-confinamiento `PROBADO_LOCALMENTE`; por eso el validador puro rechaza
-`modo: ejecucion` para todos ellos. Probar o configurar el confinamiento real
-pertenece a U5. U1A no implementa locks, ledger, efectos, recuperación ni un
-runtime v2, y ninguna de sus pruebas demuestra autonomía.
+El endpoint humano del Director resuelve delegaciones y
+`REQUIERE_ARBITRAJE`, pero es no invocable y rechaza ejecución técnica. QA no
+tiene superficie configurada y por eso resuelve `ROL_NO_CONFIGURADO` hasta que
+una tarea la active. Unidad 2a no implementa locks, ledger, efectos,
+recuperación ni runtime v2, y ninguna de sus pruebas demuestra autonomía.
 
 Los schemas y artefactos históricos v1 permanecen legibles y el camino
 operativo v1 continúa temporalmente sin cambios. Leer un artefacto histórico no

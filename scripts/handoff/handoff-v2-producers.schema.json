@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Handoff v2 producer inventory", "type": "object", "additionalProperties": false,
+  "required": ["version", "profiles"], "properties": { "version": { "const": "1" }, "profiles": { "type": "object", "additionalProperties": false, "required": ["manual", "github_close", "puente", "review"], "properties": { "manual": { "$ref": "#/$defs/list" }, "github_close": { "$ref": "#/$defs/list" }, "puente": { "$ref": "#/$defs/list" }, "review": { "$ref": "#/$defs/list" } } } },
+  "$defs": { "list": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["producer_id", "kind", "path"], "properties": { "producer_id": { "type": "string", "minLength": 1 }, "kind": { "enum": ["contract", "compatibility_boundary", "adapter"] }, "path": { "type": "string", "minLength": 1 } } } } }
+}
