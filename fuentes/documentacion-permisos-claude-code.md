@@ -19,11 +19,32 @@ Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
 Reconsultadas el **2026-08-13**, contra **Claude Code 2.1.227**.
 Reconsultadas el **2026-08-16**, contra **Claude Code 2.1.233**.
 Reconsultadas el **2026-08-22**, contra **Claude Code 2.1.240**.
+Reconsultadas el **2026-08-23**, contra **Claude Code 2.1.240**, las páginas de
+permisos, settings y uso de datos.
 
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
 - `https://code.claude.com/docs/en/settings`
 - `https://code.claude.com/docs/en/sandboxing`
+- `https://code.claude.com/docs/en/data-usage`
+- `https://code.claude.com/docs/en/tools-reference`
+- `https://code.claude.com/docs/en/mcp`
+- `https://code.claude.com/docs/en/env-vars`
+- `https://cli.github.com/manual/gh_help_environment`
+
+## Ubicación de configuración de GitHub CLI en Windows
+
+**DOCUMENTADO — GitHub CLI.** `GH_CONFIG_DIR` define el directorio de
+configuración de `gh`. Si no está definido, GitHub CLI usa, en este orden,
+`$XDG_CONFIG_HOME/gh`, `$AppData/GitHub CLI` en Windows cuando `$AppData` está
+definido, o `$HOME/.config/gh`. La fuente es el
+[manual oficial de variables de entorno de GitHub CLI](https://cli.github.com/manual/gh_help_environment).
+
+**PROBADO LOCALMENTE — 2026-08-23.** Sin leer ni revelar el contenido de ningún
+archivo, se comprobó que
+`C:\Users\lucas\AppData\Roaming\GitHub CLI\hosts.yml` existe y que
+`C:\Users\lucas\.config\gh\hosts.yml` no existe. La política compartida protege
+la ruta efectiva mediante `Read(~/AppData/Roaming/GitHub CLI/**)`.
 
 ## Qué afirmaciones respalda
 
@@ -37,6 +58,19 @@ Cada punto se usó para decidir una regla concreta de la política:
   contiene sólo el nombre, como `Bash` o `PowerShell`, alcanza todos sus usos y,
   en `deny`, retira la herramienta del contexto. Los patrones de nombre deben
   cubrir el nombre completo; `mcp__*` deniega todas las herramientas MCP.
+- **Búsqueda diferida de herramientas.** `ToolSearch` busca y carga herramientas
+  diferidas. La documentación de MCP prescribe `deny: ["ToolSearch"]` para
+  deshabilitar específicamente esa herramienta; la política usa ese nombre
+  desnudo y mantiene además `mcp__*` denegado.
+- **Control terminal inevitable.** Mientras quede cualquier otra herramienta,
+  las reglas `deny` o `ask` no pueden retirar `EndConversation`. La excepción es
+  deliberada: sólo termina la conversación y no lee ni modifica archivos o
+  datos. No constituye mutación, egress ni capacidad de workflow.
+- **`WebFetch` general.** El nombre desnudo `WebFetch` alcanza todos los
+  dominios; equivale a `WebFetch(domain:*)`. El preflight de seguridad de dominio
+  permanece activo por defecto y envía sólo el hostname a Anthropic para
+  cotejarlo con su blocklist. Esta política no configura
+  `skipWebFetchPreflight`.
 - **`permissions.defaultMode`.** Acepta `default`, `acceptEdits`, `plan`, `auto`,
   `dontAsk` y `bypassPermissions`.
 - **Modo `dontAsk`.** Deniega automáticamente toda llamada que en otro modo
@@ -58,6 +92,13 @@ Cada punto se usó para decidir una regla concreta de la política:
   absoluta desde la raíz del sistema, `~/ruta` parte del directorio personal,
   `/ruta` es relativa al origen del archivo de configuración, y `ruta` o
   `./ruta` son relativas al directorio actual.
+- **Alcance de `Read` deny.** Claude Code intenta aplicar estas reglas a sus
+  herramientas integradas de lectura, incluidos `Grep`, referencias `@file` y
+  contexto aportado por el IDE. Es un control best effort de herramientas, no
+  una frontera de sistema operativo, y la documentación no ofrece una regla
+  “permitir sólo si está versionado”. Por eso se deniegan rutas sensibles
+  conocidas y se declara el riesgo residual sobre cualquier material todavía
+  legible.
 - **`Edit(...)` cubre todas las herramientas integradas de edición.** Una regla
   `Write(...)` o `NotebookEdit(...)` no participa de la verificación de permisos
   de archivos y produce una advertencia al arrancar.
@@ -74,6 +115,13 @@ Cada punto se usó para decidir una regla concreta de la política:
   Bash sandboxed. Son capas complementarias. La presencia de una política de
   permisos no demuestra que el sandbox esté configurado ni prueba confinamiento
   fuerte.
+- **Tráfico no esencial.** Un valor no vacío de
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` deshabilita auto-updates,
+  telemetría, reportes de error, `/feedback`, encuestas de calidad, release
+  notes, refrescos de descubrimiento y otras comprobaciones de disponibilidad.
+  No hace falta sumar `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY`: la encuesta ya queda
+  cubierta. Esta variable no afecta el preflight de seguridad de `WebFetch`, que
+  permanece activo mientras no se configure `skipWebFetchPreflight`.
 - **Comandos de solo lectura.** Existe un conjunto interno que corre sin prompt
   en todos los modos, e incluye las formas de solo lectura de `git`. Una regla
   `ask` o `deny` explícita lo revierte.
@@ -218,8 +266,9 @@ estrechar una regla, no una lectura que se termine.
 ## Vigencia
 
 Lo anterior describe el comportamiento documentado tras la reconsulta del
-**2026-08-22** para **Claude Code 2.1.240**, junto a las consultas anteriores de
-2.1.233, 2.1.227 y 2.1.226. No son afirmaciones permanentes.
+**2026-08-23** para **Claude Code 2.1.240**, junto a las consultas anteriores de
+2026-08-22, 2.1.233, 2.1.227 y 2.1.226. No son afirmaciones permanentes ni
+evidencia operativa de una sesión fría.
 
 Debe revalidarse cuando cambie de forma relevante la versión de Claude Code o la
 documentación de permisos, y de inmediato ante cualquier comportamiento

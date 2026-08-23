@@ -35,16 +35,27 @@ la superficie autorizados para esa tarea.
 esta superficie de especialista. `defaultMode: dontAsk` deniega automáticamente
 lo no permitido; los modos de bypass y auto están deshabilitados. La política
 retira shell, edición, MCP y cualquier capacidad permanente de workflow, y sólo
-permite `WebSearch` como búsqueda web general y `WebFetch` únicamente para los
-dominios oficiales explícitos de `.claude/settings.json`.
+permite `WebSearch` y `WebFetch` como capacidades generales de investigación en
+Internet. `Bash` y `PowerShell`, denegados por nombre desnudo, retiran las vías
+de subprocess expuestas por esas herramientas.
 
-La lista explícita de `deny` cubre los mutadores y las herramientas auxiliares
-observados en la prueba fría. `defaultMode: dontAsk` sigue cerrando cualquier
-herramienta futura que no esté permitida; esto no declara un sandbox del sistema
-operativo.
+`Read`, `Grep`, `WebSearch` y `WebFetch` son las capacidades operativas de esta
+superficie. La lista explícita de `deny` cubre los mutadores, agentes, mensajería,
+publicación, notificaciones, planificación, búsqueda diferida de herramientas y
+las demás superficies de efecto observadas. `defaultMode: dontAsk` sigue
+cerrando cualquier herramienta futura que no esté permitida; esto no declara un
+sandbox del sistema operativo.
+
+`EndConversation` es la excepción terminal inevitable: Claude Code no permite
+retirarla mientras exista otra herramienta. Sólo termina la conversación; no es
+una mutación de archivos, una vía de egress ni una capacidad de workflow.
 
 Esta configuración es una política de herramientas, no un sandbox del sistema
-operativo ni evidencia de confinamiento fuerte.
+operativo ni evidencia de confinamiento fuerte. Claude Code no ofrece una regla
+`Read` que permita sólo archivos versionados: los `deny` explícitos protegen las
+rutas sensibles conocidas, pero todo otro material legible permanece al alcance
+de la superficie. Por eso `WebFetch` general conserva riesgo residual de prompt
+injection y de exfiltración de cualquier material que todavía pueda leerse.
 
 `.claude/settings.local.json` no debe contener permisos del workflow ni permisos
 permanentes. Su depuración se realiza administrativamente, con rollback, después
