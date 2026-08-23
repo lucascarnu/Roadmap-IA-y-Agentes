@@ -18,30 +18,34 @@ el material que respalda la política de permisos de `.claude/settings.json`.
 Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
 Reconsultadas el **2026-08-13**, contra **Claude Code 2.1.227**.
 Reconsultadas el **2026-08-16**, contra **Claude Code 2.1.233**.
+Reconsultadas el **2026-08-22**, contra **Claude Code 2.1.240**.
 
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
 - `https://code.claude.com/docs/en/settings`
+- `https://code.claude.com/docs/en/sandboxing`
 
 ## Qué afirmaciones respalda
 
 Cada punto se usó para decidir una regla concreta de la política:
 
-- **`permissions.allow` / `ask` / `deny`.** Se evalúan en ese orden —deny, luego
-  ask, luego allow— y la primera coincidencia decide. La especificidad no altera
-  el orden, así que un deny amplio no admite excepciones por allow más estrecho.
-- **Nombre de herramienta desnudo.** Una regla que contiene sólo el nombre de la
-  herramienta, sin paréntesis, coincide con todos sus usos. La documentación
-  usa `WebFetch` como ejemplo explícito de una regla que alcanza todas las
-  solicitudes de esa herramienta; la sintaxis general aplica igualmente a
-  `WebSearch`.
+- **`permissions.allow` / `ask` / `deny`.** Las reglas coincidentes de todos los
+  scopes se combinan con precedencia `deny`, luego `ask` y por último `allow`.
+  La especificidad no altera esa precedencia: un deny amplio de cualquier scope
+  no admite excepciones mediante un allow más estrecho.
+- **Nombre de herramienta desnudo y glob de herramienta.** Una regla que
+  contiene sólo el nombre, como `Bash` o `PowerShell`, alcanza todos sus usos y,
+  en `deny`, retira la herramienta del contexto. Los patrones de nombre deben
+  cubrir el nombre completo; `mcp__*` deniega todas las herramientas MCP.
 - **`permissions.defaultMode`.** Acepta `default`, `acceptEdits`, `plan`, `auto`,
   `dontAsk` y `bypassPermissions`.
 - **Modo `dontAsk`.** Deniega automáticamente toda llamada que en otro modo
-  habría abierto un prompt. Solo corren las coincidencias con `allow`, los
-  comandos Bash de solo lectura y lo aprobado por un hook `PreToolUse`. Las
-  reglas `ask` pasan a denegarse, y la herramienta `AskUserQuestion` queda
-  denegada.
+  habría abierto un prompt. Sólo corren las coincidencias preaprobadas; las
+  reglas `ask`, `AskUserQuestion`, los conectores configurados para preguntar y
+  las herramientas MCP marcadas `requiresUserInteraction` quedan denegados.
+- **Deshabilitación de modos amplios.** Para impedir `bypassPermissions` y
+  `auto`, `permissions.disableBypassPermissionsMode` y
+  `permissions.disableAutoMode` usan literalmente el valor `"disable"`.
 - **Comodines en reglas de comandos.** `*` coincide en cualquier posición,
   incluido el medio del patrón. Un `*` final precedido de espacio impone frontera
   de palabra y admite también el comando sin argumentos. El sufijo `:*` equivale
@@ -62,8 +66,14 @@ Cada punto se usó para decidir una regla concreta de la política:
   verificación corre antes de evaluarlas.
 - **Configuración compartida y local.** `.claude/settings.json` se versiona y se
   comparte; `.claude/settings.local.json` no se versiona y sirve para ajustes
-  personales o de una máquina. La precedencia va de managed a CLI, local,
-  proyecto y usuario.
+  personales o de una máquina. Las reglas de permisos de los distintos scopes
+  se combinan y cualquier `deny` coincidente prevalece; para los demás settings
+  rige la precedencia documentada de fuentes.
+- **Sandbox complementario.** Las reglas de permisos controlan herramientas,
+  archivos y dominios; el sandbox aplica restricciones de sistema operativo al
+  Bash sandboxed. Son capas complementarias. La presencia de una política de
+  permisos no demuestra que el sandbox esté configurado ni prueba confinamiento
+  fuerte.
 - **Comandos de solo lectura.** Existe un conjunto interno que corre sin prompt
   en todos los modos, e incluye las formas de solo lectura de `git`. Una regla
   `ask` o `deny` explícita lo revierte.
@@ -76,6 +86,10 @@ Cada punto se usó para decidir una regla concreta de la política:
   `settings.json` del que proviene cada una.
 
 ## Semántica observada del matcher
+
+Esta sección conserva observaciones históricas del perfil operativo anterior.
+No describe capacidades del perfil vigente de especialista, que deniega shell,
+edición y MCP por nombre de herramienta.
 
 **PROBADO LOCALMENTE — 2026-08-14.** Estas observaciones describen el matcher
 efectivo en este entorno; no son una garantía universal del producto salvo donde
@@ -204,9 +218,8 @@ estrechar una regla, no una lectura que se termine.
 ## Vigencia
 
 Lo anterior describe el comportamiento documentado tras la reconsulta del
-**2026-08-16** para **Claude Code 2.1.233**, junto a las consultas del
-**2026-08-13** para **Claude Code 2.1.227** y del **2026-08-08** para **Claude
-Code 2.1.226**. No son afirmaciones permanentes.
+**2026-08-22** para **Claude Code 2.1.240**, junto a las consultas anteriores de
+2.1.233, 2.1.227 y 2.1.226. No son afirmaciones permanentes.
 
 Debe revalidarse cuando cambie de forma relevante la versión de Claude Code o la
 documentación de permisos, y de inmediato ante cualquier comportamiento
