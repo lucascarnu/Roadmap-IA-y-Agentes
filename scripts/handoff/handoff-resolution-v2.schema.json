@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff-resolution-v2.schema.json",
+  "title": "Resolución externa cerrada de handoff v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["head_sha", "contract_sha256", "manifest_sha256", "git_sources", "canonical_references", "closure_evidence"],
+  "properties": {
+    "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "contract_sha256": { "$ref": "#/$defs/sha256" },
+    "manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "git_sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["git_blob_oid", "sha256", "bytes"],
+        "properties": {
+          "git_blob_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "canonical_references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonical_reference" }
+    },
+    "closure_evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/closure_evidence" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "payload": {
+      "type": "object",
+      "required": ["resolution_id", "head_sha", "sha256", "bytes", "content"],
+      "properties": {
+        "resolution_id": { "$ref": "#/$defs/sha256" },
+        "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "content": { "type": "string", "minLength": 1 }
+      }
+    },
+    "canonical_reference": {
+      "allOf": [
+        { "$ref": "#/$defs/payload" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resolution_id", "reference", "head_sha", "sha256", "bytes", "content"],
+          "properties": {
+            "resolution_id": { "$ref": "#/$defs/sha256" },
+            "reference": { "type": "string", "minLength": 1 },
+            "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "bytes": { "type": "integer", "minimum": 1 },
+            "content": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "closure_evidence": {
+      "allOf": [
+        { "$ref": "#/$defs/payload" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resolution_id", "tipo", "referencia", "head_o_historial", "head_sha", "sha256", "bytes", "content"],
+          "properties": {
+            "resolution_id": { "$ref": "#/$defs/sha256" },
+            "tipo": { "type": "string", "minLength": 1 },
+            "referencia": { "type": "string", "minLength": 1 },
+            "head_o_historial": { "type": "string", "minLength": 1 },
+            "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "bytes": { "type": "integer", "minimum": 1 },
+            "content": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    }
+  }
+}

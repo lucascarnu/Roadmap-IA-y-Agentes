@@ -420,8 +420,9 @@ de `0015`. Esto no eleva el confinamiento: todas las superficies conservan
 [`handoff-v2-producers.json`](handoff-v2-producers.json) fijan request exacto,
 productor, cadena de productores, fuentes, intento y binding del resultado. El
 cierre exige siempre manifiesto e intento y compara de extremo a extremo
-`attempt_id`, `artifact_id`, hash y bytes del request, hash del manifiesto y
-`head_sha`. Un resolvedor externo inyecta `head_sha` y el mapa
+`attempt_id`, `transport_real_id`, destinatario canónico, `artifact_id`, hash y
+bytes del request, hash del manifiesto, `head_sha`, referencia/hash/bytes de la
+salida y `salida_requerida`. Un resolvedor externo inyecta `head_sha` y el mapa
 `path -> { git_blob_oid, sha256, bytes }`; el validador compara los tres valores
 para cada fuente versionada y exige el conjunto exacto de productores. La ruta
 de exclusividad se deriva como
@@ -461,6 +462,70 @@ lo migra ni lo reinterpreta como v2; el validador v2 rechaza explícitamente
 `handoff_version: "1"`.
 
 > El contrato v2 y sus invariantes son representables y están validados determinísticamente; no existe todavía un runtime autónomo habilitado para ejecutarlo.
+
+## Unidad 2b.1: gate de subsistema para posta v2
+
+[`delivery-v2-cli.mjs`](delivery-v2-cli.mjs) es el único entrypoint controlado de
+esta porción. Su grafo es `CLI → delivery-engine-v2 → handoff-contract-v2`; el
+runtime v1 (`handoff.mjs`, `poll`, `tick`, `processIssue` e `invokeAgent`) no
+importa estos módulos ni escribe su ledger. El motor tampoco es productor de
+contratos o manifiestos, por lo que no se agregó al inventario de productores
+de 2a.
+
+El CLI recibe por separado el bundle de intento/resultado, los bytes exactos de
+contrato, manifiesto y salida, y la resolución externa cerrada gobernada por
+[`handoff-resolution-v2.schema.json`](handoff-resolution-v2.schema.json). Esa
+entrada contiene `head_sha`, metadata Git y conjuntos exactos de referencias
+canónicas y evidencia de cierre. Cada resolución conserva contenido, SHA-256,
+bytes, HEAD e identificador derivado; faltantes, extras, duplicados, colisiones o
+discrepancias fallan antes de crear el ledger. Los callbacks puros del contrato
+consultan exclusivamente esos conjuntos ya verificados: no aceptan existencia
+aparente del path, mera igualdad de HEAD ni callbacks permisivos.
+
+El CLI calcula además los SHA-256 de contrato y manifiesto desde sus bytes y los
+compara con la resolución, el intento, el resultado y el manifiesto antes de
+crear el ledger; no acepta que el mismo bundle se autoafirme esos hashes. El
+mapa Git externo también debe coincidir exactamente con las fuentes versionadas
+del manifiesto.
+
+El intento fija `attempt_id`, `transport_real_id`, destinatario canónico,
+manifiesto, `head_sha` y `salida_requerida`. La ruta durable se deriva del
+SHA-256 del par ordenado `attempt_id + transport_real_id`, pero el ledger
+conserva ambos literales, target, manifiesto, HEAD y referencia/hash/bytes de la
+salida original, y vuelve a compararlos en cada reanudación. Los estados
+son `PREPARADA → EMISION_CLAIMED → RECONCILIANDO → ENTREGA_CONFIRMADA →
+HANDOFF_COMPLETE`; toda falta cerrada termina en `ENTREGA_NO_CONFIRMADA` con
+causa enumerada.
+
+Cada estado es inmutable y se publica mediante archivo temporal + rename. El
+schema [`handoff-delivery-v2.schema.json`](handoff-delivery-v2.schema.json)
+gobierna las claves, fases, causas, bindings y contadores que el motor valida al
+leer y antes de persistir. Un lock de transición cross-process y un CAS sobre la
+secuencia serializan `start`, `resume` y `late-receipt`; el claim del efecto se
+crea antes de la invocación. La exclusividad es una invariante observable de
+este canal controlado, no una garantía general del sistema operativo.
+
+El ledger diferencia `invocation_intent_count` —intención durable ya reclamada,
+que queda ambigua ante una caída— de `invocation_returned_count`, que sólo sube
+cuando el callback de invocación retorna. Una caída o timeout nunca reemite: al
+reiniciar se hace como máximo una reconciliación finita por el mismo ID. Un
+receipt tardío válido se conserva por separado como `AMBIGUEDAD_POSTERIOR`; no
+reabre el terminal, no hace replay y requiere resolución humana fuera de esta
+unidad. No hay limpieza automática. Un rollback de código preserva los ledgers
+reales; las pruebas borran únicamente sus raíces temporales identificadas.
+
+La batería [`delivery-v2.test.mjs`](delivery-v2.test.mjs) cubre camino feliz,
+ausencia de transporte real, cada mismatch de binding, salida ausente, timeout,
+competencia de `start` y `resume` entre procesos, corrupción, crash/restart por
+fase, receipt tardío, grafo y API. El CLI sólo materializa el outbound local y
+reconcilia un receipt local: no conecta adapter ni red reales.
+
+**Vía/autenticación antes y después: `NO_CAMBIA`.** La evidencia observable es
+que el diff no modifica `actores.json`, perfiles, adapters, autenticación ni
+permisos y que el import graph deja el runtime v1 desconectado. Esta unidad
+implementa `GATE_DE_SUBSISTEMA`; no declara `GATE_OPERATIVO_VALIDADO`, entrega
+real por adapter/red, garantía de filesystem host, roles persistentes ni chat
+libre.
 
 ## Evidencia local
 
