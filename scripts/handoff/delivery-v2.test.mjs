@@ -14,6 +14,7 @@ import {
   deliveryLedgerPathV2,
   DeliveryV2Error,
 } from "./delivery-engine-v2.mjs";
+import { COVERAGE_CATEGORIES, validateCoveragePreflightV2 } from "./handoff-coverage-v2.mjs";
 import { GOVERNING_CONTEXT_V2 } from "./handoff-contract-v2.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -28,6 +29,7 @@ const HUMAN_REFERENCE = "decisiones/0013-delegar-cierre-operativo-y-merge-rutina
 const CATALOG = JSON.parse(await readFile(join(HERE, "roles.catalog.json"), "utf8"));
 const REGISTRY = JSON.parse(await readFile(join(HERE, "actores.json"), "utf8"));
 const PRODUCERS = JSON.parse(await readFile(join(HERE, "handoff-v2-producers.json"), "utf8"));
+const COVERAGE_POLICY_BYTES = await readFile(join(HERE, "handoff-coverage-policy-v2.json"), "utf8");
 const GIT_SOURCES = {
   "scripts/handoff/handoff-contract-v2.mjs": { git_blob_oid: "1".repeat(40), sha256: "1".repeat(64), bytes: 101 },
   "scripts/handoff/prompt-template.md": { git_blob_oid: "2".repeat(40), sha256: "2".repeat(64), bytes: 202 },
@@ -75,6 +77,41 @@ function dependencies(deliveryPackage) {
   return { catalog: CATALOG, registry: REGISTRY, producers: PRODUCERS, head_sha: deliveryPackage.attempt.head_sha, contract_sha256: deliveryPackage.manifest.contract_sha256, manifest_sha256: deliveryPackage.attempt.manifest_sha256, git_sources: deliveryPackage.git_sources, sha256: (value) => sha256(Buffer.from(value)), resolveCanonicalReference: (reference) => references.has(reference), resolveEvidence: (item, head) => head === deliveryPackage.resolution.head_sha && evidence.has([item.tipo, item.referencia, item.head_o_historial].join("\0")) };
 }
 
+function refreshManifestBinding(data) {
+  const manifestHash = sha256(Buffer.from(JSON.stringify(data.manifest)));
+  data.attempt.manifest_sha256 = manifestHash; data.result.binding.manifest_sha256 = manifestHash; data.receipt.manifest_sha256 = manifestHash; data.resolution.manifest_sha256 = manifestHash;
+  return data;
+}
+
+function coveredFixture({ contextAccessible = false } = {}) {
+  const data = fixture(); const document = JSON.parse(COVERAGE_POLICY_BYTES); const policy = document.policies[0]; const treeOid = "b".repeat(40);
+  const requirements = COVERAGE_CATEGORIES.flatMap((category) => policy.requirements[category].map((item) => ({ ...item, category })));
+  const access = requirements.map((item) => ({ requirement_id: item.id, classification: item.classification, locator: item.locator, accessible: item.classification === "CONTEXTO_NO_NECESARIO" ? contextAccessible : true }));
+  const accessible = new Map(access.map((item) => [item.requirement_id, item.accessible])); const paths = new Set();
+  for (const item of requirements) if (accessible.get(item.id)) { paths.add(item.locator); for (const match of item.search.expected_matches) paths.add(match); }
+  const queriesByPath = new Map([...paths].map((path) => [path, requirements.filter((item) => accessible.get(item.id) && item.search.expected_matches.includes(path)).map((item) => item.search.query)]));
+  const tree_entries = [...paths].sort().map((path) => { const content = [`frozen:${path}`, ...queriesByPath.get(path)].join("\n"); const bytes = Buffer.byteLength(content); return { path, head_sha: HEAD, git_tree_oid: treeOid, git_blob_oid: sha256(Buffer.from(`blob:${path}`)).slice(0, 40), sha256: sha256(Buffer.from(content)), bytes, content }; });
+  const tree = new Map(tree_entries.map((entry) => [entry.path, entry]));
+  const search_results = requirements.map((item) => ({ requirement_id: item.id, query: item.search.query, matches: (accessible.get(item.id) ? item.search.expected_matches : []).map((path) => { const source = tree.get(path); return { path, git_blob_oid: source.git_blob_oid, sha256: source.sha256, bytes: source.bytes }; }) }));
+  const evidence = {
+    evidence_version: "1", canonicalization_version: "1", profile_id: policy.profile_id, artifact_type: policy.artifact_type, head_sha: HEAD, git_tree_oid: treeOid,
+    policy_sha256: sha256(Buffer.from(COVERAGE_POLICY_BYTES)), policy_bytes: Buffer.byteLength(COVERAGE_POLICY_BYTES),
+    resolution_target: { artifact_id: data.attempt.artifact_id, attempt_id: data.attempt.attempt_id, transport_real_id: data.attempt.transport_real_id },
+    artifact_inventory: Object.fromEntries(COVERAGE_CATEGORIES.map((category) => [category, policy.requirements[category].map((item) => item.id).sort()])),
+    source_access: access, tree_entries, search_results,
+    assessments: {
+      counts: policy.models.counts.map((item) => ({ id: item.id, observed: item.expected, reconciled: true, evidence_requirement_ids: [...item.evidence_requirement_ids] })),
+      facts: policy.models.facts.map((item) => ({ id: item.id, evidence_requirement_ids: [...item.evidence_requirement_ids] })),
+      decisions: policy.models.decisions.map((item) => ({ id: item.id, inferred: false, evidence_requirement_ids: [...item.evidence_requirement_ids] })),
+    },
+  };
+  const expected = { profile_id: policy.profile_id, artifact_type: policy.artifact_type, head_sha: HEAD, artifact_id: data.attempt.artifact_id, attempt_id: data.attempt.attempt_id, transport_real_id: data.attempt.transport_real_id };
+  const binding = validateCoveragePreflightV2({ policyBytes: COVERAGE_POLICY_BYTES, evidence, expected }).binding;
+  data.manifest.coverage_binding = structuredClone(binding); data.attempt.coverage_binding = structuredClone(binding); refreshManifestBinding(data);
+  data.coverage = { policyBytes: COVERAGE_POLICY_BYTES, evidence, expected, binding };
+  return data;
+}
+
 async function temporaryRoot(t) {
   const root = await mkdtemp(join(tmpdir(), "handoff-v2-delivery-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -91,11 +128,13 @@ async function phases(root, deliveryPackage) {
   return Promise.all(files.map(async (name) => JSON.parse(await readFile(join(deliveryDir, name), "utf8")).phase));
 }
 
-async function writeCliInputs(root, data) {
-  const paths = { package: join(root, "package.json"), contract: join(root, "contract.json"), manifest: join(root, "manifest.json"), output: join(root, "output.txt"), resolution: join(root, "resolution.json"), receipt: join(root, "receipt.json") };
+async function writeCliInputs(root, data, options = {}) {
+  const paths = { package: join(root, "package.json"), contract: join(root, "contract.json"), manifest: join(root, "manifest.json"), output: join(root, "output.txt"), resolution: join(root, "resolution.json"), receipt: join(root, "receipt.json"), coveragePolicy: join(root, "coverage-policy.json"), coverageEvidence: join(root, "coverage-evidence.json") };
   await writeFile(paths.package, JSON.stringify({ attempt: data.attempt, result: data.result })); await writeFile(paths.contract, JSON.stringify(data.contract)); await writeFile(paths.manifest, JSON.stringify(data.manifest)); await writeFile(paths.output, data.output.content);
   await writeFile(paths.resolution, JSON.stringify(data.resolution)); await writeFile(paths.receipt, JSON.stringify(data.receipt));
-  return ["--package", paths.package, "--contract", paths.contract, "--manifest", paths.manifest, "--output", paths.output, "--resolution", paths.resolution, "--receipt", paths.receipt];
+  const result = ["--package", paths.package, "--contract", paths.contract, "--manifest", paths.manifest, "--output", paths.output, "--resolution", paths.resolution, "--receipt", paths.receipt];
+  if (options.coverage) { await writeFile(paths.coveragePolicy, data.coverage.policyBytes); await writeFile(paths.coverageEvidence, JSON.stringify(data.coverage.evidence)); result.push("--coverage-policy", paths.coveragePolicy, "--coverage-evidence", paths.coverageEvidence); }
+  return result;
 }
 
 test("U2B positivo invoca una vez y completa durablemente con receipt y salida válidos", async (t) => {
@@ -276,8 +315,78 @@ test("U2B recupera un lock de transición huérfano sin borrar su evidencia", as
   assert.equal((await readdir(deliveryDir)).some((name) => name.startsWith("transition.lock.stale-999999-")), true); assert.equal(counters.invocations, 1);
 });
 
+async function rejectCoveredCli(t, name, mutate) {
+  const root = await temporaryRoot(t); const caseDir = join(root, name); await mkdir(caseDir); const data = coveredFixture(); await mutate(data);
+  const args = await writeCliInputs(caseDir, data, { coverage: true }); const ledgerRoot = join(caseDir, "ledger");
+  await assert.rejects(execFileAsync(process.execPath, [join(HERE, "delivery-v2-cli.mjs"), "start-covered", ...args, "--root", ledgerRoot, "--timeout-ms", "100"]), (error) => /COVERAGE|FUENTE_MATERIAL/.test(`${error.stderr}`), name);
+  await assert.rejects(access(ledgerRoot), { code: "ENOENT" });
+}
+
+test("U2B2 start-covered valida preflight externo antes del claim y persiste binding exacto", async (t) => {
+  const root = await temporaryRoot(t); const data = coveredFixture(); const args = await writeCliInputs(root, data, { coverage: true }); const ledgerRoot = join(root, "ledger");
+  const completed = await execFileAsync(process.execPath, [join(HERE, "delivery-v2-cli.mjs"), "start-covered", ...args, "--root", ledgerRoot, "--timeout-ms", "100"]);
+  assert.equal(JSON.parse(completed.stdout).phase, "HANDOFF_COMPLETE");
+  const deliveryDir = deliveryLedgerPathV2(ledgerRoot, data.attempt.attempt_id, data.attempt.transport_real_id); const names = (await readdir(deliveryDir)).filter((name) => /^state-/.test(name)).sort();
+  const state = JSON.parse(await readFile(join(deliveryDir, names.at(-1)), "utf8")); assert.deepEqual(state.binding.coverage_binding, data.coverage.binding); await access(join(deliveryDir, "outbound.json"));
+  const resumeDir = join(root, "resume-inputs"); await mkdir(resumeDir); const resumeArgs = await writeCliInputs(resumeDir, data); const resumed = await execFileAsync(process.execPath, [join(HERE, "delivery-v2-cli.mjs"), "resume", ...resumeArgs, "--root", ledgerRoot, "--timeout-ms", "100"]); assert.equal(JSON.parse(resumed.stdout).phase, "HANDOFF_COMPLETE");
+  const substituted = structuredClone(data); substituted.attempt.coverage_binding.policy_version = "2"; substituted.manifest.coverage_binding.policy_version = "2"; refreshManifestBinding(substituted); const mismatchDir = join(root, "resume-mismatch"); await mkdir(mismatchDir); const mismatchArgs = await writeCliInputs(mismatchDir, substituted);
+  await assert.rejects(execFileAsync(process.execPath, [join(HERE, "delivery-v2-cli.mjs"), "resume", ...mismatchArgs, "--root", ledgerRoot, "--timeout-ms", "100"]), (error) => /DELIVERY_BINDING_NO_COINCIDE/.test(`${error.stderr}`));
+  const counters = { invocations: 0, reconciliations: 0 }; await assert.rejects(engine(join(root, "bypass"), counters, data.receipt).start(data, dependencies(data)), (error) => error.code === "COVERAGE_MODE_REQUIRED"); assert.deepEqual(counters, { invocations: 0, reconciliations: 0 }); await assert.rejects(access(join(root, "bypass")), { code: "ENOENT" });
+  await assert.rejects(engine(join(root, "self-declared"), counters, data.receipt).startCovered(data, dependencies(data), { binding: data.coverage.binding }), (error) => error.code === "COVERAGE_VERIFICACION_REQUERIDA"); await assert.rejects(access(join(root, "self-declared")), { code: "ENOENT" });
+});
+
+test("U2B2 política gobierna conjuntos exactos y rechaza omisiones, extras y colisiones antes del ledger", async (t) => {
+  for (const category of COVERAGE_CATEGORIES) {
+    await rejectCoveredCli(t, `missing-${category}`, (data) => { data.coverage.evidence.artifact_inventory[category].pop(); });
+    await rejectCoveredCli(t, `extra-${category}`, (data) => { data.coverage.evidence.artifact_inventory[category].push(`extra-${category}`); });
+  }
+  await rejectCoveredCli(t, "consumer-real-omitido", (data) => { data.coverage.evidence.artifact_inventory.consumers = data.coverage.evidence.artifact_inventory.consumers.filter((id) => id !== "consumer-engine"); });
+  await rejectCoveredCli(t, "source-duplicada", (data) => { data.coverage.evidence.source_access.push(structuredClone(data.coverage.evidence.source_access[0])); });
+  await rejectCoveredCli(t, "policy-id-colisionado", (data) => { const policy = JSON.parse(data.coverage.policyBytes); policy.policies[0].requirements.canon.push(structuredClone(policy.policies[0].requirements.canon[0])); data.coverage.policyBytes = JSON.stringify(policy); });
+  await rejectCoveredCli(t, "policy-equivocada", (data) => { const policy = JSON.parse(data.coverage.policyBytes); policy.policies[0].profile_id = "github_close"; data.coverage.policyBytes = JSON.stringify(policy); });
+  await rejectCoveredCli(t, "resolucion-ajena", (data) => { data.coverage.evidence.resolution_target.attempt_id = "attempt-ajeno"; });
+});
+
+test("U2B2 tree, blobs y búsquedas externas quedan ligados exactamente", async (t) => {
+  await rejectCoveredCli(t, "tree-omitido", (data) => { data.coverage.evidence.tree_entries.pop(); });
+  await rejectCoveredCli(t, "tree-extra", (data) => { const entry = structuredClone(data.coverage.evidence.tree_entries[0]); entry.path = "extra.md"; data.coverage.evidence.tree_entries.push(entry); });
+  await rejectCoveredCli(t, "blob-divergente", (data) => { data.coverage.evidence.tree_entries[0].git_blob_oid = "c".repeat(40); });
+  await rejectCoveredCli(t, "contenido-ausente", (data) => { data.coverage.evidence.tree_entries[0].content = ""; data.coverage.evidence.tree_entries[0].bytes = 0; });
+  await rejectCoveredCli(t, "contenido-hash-distinto", (data) => { data.coverage.evidence.tree_entries[0].sha256 = "d".repeat(64); });
+  await rejectCoveredCli(t, "search-omitida", (data) => { data.coverage.evidence.search_results.pop(); });
+  await rejectCoveredCli(t, "search-match-divergente", (data) => { const search = data.coverage.evidence.search_results.find((item) => item.matches.length); search.matches[0].sha256 = "e".repeat(64); });
+  await rejectCoveredCli(t, "search-sin-contenido", (data) => { const search = data.coverage.evidence.search_results.find((item) => item.matches.length); const path = search.matches[0].path; const source = data.coverage.evidence.tree_entries.find((entry) => entry.path === path); source.content = `frozen:${path}`; source.bytes = Buffer.byteLength(source.content); source.sha256 = sha256(Buffer.from(source.content)); for (const item of data.coverage.evidence.search_results) for (const match of item.matches) if (match.path === path) { match.sha256 = source.sha256; match.bytes = source.bytes; } });
+  await rejectCoveredCli(t, "head-tree-divergente", (data) => { data.coverage.evidence.tree_entries[0].head_sha = "f".repeat(40); });
+});
+
+test("U2B2 fuentes y modelos fallan cerrados salvo contexto explícitamente no necesario", async (t) => {
+  const allowed = coveredFixture(); const context = allowed.coverage.evidence.source_access.find((item) => item.classification === "CONTEXTO_NO_NECESARIO"); assert.equal(context.accessible, false);
+  assert.doesNotThrow(() => validateCoveragePreflightV2({ policyBytes: allowed.coverage.policyBytes, evidence: allowed.coverage.evidence, expected: allowed.coverage.expected, declaredBinding: allowed.coverage.binding }));
+  await rejectCoveredCli(t, "fuente-material-inaccesible", (data) => { data.coverage.evidence.source_access.find((item) => item.requirement_id === "consumer-engine").accessible = false; });
+  await rejectCoveredCli(t, "conteo-no-reconciliado", (data) => { data.coverage.evidence.assessments.counts[0].reconciled = false; });
+  await rejectCoveredCli(t, "conteo-distinto", (data) => { data.coverage.evidence.assessments.counts[0].observed += 1; });
+  await rejectCoveredCli(t, "hecho-sin-evidencia", (data) => { data.coverage.evidence.assessments.facts[0].evidence_requirement_ids = []; });
+  await rejectCoveredCli(t, "decision-inferida", (data) => { data.coverage.evidence.assessments.decisions[0].inferred = true; });
+});
+
+test("U2B2 binding policy/preflight/HEAD/bytes/ID y conjuntos no admite sustitución", async (t) => {
+  for (const field of ["policy_id", "policy_version", "policy_sha256", "policy_bytes", "preflight_sha256", "preflight_bytes", "head_sha", "git_tree_oid", "resolution_target_sha256"]) {
+    await rejectCoveredCli(t, `binding-${field}`, (data) => { data.attempt.coverage_binding[field] = typeof data.attempt.coverage_binding[field] === "number" ? data.attempt.coverage_binding[field] + 1 : field === "policy_version" ? "2" : field.includes("head") || field.includes("tree") ? "c".repeat(40) : "c".repeat(64); });
+  }
+  await rejectCoveredCli(t, "binding-set", (data) => { data.attempt.coverage_binding.requirement_sets.consumers.push("consumer-extra"); });
+  await rejectCoveredCli(t, "manifest-binding-distinto", (data) => { data.manifest.coverage_binding.policy_version = "2"; refreshManifestBinding(data); });
+  await rejectCoveredCli(t, "attempt-binding-ausente", (data) => { delete data.attempt.coverage_binding; });
+});
+
+test("U2B2 conserva fixture y ledger histórico 2b.1 sin reinterpretación", async (t) => {
+  const root = await temporaryRoot(t); const data = fixture(); const counters = { invocations: 0, reconciliations: 0 };
+  const terminal = await engine(root, counters, null).start(data, dependencies(data)); assert.equal(terminal.phase, "ENTREGA_NO_CONFIRMADA"); assert.equal(Object.hasOwn(terminal.binding, "coverage_binding"), false);
+  const resumed = await engine(root, counters, null).resume(data, dependencies(data)); assert.equal(resumed.phase, "ENTREGA_NO_CONFIRMADA");
+  const late = await engine(root, counters, null).recordLateReceipt(data, dependencies(data), data.receipt); assert.equal(late.classification, "AMBIGUEDAD_POSTERIOR"); assert.deepEqual(counters, { invocations: 1, reconciliations: 1 });
+});
+
 test("U2B schemas y grafo mantienen v1 desconectado y API pública mínima", async () => {
-  for (const file of ["handoff-attempt-v2.schema.json", "handoff-result-v2.schema.json", "handoff-delivery-v2.schema.json", "handoff-resolution-v2.schema.json"]) {
+  for (const file of ["handoff-attempt-v2.schema.json", "handoff-result-v2.schema.json", "handoff-delivery-v2.schema.json", "handoff-resolution-v2.schema.json", "handoff-coverage-policy-v2.schema.json", "handoff-coverage-preflight-v2.schema.json"]) {
     const raw = await readFile(join(HERE, file), "utf8");
     assert.doesNotThrow(() => JSON.parse(raw), file);
   }
@@ -293,5 +402,6 @@ test("U2B schemas y grafo mantienen v1 desconectado y API pública mínima", asy
   const moduleNames = (await readdir(HERE)).filter((name) => name.endsWith(".mjs")); const importers = [];
   for (const name of moduleNames) if ((await readFile(join(HERE, name), "utf8")).includes('from "./delivery-engine-v2.mjs"')) importers.push(name);
   assert.deepEqual(importers.sort(), ["delivery-v2-cli.mjs", "delivery-v2.test.mjs"]); assert.doesNotMatch(cliSource, /state-\d|HANDOFF_COMPLETE|ENTREGA_NO_CONFIRMADA/);
+  assert.match(cliSource, /start-covered/); assert.doesNotMatch(v1Source, /handoff-coverage-v2|start-covered|coverage_binding/);
   const api = await import("./delivery-engine-v2.mjs"); assert.deepEqual(Object.keys(api).sort(), ["DELIVERY_PHASES_V2", "DeliveryV2Error", "createDeliveryEngineV2", "deliveryKeyV2", "deliveryLedgerPathV2"].sort());
 });

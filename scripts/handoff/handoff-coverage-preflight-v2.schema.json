@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff-coverage-preflight-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_version", "canonicalization_version", "profile_id", "artifact_type", "head_sha", "git_tree_oid", "policy_sha256", "policy_bytes", "resolution_target", "artifact_inventory", "source_access", "tree_entries", "search_results", "assessments"],
+  "properties": {
+    "evidence_version": { "const": "1" }, "canonicalization_version": { "const": "1" },
+    "profile_id": { "type": "string", "minLength": 1 }, "artifact_type": { "type": "string", "minLength": 1 },
+    "head_sha": { "$ref": "#/$defs/sha40" }, "git_tree_oid": { "$ref": "#/$defs/sha40" }, "policy_sha256": { "$ref": "#/$defs/sha256" }, "policy_bytes": { "type": "integer", "minimum": 1 },
+    "resolution_target": { "type": "object", "additionalProperties": false, "required": ["artifact_id", "attempt_id", "transport_real_id"], "properties": { "artifact_id": { "type": "string", "minLength": 1 }, "attempt_id": { "type": "string", "minLength": 1 }, "transport_real_id": { "type": "string", "minLength": 1 } } },
+    "artifact_inventory": { "$ref": "#/$defs/categorySets" },
+    "source_access": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["requirement_id", "classification", "locator", "accessible"], "properties": { "requirement_id": { "type": "string" }, "classification": { "$ref": "#/$defs/classification" }, "locator": { "type": "string" }, "accessible": { "type": "boolean" } } } },
+    "tree_entries": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path", "head_sha", "git_tree_oid", "git_blob_oid", "sha256", "bytes", "content"], "properties": { "path": { "type": "string" }, "head_sha": { "$ref": "#/$defs/sha40" }, "git_tree_oid": { "$ref": "#/$defs/sha40" }, "git_blob_oid": { "$ref": "#/$defs/sha40" }, "sha256": { "$ref": "#/$defs/sha256" }, "bytes": { "type": "integer", "minimum": 1 }, "content": { "type": "string", "minLength": 1 } } } },
+    "search_results": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["requirement_id", "query", "matches"],
+        "properties": {
+          "requirement_id": { "type": "string" }, "query": { "type": "string" },
+          "matches": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["path", "git_blob_oid", "sha256", "bytes"],
+              "properties": { "path": { "type": "string" }, "git_blob_oid": { "$ref": "#/$defs/sha40" }, "sha256": { "$ref": "#/$defs/sha256" }, "bytes": { "type": "integer", "minimum": 1 } }
+            }
+          }
+        }
+      }
+    },
+    "assessments": { "type": "object", "additionalProperties": false, "required": ["counts", "facts", "decisions"], "properties": {
+      "counts": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "observed", "reconciled", "evidence_requirement_ids"], "properties": { "id": { "type": "string" }, "observed": { "type": "integer", "minimum": 0 }, "reconciled": { "type": "boolean" }, "evidence_requirement_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true } } } },
+      "facts": { "$ref": "#/$defs/assessmentArray" },
+      "decisions": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "inferred", "evidence_requirement_ids"], "properties": { "id": { "type": "string" }, "inferred": { "type": "boolean" }, "evidence_requirement_ids": { "type": "array", "minItems": 1, "items": { "type": "string" }, "uniqueItems": true } } } }
+    } }
+  },
+  "$defs": {
+    "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "classification": { "enum": ["REQUERIDO_PARA_LA_TAREA", "REFERENCIA_DURABLE_RESOLUBLE", "CONTEXTO_NO_NECESARIO"] },
+    "stringSet": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "categorySets": { "type": "object", "additionalProperties": false, "required": ["canon", "enumerations", "producers", "consumers", "schemas", "validators", "tests", "invariants"], "properties": { "canon": { "$ref": "#/$defs/stringSet" }, "enumerations": { "$ref": "#/$defs/stringSet" }, "producers": { "$ref": "#/$defs/stringSet" }, "consumers": { "$ref": "#/$defs/stringSet" }, "schemas": { "$ref": "#/$defs/stringSet" }, "validators": { "$ref": "#/$defs/stringSet" }, "tests": { "$ref": "#/$defs/stringSet" }, "invariants": { "$ref": "#/$defs/stringSet" } } },
+    "assessmentArray": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "evidence_requirement_ids"], "properties": { "id": { "type": "string" }, "evidence_requirement_ids": { "type": "array", "minItems": 1, "items": { "type": "string" }, "uniqueItems": true } } } }
+  }
+}

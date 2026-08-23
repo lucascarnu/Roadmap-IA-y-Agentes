@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createDeliveryEngineV2, DeliveryV2Error } from "./delivery-engine-v2.mjs";
+import { HandoffCoverageV2Error, validateCoveragePreflightV2 } from "./handoff-coverage-v2.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..");
@@ -13,7 +14,9 @@ function args(argv) {
   const operation = argv[0];
   const values = {};
   for (let index = 1; index < argv.length; index += 2) values[argv[index]?.replace(/^--/, "")] = argv[index + 1];
-  if (!["start", "resume", "late-receipt"].includes(operation) || ["package", "contract", "manifest", "output", "resolution"].some((key) => !values[key])) throw new DeliveryV2Error("USO_INVALIDO", "Uso: delivery-v2-cli.mjs <start|resume|late-receipt> --package <json> --contract <json> --manifest <json> --output <file> --resolution <json> [--receipt <json>] [--root <dir>] [--timeout-ms <ms>]");
+  if (!["start", "start-covered", "resume", "late-receipt"].includes(operation) || ["package", "contract", "manifest", "output", "resolution"].some((key) => !values[key])) throw new DeliveryV2Error("USO_INVALIDO", "Uso: delivery-v2-cli.mjs <start|start-covered|resume|late-receipt> --package <json> --contract <json> --manifest <json> --output <file> --resolution <json> [--coverage-policy <json> --coverage-evidence <json>] [--receipt <json>] [--root <dir>] [--timeout-ms <ms>]");
+  const coverageFlags = [values["coverage-policy"], values["coverage-evidence"]];
+  if (operation === "start-covered" ? coverageFlags.some((value) => !value) : coverageFlags.some(Boolean)) throw new DeliveryV2Error("USO_INVALIDO", "Sólo start-covered exige policy y evidence externas");
   return { operation, ...values };
 }
 
@@ -140,6 +143,16 @@ async function main() {
   const parsed = args(process.argv.slice(2));
   const { deliveryPackage, resolution, externalResolution } = await loadInputs(parsed);
   const dependencies = await dependenciesFor(resolution, externalResolution);
+  let coverageVerification;
+  if (parsed.operation === "start-covered") {
+    const policyBytes = await raw(parsed["coverage-policy"]); const evidence = await json(parsed["coverage-evidence"]);
+    try {
+      coverageVerification = validateCoveragePreflightV2({ policyBytes, evidence, declaredBinding: deliveryPackage.attempt?.coverage_binding, expected: { profile_id: deliveryPackage.contract.profile_id, artifact_type: deliveryPackage.attempt?.coverage_binding?.artifact_type, head_sha: resolution.head_sha, artifact_id: deliveryPackage.attempt.artifact_id, attempt_id: deliveryPackage.attempt.attempt_id, transport_real_id: deliveryPackage.attempt.transport_real_id } });
+    } catch (error) {
+      if (error instanceof HandoffCoverageV2Error) throw new DeliveryV2Error(error.code, error.message, error);
+      throw error;
+    }
+  }
   const timeoutMs = Number(parsed["timeout-ms"] ?? 5_000);
   const engine = createDeliveryEngineV2({
     rootDir: parsed.root ?? join(HERE, ".handoff", "v2", "deliveries"),
@@ -154,6 +167,7 @@ async function main() {
   });
   let result;
   if (parsed.operation === "start") result = await engine.start(deliveryPackage, dependencies);
+  else if (parsed.operation === "start-covered") result = await engine.startCovered(deliveryPackage, dependencies, coverageVerification);
   else if (parsed.operation === "resume") result = await engine.resume(deliveryPackage, dependencies);
   else {
     if (!parsed.receipt) throw new DeliveryV2Error("USO_INVALIDO", "late-receipt exige --receipt");

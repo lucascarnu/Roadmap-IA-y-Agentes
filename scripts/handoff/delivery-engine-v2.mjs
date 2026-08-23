@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, readdir, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { coverageBindingFromVerificationV2, HandoffCoverageV2Error } from "./handoff-coverage-v2.mjs";
 
 import {
   HandoffContractV2Error,
+  validateCoverageBindingV2,
   validateDeliveryReceiptV2,
   validateResultV2,
 } from "./handoff-contract-v2.mjs";
@@ -14,6 +16,7 @@ export const DELIVERY_PHASES_V2 = Object.freeze([...DELIVERY_SCHEMA_V2.propertie
 const TERMINAL_PHASES = new Set(["HANDOFF_COMPLETE", "ENTREGA_NO_CONFIRMADA"]);
 const LEDGER_KEYS = Object.freeze([...DELIVERY_SCHEMA_V2.required]);
 const BINDING_KEYS = Object.freeze([...DELIVERY_SCHEMA_V2.properties.binding.required]);
+const COVERED_BINDING_KEYS = Object.freeze([...BINDING_KEYS, "coverage_binding"]);
 const CAUSES = new Set(DELIVERY_SCHEMA_V2.properties.cause.oneOf[1].enum);
 
 export class DeliveryV2Error extends Error {
@@ -41,7 +44,7 @@ function outputBytesOf(deliveryPackage) {
 
 function bindingFromPackage(deliveryPackage) {
   const { attempt, result } = deliveryPackage;
-  return {
+  const binding = {
     attempt_id: attempt.attempt_id,
     transport_real_id: attempt.transport_real_id,
     target_role_id: attempt.target.role_id,
@@ -52,18 +55,31 @@ function bindingFromPackage(deliveryPackage) {
     output_sha256: result.binding.output_sha256,
     output_bytes: result.binding.output_bytes,
   };
+  if (attempt.coverage_binding !== undefined) binding.coverage_binding = structuredClone(attempt.coverage_binding);
+  return binding;
 }
 
 function sameBinding(left, right) {
-  return BINDING_KEYS.every((key) => left[key] === right[key]);
+  const canonical = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+    if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+    return JSON.stringify(value);
+  };
+  return canonical(left) === canonical(right);
 }
 
 function validateLedgerState(state, expectedKey) {
   if (!state || typeof state !== "object" || Array.isArray(state) || Object.keys(state).sort().join("|") !== [...LEDGER_KEYS].sort().join("|")) fail("LEDGER_CORRUPTO", "Shape de ledger no admitida");
   if (state.delivery_version !== "2" || !/^[0-9a-f]{64}$/.test(state.delivery_key) || (expectedKey && state.delivery_key !== expectedKey) || !Number.isInteger(state.sequence) || state.sequence < 1 || !DELIVERY_PHASES_V2.includes(state.phase) || typeof state.updated_at !== "string" || !state.updated_at) fail("LEDGER_CORRUPTO", "Metadatos de ledger inválidos");
-  if (!state.binding || typeof state.binding !== "object" || Array.isArray(state.binding) || Object.keys(state.binding).sort().join("|") !== [...BINDING_KEYS].sort().join("|")) fail("LEDGER_CORRUPTO", "Binding de ledger inválido");
+  const bindingKeys = state.binding && typeof state.binding === "object" && !Array.isArray(state.binding) ? Object.keys(state.binding).sort().join("|") : "";
+  const historicalKeys = [...BINDING_KEYS].sort().join("|"); const coveredKeys = [...COVERED_BINDING_KEYS].sort().join("|");
+  if (!state.binding || typeof state.binding !== "object" || Array.isArray(state.binding) || ![historicalKeys, coveredKeys].includes(bindingKeys)) fail("LEDGER_CORRUPTO", "Binding de ledger inválido");
   for (const key of ["attempt_id", "transport_real_id", "target_role_id", "target_surface_id", "output_ref"]) if (typeof state.binding[key] !== "string" || !state.binding[key]) fail("LEDGER_CORRUPTO", `binding.${key}`);
   if (!/^[0-9a-f]{64}$/.test(state.binding.manifest_sha256) || !/^[0-9a-f]{40}$/.test(state.binding.head_sha) || !/^[0-9a-f]{64}$/.test(state.binding.output_sha256) || !Number.isInteger(state.binding.output_bytes) || state.binding.output_bytes < 1 || deliveryKeyV2(state.binding.attempt_id, state.binding.transport_real_id) !== state.delivery_key) fail("LEDGER_CORRUPTO", "Hashes/binding de ledger inválidos");
+  if (state.binding.coverage_binding !== undefined) {
+    try { validateCoverageBindingV2(state.binding.coverage_binding); } catch (error) { fail("LEDGER_CORRUPTO", `coverage_binding: ${error.message}`, error); }
+    if (state.binding.coverage_binding.head_sha !== state.binding.head_sha) fail("LEDGER_CORRUPTO", "coverage_binding HEAD");
+  }
   for (const counter of ["invocation_intent_count", "invocation_returned_count", "reconciliation_count"]) if (![0, 1].includes(state[counter])) fail("LEDGER_CORRUPTO", counter);
   if (state.invocation_returned_count > state.invocation_intent_count || (state.phase === "ENTREGA_NO_CONFIRMADA" ? !CAUSES.has(state.cause) : state.cause !== null)) fail("LEDGER_CORRUPTO", "Contadores o causa incompatibles");
   const tuple = [state.invocation_intent_count, state.invocation_returned_count, state.reconciliation_count].join("");
@@ -265,7 +281,7 @@ export function createDeliveryEngineV2(options = {}) {
     return reconcileOnce(deliveryDir, state, deliveryPackage, outputBytes);
   }
 
-  async function start(deliveryPackage, dependencies) {
+  async function startFlow(deliveryPackage, dependencies) {
     const outputBytes = validatePackage(deliveryPackage, dependencies);
     const prepared = await prepare(deliveryPackage);
     return withTransitionLock(prepared.deliveryDir, async () => {
@@ -274,6 +290,19 @@ export function createDeliveryEngineV2(options = {}) {
       await fault("after_claim", { deliveryDir: prepared.deliveryDir, state });
       return invokeAndReconcile(prepared.deliveryDir, state, deliveryPackage, outputBytes);
     });
+  }
+
+  async function start(deliveryPackage, dependencies) {
+    if (deliveryPackage?.attempt?.coverage_binding !== undefined || deliveryPackage?.manifest?.coverage_binding !== undefined) fail("COVERAGE_MODE_REQUIRED", "Un paquete cubierto sólo puede iniciar por start-covered");
+    return startFlow(deliveryPackage, dependencies);
+  }
+
+  async function startCovered(deliveryPackage, dependencies, coverageVerification) {
+    if (deliveryPackage?.attempt?.coverage_binding === undefined || deliveryPackage?.manifest?.coverage_binding === undefined) fail("COVERAGE_BINDING_REQUERIDO", "start-covered exige coverage_binding");
+    let verifiedCoverageBinding;
+    try { verifiedCoverageBinding = coverageBindingFromVerificationV2(coverageVerification); validateCoverageBindingV2(verifiedCoverageBinding); } catch (error) { fail(error instanceof HandoffCoverageV2Error ? error.code : "COVERAGE_BINDING_INVALIDO", error.message, error); }
+    if (!sameBinding({ coverage_binding: verifiedCoverageBinding }, { coverage_binding: deliveryPackage.attempt.coverage_binding })) fail("COVERAGE_BINDING_NO_COINCIDE", "preflight/attempt");
+    return startFlow(deliveryPackage, dependencies);
   }
 
   async function resume(deliveryPackage, dependencies) {
@@ -319,5 +348,5 @@ export function createDeliveryEngineV2(options = {}) {
     });
   }
 
-  return Object.freeze({ start, resume, recordLateReceipt });
+  return Object.freeze({ start, startCovered, resume, recordLateReceipt });
 }

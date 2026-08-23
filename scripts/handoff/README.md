@@ -527,6 +527,50 @@ implementa `GATE_DE_SUBSISTEMA`; no declara `GATE_OPERATIVO_VALIDADO`, entrega
 real por adapter/red, garantía de filesystem host, roles persistentes ni chat
 libre.
 
+## Unidad 2b.2: preflight de cobertura documental
+
+El modo controlado `delivery-v2-cli.mjs start-covered` ejecuta un preflight puro
+antes de crear el directorio del ledger, escribir `outbound.json` o invocar el
+callback de efecto. Los modos históricos `start`, `resume` y `late-receipt`
+conservan el comportamiento 2b.1. Un paquete nuevo que contiene
+`coverage_binding` sólo puede iniciarse mediante `start-covered`; los ledgers y
+artefactos previos sin ese campo siguen siendo legibles sin migración ni
+reinterpretación.
+
+La autoridad externa es
+[`handoff-coverage-policy-v2.json`](handoff-coverage-policy-v2.json), gobernada
+por [`handoff-coverage-policy-v2.schema.json`](handoff-coverage-policy-v2.schema.json)
+y seleccionada por `profile_id + artifact_type`. La política —no el contrato ni
+el artefacto evaluado— fija conjuntos mínimos de canon, enumeraciones,
+productores, consumidores, schemas, validadores, tests e invariantes. No se
+agrega al inventario `handoff-v2-producers.json`: es una autoridad de admisión
+leída por el preflight, no un productor del contrato o manifiesto histórico.
+
+El resolvedor externo aporta evidencia con HEAD, árbol Git, blobs, contenido
+congelado y resultados estructurados de búsqueda según
+[`handoff-coverage-preflight-v2.schema.json`](handoff-coverage-preflight-v2.schema.json).
+[`handoff-coverage-v2.mjs`](handoff-coverage-v2.mjs) exige conjuntos exactos y
+liga cada búsqueda a metadata y bytes del mismo árbol. Una fuente
+`REQUERIDO_PARA_LA_TAREA` o `REFERENCIA_DURABLE_RESOLUBLE` inaccesible falla con
+`FUENTE_MATERIAL_NO_ACCESIBLE`; sólo `CONTEXTO_NO_NECESARIO` puede continuar
+inaccesible. `FUENTE_NO_ACCESIBLE_DECLARADA` no es un estado aprobatorio de esta
+frontera.
+
+La canonicalización explícita versión `1` deriva desde los bytes reales de la
+política, la evidencia externa y el HEAD un binding con identidad/versión/hash
+de política, hash/bytes del preflight, árbol Git, destino de resolución y los
+ocho conjuntos. Ese binding debe coincidir en intento y manifiesto, se persiste
+opcionalmente en cada estado del ledger cubierto y vuelve a compararse en cada
+`resume`. El claim de cobertura existe sólo en la frontera `start-covered`.
+
+Las pruebas de esta unidad usan exclusivamente fixtures sintéticos y raíces
+temporales. Cubren conjuntos faltantes o extra, consumidor omitido, fuentes
+inaccesibles, tree/blob/search divergentes, contenido congelado, conteos,
+hechos, decisiones, bindings y compatibilidad de ledgers 2b.1. Esto implementa
+`GATE_DE_SUBSISTEMA`; no demuestra cobertura de artefactos reales, adapter/red,
+PC/iPad, callers ni `GATE_OPERATIVO_VALIDADO`. Esas validaciones pertenecen a
+Unidad 3.
+
 ## Evidencia local
 
 Los artefactos no se versionan y viven en:
