@@ -35,7 +35,8 @@ la superficie autorizados para esa tarea.
 esta superficie de especialista. `defaultMode: dontAsk` deniega automáticamente
 lo no permitido; los modos de bypass y auto están deshabilitados. La política
 retira shell, edición, MCP y cualquier capacidad permanente de workflow, y sólo
-permite búsqueda y consulta web sobre los dominios oficiales declarados.
+permite `WebSearch` como búsqueda web general y `WebFetch` únicamente para los
+dominios oficiales explícitos de `.claude/settings.json`.
 
 Esta configuración es una política de herramientas, no un sandbox del sistema
 operativo ni evidencia de confinamiento fuerte.
