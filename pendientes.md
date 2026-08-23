@@ -755,6 +755,15 @@ visibles. Hasta entonces el estado permanece **ABIERTO**; la política no equiva
 a sandbox de sistema operativo y conserva el riesgo residual de exfiltración de
 todo material no cubierto por los `Read` deny que siga siendo legible.
 
+**Corrección M1/M2 de la ampliación Web.** Se preserva la evidencia de pruebas
+verdes ya registrada. Este delta corrige M1 mediante `deny` explícito de
+`ToolSearch`, preguntas, coordinación, findings, artifacts, notificaciones y
+planificación; y M2 mediante `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, sin
+duplicar la variable específica de encuestas ni desactivar el preflight de
+`WebFetch`. El reprobe frío pendiente queda limitado al inventario efectivo de
+herramientas, la ausencia de encuesta y la denegación de las nueve herramientas
+afectadas. No reabre ni repite la matriz verde.
+
 **Capas ampliadoras verificadas ausentes — 2026-08-22.** En user settings,
 `permissions.allow` está vacío; no existen archivos o registro managed,
 `.mcp.json`, hooks de Claude, alias Git, `core.hooksPath` ni hooks Git activos.

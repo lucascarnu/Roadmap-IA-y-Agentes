@@ -39,10 +39,16 @@ permite `WebSearch` y `WebFetch` como capacidades generales de investigación en
 Internet. `Bash` y `PowerShell`, denegados por nombre desnudo, retiran las vías
 de subprocess expuestas por esas herramientas.
 
-La lista explícita de `deny` cubre los mutadores y las herramientas auxiliares
-observados en la prueba fría. `defaultMode: dontAsk` sigue cerrando cualquier
-herramienta futura que no esté permitida; esto no declara un sandbox del sistema
-operativo.
+`Read`, `Grep`, `WebSearch` y `WebFetch` son las capacidades operativas de esta
+superficie. La lista explícita de `deny` cubre los mutadores, agentes, mensajería,
+publicación, notificaciones, planificación, búsqueda diferida de herramientas y
+las demás superficies de efecto observadas. `defaultMode: dontAsk` sigue
+cerrando cualquier herramienta futura que no esté permitida; esto no declara un
+sandbox del sistema operativo.
+
+`EndConversation` es la excepción terminal inevitable: Claude Code no permite
+retirarla mientras exista otra herramienta. Sólo termina la conversación; no es
+una mutación de archivos, una vía de egress ni una capacidad de workflow.
 
 Esta configuración es una política de herramientas, no un sandbox del sistema
 operativo ni evidencia de confinamiento fuerte. Claude Code no ofrece una regla

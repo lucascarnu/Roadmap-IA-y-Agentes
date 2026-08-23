@@ -28,6 +28,15 @@
       "ScheduleWakeup",
       "TaskOutput",
       "TaskStop",
+      "ToolSearch",
+      "AskUserQuestion",
+      "ListAgents",
+      "ReportFindings",
+      "Artifact",
+      "PushNotification",
+      "DesignSync",
+      "EnterPlanMode",
+      "ExitPlanMode",
       "Read(~/.ssh/**)",
       "Read(~/.aws/**)",
       "Read(~/.azure/**)",
@@ -53,5 +62,8 @@
       "Read(/.consultor/relevo-consultor-2026-08-22.md)",
       "Read(/.consultor/relevo-ejecutor-2026-08-22.md)"
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
 }

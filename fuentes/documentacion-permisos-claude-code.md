@@ -27,6 +27,9 @@ permisos, settings y uso de datos.
 - `https://code.claude.com/docs/en/settings`
 - `https://code.claude.com/docs/en/sandboxing`
 - `https://code.claude.com/docs/en/data-usage`
+- `https://code.claude.com/docs/en/tools-reference`
+- `https://code.claude.com/docs/en/mcp`
+- `https://code.claude.com/docs/en/env-vars`
 - `https://cli.github.com/manual/gh_help_environment`
 
 ## Ubicación de configuración de GitHub CLI en Windows
@@ -55,6 +58,14 @@ Cada punto se usó para decidir una regla concreta de la política:
   contiene sólo el nombre, como `Bash` o `PowerShell`, alcanza todos sus usos y,
   en `deny`, retira la herramienta del contexto. Los patrones de nombre deben
   cubrir el nombre completo; `mcp__*` deniega todas las herramientas MCP.
+- **Búsqueda diferida de herramientas.** `ToolSearch` busca y carga herramientas
+  diferidas. La documentación de MCP prescribe `deny: ["ToolSearch"]` para
+  deshabilitar específicamente esa herramienta; la política usa ese nombre
+  desnudo y mantiene además `mcp__*` denegado.
+- **Control terminal inevitable.** Mientras quede cualquier otra herramienta,
+  las reglas `deny` o `ask` no pueden retirar `EndConversation`. La excepción es
+  deliberada: sólo termina la conversación y no lee ni modifica archivos o
+  datos. No constituye mutación, egress ni capacidad de workflow.
 - **`WebFetch` general.** El nombre desnudo `WebFetch` alcanza todos los
   dominios; equivale a `WebFetch(domain:*)`. El preflight de seguridad de dominio
   permanece activo por defecto y envía sólo el hostname a Anthropic para
@@ -104,6 +115,13 @@ Cada punto se usó para decidir una regla concreta de la política:
   Bash sandboxed. Son capas complementarias. La presencia de una política de
   permisos no demuestra que el sandbox esté configurado ni prueba confinamiento
   fuerte.
+- **Tráfico no esencial.** Un valor no vacío de
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` deshabilita auto-updates,
+  telemetría, reportes de error, `/feedback`, encuestas de calidad, release
+  notes, refrescos de descubrimiento y otras comprobaciones de disponibilidad.
+  No hace falta sumar `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY`: la encuesta ya queda
+  cubierta. Esta variable no afecta el preflight de seguridad de `WebFetch`, que
+  permanece activo mientras no se configure `skipWebFetchPreflight`.
 - **Comandos de solo lectura.** Existe un conjunto interno que corre sin prompt
   en todos los modos, e incluye las formas de solo lectura de `git`. Una regla
   `ask` o `deny` explícita lo revierte.
