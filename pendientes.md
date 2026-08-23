@@ -74,10 +74,25 @@ divide en cuatro unidades:
    sólo lectura, y deja runtime, efectos y locks para las unidades posteriores.
 3. **Unidad 2b — motor.** Implementa admisión, acción y emisión en los canales
    controlados, incluido el preflight documental, la matriz de dependencias y
-   el transporte PC/iPad.
+   el transporte PC/iPad. Su primera porción implementa el gate de posta real
+   definido abajo.
 4. **Unidad 3 — verificación y guía.** Incorpora fixtures, pruebas negativas,
    QA de superficies y `guias/construccion-de-gates.md`; destila allí la
-   bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123).
+   bitácora del [Issue #123](https://github.com/lucascarnu/Roadmap-IA-y-Agentes/issues/123),
+   incluido un fixture negativo donde un final local sin transporte real falla.
+
+**Resultado del piloto Codex nativo.** `T-PILOTO-CODEX-NATIVO-001` queda en
+`CONSERVAR_2B_ACOTADA`. Codex nativo probó el circuito padre → hijos read-only:
+creación, ejecución sin historial, espera, observación de terminales y
+consolidación. Para ese componente no se reconstruyen bridge, TUI ni heartbeat;
+la [documentación oficial de subagentes](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+confirma que Codex orquesta creación, espera y consolidación de resultados.
+
+El piloto no probó roles persistentes, `wakeup notLoaded`, durabilidad,
+exactly-once, idempotencia ni los gates de `0016`. Modelo, esfuerzo, `cwd` y
+sandbox efectivos quedaron `NO_PROBADO`. Sí probó un incidente de transporte:
+el final local con `ENVIADO_A` no trasladó la posta, y un seguimiento posterior
+al estado idle tampoco reconcilió ese terminal.
 
 Entre la unidad 1 y las unidades de implementación se completa la
 [fase de aceptación de permisos](#permisos-y-ejecución-no-interactiva): se
@@ -277,6 +292,20 @@ Brasilia o São Paulo en `UTC−03:00`; y hora `UTC`.
 La comprobación de coincidencia es la que cierra el defecto 1: si el informe
 declara incluir un JSON u otro artefacto y aparece vacío, incompleto o distinto
 del persistido, el gate impide la emisión.
+
+**Posta real — REQUISITO / REGLA PENDIENTE DE IMPLEMENTACIÓN; no es un gate
+mecánico vigente.** `ENTREGA_CONFIRMADA` exige una única invocación real con
+`TRANSPORTE_REAL_ID` y que el receptor procese ese mismo identificador.
+`HANDOFF_COMPLETE` exige además la salida humana o contractual requerida. Si
+falta cualquiera de esas condiciones, el estado es `ENTREGA_NO_CONFIRMADA` y
+bloquea marcar ready, integrar e iniciar la unidad siguiente.
+
+Después de observar terminal o idle, el emisor reconcilia una sola vez, con
+timeout finito y sin retry ciego. Implementar este gate es la primera porción de
+la Unidad 2b; la Unidad 3 agrega el fixture negativo en el que un final local sin
+transporte falla. Hasta que ambas porciones existan y pasen sus pruebas, esta
+regla describe el requisito aceptado pero no permite afirmar enforcement
+mecánico.
 
 **Deduplicación.** No hay ningún asunto previo sobre plantillas ni formato de
 informes: es `NUEVO_APORTE`. Pertenece a la misma familia que la línea de
