@@ -19,11 +19,14 @@ Consultadas el **2026-08-08**, contra la versión local **Claude Code 2.1.226**.
 Reconsultadas el **2026-08-13**, contra **Claude Code 2.1.227**.
 Reconsultadas el **2026-08-16**, contra **Claude Code 2.1.233**.
 Reconsultadas el **2026-08-22**, contra **Claude Code 2.1.240**.
+Reconsultadas el **2026-08-23**, contra **Claude Code 2.1.240**, las páginas de
+permisos, settings y uso de datos.
 
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/permission-modes`
 - `https://code.claude.com/docs/en/settings`
 - `https://code.claude.com/docs/en/sandboxing`
+- `https://code.claude.com/docs/en/data-usage`
 
 ## Qué afirmaciones respalda
 
@@ -37,6 +40,11 @@ Cada punto se usó para decidir una regla concreta de la política:
   contiene sólo el nombre, como `Bash` o `PowerShell`, alcanza todos sus usos y,
   en `deny`, retira la herramienta del contexto. Los patrones de nombre deben
   cubrir el nombre completo; `mcp__*` deniega todas las herramientas MCP.
+- **`WebFetch` general.** El nombre desnudo `WebFetch` alcanza todos los
+  dominios; equivale a `WebFetch(domain:*)`. El preflight de seguridad de dominio
+  permanece activo por defecto y envía sólo el hostname a Anthropic para
+  cotejarlo con su blocklist. Esta política no configura
+  `skipWebFetchPreflight`.
 - **`permissions.defaultMode`.** Acepta `default`, `acceptEdits`, `plan`, `auto`,
   `dontAsk` y `bypassPermissions`.
 - **Modo `dontAsk`.** Deniega automáticamente toda llamada que en otro modo
@@ -58,6 +66,13 @@ Cada punto se usó para decidir una regla concreta de la política:
   absoluta desde la raíz del sistema, `~/ruta` parte del directorio personal,
   `/ruta` es relativa al origen del archivo de configuración, y `ruta` o
   `./ruta` son relativas al directorio actual.
+- **Alcance de `Read` deny.** Claude Code intenta aplicar estas reglas a sus
+  herramientas integradas de lectura, incluidos `Grep`, referencias `@file` y
+  contexto aportado por el IDE. Es un control best effort de herramientas, no
+  una frontera de sistema operativo, y la documentación no ofrece una regla
+  “permitir sólo si está versionado”. Por eso se deniegan rutas sensibles
+  conocidas y se declara el riesgo residual sobre cualquier material todavía
+  legible.
 - **`Edit(...)` cubre todas las herramientas integradas de edición.** Una regla
   `Write(...)` o `NotebookEdit(...)` no participa de la verificación de permisos
   de archivos y produce una advertencia al arrancar.
@@ -218,8 +233,9 @@ estrechar una regla, no una lectura que se termine.
 ## Vigencia
 
 Lo anterior describe el comportamiento documentado tras la reconsulta del
-**2026-08-22** para **Claude Code 2.1.240**, junto a las consultas anteriores de
-2.1.233, 2.1.227 y 2.1.226. No son afirmaciones permanentes.
+**2026-08-23** para **Claude Code 2.1.240**, junto a las consultas anteriores de
+2026-08-22, 2.1.233, 2.1.227 y 2.1.226. No son afirmaciones permanentes ni
+evidencia operativa de una sesión fría.
 
 Debe revalidarse cuando cambie de forma relevante la versión de Claude Code o la
 documentación de permisos, y de inmediato ante cualquier comportamiento

@@ -5,12 +5,10 @@
     "disableAutoMode": "disable",
     "allow": [
       "WebSearch",
-      "WebFetch(domain:code.claude.com)",
-      "WebFetch(domain:developers.openai.com)",
-      "WebFetch(domain:learn.chatgpt.com)"
+      "WebFetch"
     ],
     "deny": [
-      "Edit(/**)",
+      "Edit",
       "Bash",
       "PowerShell",
       "mcp__*",
@@ -29,7 +27,30 @@
       "ExitWorktree",
       "ScheduleWakeup",
       "TaskOutput",
-      "TaskStop"
+      "TaskStop",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.docker/**)",
+      "Read(~/.config/**)",
+      "Read(~/.claude/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.codex/**)",
+      "Read(~/.git-credentials)",
+      "Read(~/.netrc)",
+      "Read(~/.npmrc)",
+      "Read(~/.pypirc)",
+      "Read(/.git/**)",
+      "Read(/.claude/settings.local.json)",
+      "Read(/.consultor/checkpoint.md)",
+      "Read(/scripts/handoff/notify.local.json)",
+      "Read(/scripts/handoff/artifacts/**)",
+      "Read(/scripts/handoff/.handoff/**)",
+      "Read(/.consultor/prompt-autorizar-h2-arquitecto-2026-08-22.md)",
+      "Read(/.consultor/prompt-cutover-arquitecto-2026-08-22.md)",
+      "Read(/.consultor/relevo-consultor-2026-08-22.md)",
+      "Read(/.consultor/relevo-ejecutor-2026-08-22.md)"
     ]
   }
 }
