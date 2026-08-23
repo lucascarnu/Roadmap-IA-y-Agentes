@@ -24,6 +24,7 @@ const OUTPUT = "Informe contractual completo";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const REQUEST_HASH = sha256(Buffer.from(REQUEST));
 const OUTPUT_HASH = sha256(Buffer.from(OUTPUT));
+const HUMAN_REFERENCE = "decisiones/0013-delegar-cierre-operativo-y-merge-rutinario.md#cuando-si-se-escala-al-director";
 const CATALOG = JSON.parse(await readFile(join(HERE, "roles.catalog.json"), "utf8"));
 const REGISTRY = JSON.parse(await readFile(join(HERE, "actores.json"), "utf8"));
 const PRODUCERS = JSON.parse(await readFile(join(HERE, "handoff-v2-producers.json"), "utf8"));
@@ -33,7 +34,16 @@ const GIT_SOURCES = {
   "reglas.md": { git_blob_oid: "3".repeat(40), sha256: "3".repeat(64), bytes: 303 },
 };
 
+function resolvedEntry(kind, identity, content, head = HEAD) {
+  const bytes = Buffer.byteLength(content); const hash = sha256(Buffer.from(content));
+  const fields = kind === "canonical_reference"
+    ? [identity.reference]
+    : [identity.tipo, identity.referencia, identity.head_o_historial];
+  return { resolution_id: sha256(Buffer.from([kind, ...fields, head, hash, String(bytes)].join("\0"))), ...identity, head_sha: head, sha256: hash, bytes, content };
+}
+
 function fixture(overrides = {}) {
+  const gitSources = structuredClone(GIT_SOURCES);
   const contract = {
     handoff_version: "2", artifact_id: "ARTIFACT-DELIVERY", tarea: "Entregar posta v2", head_sha: HEAD, profile_id: "manual",
     contexto_autorizado: [...GOVERNING_CONTEXT_V2, ".agentes/arquitecto/AGENTS.override.md", "ARQUITECTO.md", "AGENTS.md"],
@@ -41,21 +51,28 @@ function fixture(overrides = {}) {
     destinatario: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", required_capabilities: ["filesystem"] },
     modo: "solo_lectura", salida_requerida: "Informe contractual completo", objeto_entrada: { id: "in", descripcion: "Posta" }, objeto_producido: { id: "out", descripcion: "Informe" },
     mutaciones_permitidas: [], operaciones_permitidas: [], acciones_prohibidas: ["integrar"], rollback: { strategy: "NO_APLICA", reference: "sin efectos" }, postcondiciones: [], disparadores_0015: [], impacto_economico: { tipo: "no_aplica" }, reintentos: { maximos: 0, politica_costo_indeterminado: "DETENER_SIN_REINTENTO" },
-    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD"], estado_canonico: { accion_anterior: { id: "a", descripcion: "Anterior" }, evidencia_cierre: { tipo: "COMMIT", referencia: "x", head_o_historial: HEAD }, proxima_accion: { id: "b", descripcion: "Siguiente" }, head_reconciliacion: HEAD }, operaciones_delegadas_a_humanos: [],
+    transiciones_permitidas: ["COMPLETADO->ARQUITECTO_LEAD"], estado_canonico: { accion_anterior: { id: "a", descripcion: "Anterior" }, evidencia_cierre: { tipo: "COMMIT", referencia: "x", head_o_historial: HEAD }, proxima_accion: { id: "b", descripcion: "Siguiente" }, head_reconciliacion: HEAD },
+    operaciones_delegadas_a_humanos: [{ categoria: "CAMBIO_DE_PRODUCTO_ALCANCE_O_INTENCION", referencia_canonica: HUMAN_REFERENCE, condicion_observable: "Arbitraje material", actor_o_capacidad_requerida: "arbitraje_producto", naturaleza: "DECISION_MATERIAL" }],
   };
   const contractHash = sha256(Buffer.from(JSON.stringify(contract)));
-  const producerChain = PRODUCERS.profiles.manual.map((item) => ({ profile_id: "manual", ...item, head_sha: HEAD, ...GIT_SOURCES[item.path] }));
-  const manifest = { artifact_id: contract.artifact_id, head_sha: HEAD, contract_sha256: contractHash, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: REQUEST_HASH, bytes: Buffer.byteLength(REQUEST), content: REQUEST }, producer_chain: producerChain, sources: [...producerChain.map(({ path, head_sha, git_blob_oid, sha256: hash, bytes }) => ({ kind: "versioned", path, head_sha, git_blob_oid, sha256: hash, bytes })), { kind: "versioned", path: "reglas.md", head_sha: HEAD, ...GIT_SOURCES["reglas.md"] }] };
+  const producerChain = PRODUCERS.profiles.manual.map((item) => ({ profile_id: "manual", ...item, head_sha: HEAD, ...gitSources[item.path] }));
+  const manifest = { artifact_id: contract.artifact_id, head_sha: HEAD, contract_sha256: contractHash, producer: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor", adapter: "AGENTS.md", cwd: "." }, request: { sha256: REQUEST_HASH, bytes: Buffer.byteLength(REQUEST), content: REQUEST }, producer_chain: producerChain, sources: [...producerChain.map(({ path, head_sha, git_blob_oid, sha256: hash, bytes }) => ({ kind: "versioned", path, head_sha, git_blob_oid, sha256: hash, bytes })), { kind: "versioned", path: "reglas.md", head_sha: HEAD, ...gitSources["reglas.md"] }] };
   const manifestHash = sha256(Buffer.from(JSON.stringify(manifest)));
   const attempt = { attempt_id: "attempt:ARTIFACT-DELIVERY:001", transport_real_id: "TRANSPORT-REAL-001", artifact_id: contract.artifact_id, request_sha256: REQUEST_HASH, request_bytes: Buffer.byteLength(REQUEST), target: { role_id: "EJECUTOR_PRINCIPAL", surface_id: "codex-ejecutor" }, head_sha: HEAD, manifest_sha256: manifestHash, salida_requerida: contract.salida_requerida };
   const binding = { attempt_id: attempt.attempt_id, transport_real_id: attempt.transport_real_id, artifact_id: attempt.artifact_id, request_sha256: attempt.request_sha256, request_bytes: attempt.request_bytes, manifest_sha256: attempt.manifest_sha256, head_sha: attempt.head_sha, target_role_id: attempt.target.role_id, target_surface_id: attempt.target.surface_id, output_ref: "output.txt", output_sha256: OUTPUT_HASH, output_bytes: Buffer.byteLength(OUTPUT) };
   const result = { handoff_version: "2", binding, estado: "COMPLETADO", decision: "SIN_OBJECIONES", resumen: "Válido", evidencia: [], archivos_leidos: ["reglas.md"], siguiente: null, firma: { ejecutor_real: "Codex", entorno: "fixture", modelo_configurado: "fixture", modelo_efectivo: "NO_OBSERVABLE", esfuerzo_o_modo_configurado: "high", esfuerzo_o_modo_efectivo: "NO_VERIFICADO", sujeto_evaluado: "delivery-v2", via_evaluada: "fixture", fecha: "2026-08-23" } };
   const receipt = { attempt_id: attempt.attempt_id, transport_real_id: attempt.transport_real_id, artifact_id: attempt.artifact_id, request_sha256: attempt.request_sha256, request_bytes: attempt.request_bytes, target_role_id: attempt.target.role_id, target_surface_id: attempt.target.surface_id, manifest_sha256: attempt.manifest_sha256, head_sha: attempt.head_sha, output_ref: binding.output_ref, output_sha256: binding.output_sha256, output_bytes: binding.output_bytes };
-  return { contract, manifest, attempt, result, output: { ref: binding.output_ref, content: OUTPUT }, git_sources: GIT_SOURCES, resolved_references: [], receipt, ...overrides };
+  const resolution = { head_sha: HEAD, contract_sha256: contractHash, manifest_sha256: manifestHash, git_sources: gitSources,
+    canonical_references: [resolvedEntry("canonical_reference", { reference: HUMAN_REFERENCE }, "Canon humano verificado")],
+    closure_evidence: [resolvedEntry("closure_evidence", contract.estado_canonico.evidencia_cierre, "Commit de cierre verificado")],
+  };
+  return { contract, manifest, attempt, result, output: { ref: binding.output_ref, content: OUTPUT }, git_sources: gitSources, resolution, receipt, ...overrides };
 }
 
 function dependencies(deliveryPackage) {
-  return { catalog: CATALOG, registry: REGISTRY, producers: PRODUCERS, head_sha: deliveryPackage.attempt.head_sha, contract_sha256: deliveryPackage.manifest.contract_sha256, manifest_sha256: deliveryPackage.attempt.manifest_sha256, git_sources: GIT_SOURCES, sha256: (value) => sha256(Buffer.from(value)), resolveCanonicalReference: () => true, resolveEvidence: (evidence, head) => evidence.head_o_historial === head };
+  const references = new Set(deliveryPackage.resolution.canonical_references.map((entry) => entry.reference));
+  const evidence = new Set(deliveryPackage.resolution.closure_evidence.map((entry) => [entry.tipo, entry.referencia, entry.head_o_historial].join("\0")));
+  return { catalog: CATALOG, registry: REGISTRY, producers: PRODUCERS, head_sha: deliveryPackage.attempt.head_sha, contract_sha256: deliveryPackage.manifest.contract_sha256, manifest_sha256: deliveryPackage.attempt.manifest_sha256, git_sources: deliveryPackage.git_sources, sha256: (value) => sha256(Buffer.from(value)), resolveCanonicalReference: (reference) => references.has(reference), resolveEvidence: (item, head) => head === deliveryPackage.resolution.head_sha && evidence.has([item.tipo, item.referencia, item.head_o_historial].join("\0")) };
 }
 
 async function temporaryRoot(t) {
@@ -77,7 +94,7 @@ async function phases(root, deliveryPackage) {
 async function writeCliInputs(root, data) {
   const paths = { package: join(root, "package.json"), contract: join(root, "contract.json"), manifest: join(root, "manifest.json"), output: join(root, "output.txt"), resolution: join(root, "resolution.json"), receipt: join(root, "receipt.json") };
   await writeFile(paths.package, JSON.stringify({ attempt: data.attempt, result: data.result })); await writeFile(paths.contract, JSON.stringify(data.contract)); await writeFile(paths.manifest, JSON.stringify(data.manifest)); await writeFile(paths.output, data.output.content);
-  await writeFile(paths.resolution, JSON.stringify({ head_sha: data.attempt.head_sha, contract_sha256: data.manifest.contract_sha256, manifest_sha256: data.attempt.manifest_sha256, git_sources: GIT_SOURCES })); await writeFile(paths.receipt, JSON.stringify(data.receipt));
+  await writeFile(paths.resolution, JSON.stringify(data.resolution)); await writeFile(paths.receipt, JSON.stringify(data.receipt));
   return ["--package", paths.package, "--contract", paths.contract, "--manifest", paths.manifest, "--output", paths.output, "--resolution", paths.resolution, "--receipt", paths.receipt];
 }
 
@@ -150,6 +167,10 @@ test("U2B receipt tardío exige el mismo binding durable del ledger", async (t) 
   const alternate = structuredClone(data); const otherHead = "d".repeat(40); alternate.contract.head_sha = otherHead; alternate.contract.estado_canonico.head_reconciliacion = otherHead; alternate.contract.estado_canonico.evidencia_cierre.head_o_historial = otherHead;
   alternate.manifest.head_sha = otherHead; alternate.manifest.contract_sha256 = sha256(Buffer.from(JSON.stringify(alternate.contract))); for (const entry of alternate.manifest.producer_chain) entry.head_sha = otherHead; for (const source of alternate.manifest.sources) if (source.kind === "versioned") source.head_sha = otherHead;
   const alternateManifestHash = sha256(Buffer.from(JSON.stringify(alternate.manifest))); alternate.attempt.head_sha = otherHead; alternate.attempt.manifest_sha256 = alternateManifestHash; alternate.result.binding.head_sha = otherHead; alternate.result.binding.manifest_sha256 = alternateManifestHash; alternate.receipt.head_sha = otherHead; alternate.receipt.manifest_sha256 = alternateManifestHash;
+  alternate.resolution = { ...alternate.resolution, head_sha: otherHead, contract_sha256: alternate.manifest.contract_sha256, manifest_sha256: alternateManifestHash,
+    canonical_references: [resolvedEntry("canonical_reference", { reference: HUMAN_REFERENCE }, "Canon humano verificado", otherHead)],
+    closure_evidence: [resolvedEntry("closure_evidence", alternate.contract.estado_canonico.evidencia_cierre, "Commit de cierre verificado", otherHead)],
+  };
   await assert.rejects(engine(root, counters, null).recordLateReceipt(alternate, dependencies(alternate), alternate.receipt), (error) => error.code === "DELIVERY_BINDING_NO_COINCIDE");
 });
 
@@ -182,6 +203,34 @@ test("U2B CLI compara bytes exactos con resolución externa antes de crear ledge
   await assert.rejects(execFileAsync(process.execPath, argv), (error) => /RESOLUCION_NO_COINCIDE/.test(`${error.stderr}`)); await assert.rejects(access(ledgerRoot), { code: "ENOENT" });
 });
 
+test("U2B CLI resuelve referencia canónica y evidencia de cierre sólo desde evidencia externa exacta", async (t) => {
+  const root = await temporaryRoot(t); const cli = join(HERE, "delivery-v2-cli.mjs");
+  const positive = fixture(); const positiveDir = join(root, "positive"); await mkdir(positiveDir);
+  const positiveArgs = await writeCliInputs(positiveDir, positive);
+  const completed = await execFileAsync(process.execPath, [cli, "start", ...positiveArgs, "--root", join(positiveDir, "ledger"), "--timeout-ms", "100"]);
+  assert.equal(JSON.parse(completed.stdout).phase, "HANDOFF_COMPLETE");
+
+  const cases = {
+    "referencia-ausente": (resolution) => { resolution.canonical_references = []; },
+    "referencia-distinta": (resolution) => { resolution.canonical_references = [resolvedEntry("canonical_reference", { reference: `${HUMAN_REFERENCE}-otra` }, "Canon humano verificado")]; },
+    "referencia-extra": (resolution) => { resolution.canonical_references.push(resolvedEntry("canonical_reference", { reference: "decisiones/extra.md#extra" }, "Canon extra")); },
+    "referencia-duplicada": (resolution) => { resolution.canonical_references.push(structuredClone(resolution.canonical_references[0])); },
+    "evidencia-ausente": (resolution) => { resolution.closure_evidence = []; },
+    "evidencia-referencia-distinta": (resolution) => { resolution.closure_evidence = [resolvedEntry("closure_evidence", { tipo: "COMMIT", referencia: "otro", head_o_historial: HEAD }, "Commit de cierre verificado")]; },
+    "evidencia-head-historial-distinto": (resolution) => { resolution.closure_evidence = [resolvedEntry("closure_evidence", { tipo: "COMMIT", referencia: "x", head_o_historial: "b".repeat(40) }, "Commit de cierre verificado")]; },
+    "bytes-discrepantes": (resolution) => { resolution.canonical_references[0].bytes += 1; },
+    "head-discrepante": (resolution) => { resolution.canonical_references = [resolvedEntry("canonical_reference", { reference: HUMAN_REFERENCE }, "Canon humano verificado", "b".repeat(40))]; },
+    "identificador-discrepante": (resolution) => { resolution.closure_evidence[0].resolution_id = "f".repeat(64); },
+    "git-source-extra": (resolution) => { resolution.git_sources["extra.md"] = { git_blob_oid: "4".repeat(40), sha256: "4".repeat(64), bytes: 404 }; },
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    const caseDir = join(root, name); await mkdir(caseDir); const data = fixture(); mutate(data.resolution);
+    const argv = await writeCliInputs(caseDir, data); const ledgerRoot = join(caseDir, "ledger");
+    await assert.rejects(execFileAsync(process.execPath, [cli, "start", ...argv, "--root", ledgerRoot, "--timeout-ms", "100"]), (error) => /RESOLUCION|REFERENCIAS_EXTERNAS|EVIDENCIA_EXTERNA/.test(`${error.stderr}`), name);
+    await assert.rejects(access(ledgerRoot), { code: "ENOENT" });
+  }
+});
+
 test("U2B dos resume cross-process serializan la reconciliación efectiva a uno", async (t) => {
   const root = await temporaryRoot(t); const data = fixture(); const ledgerRoot = join(root, "ledger"); const counters = { invocations: 0, reconciliations: 0 };
   const crashing = engine(ledgerRoot, counters, data.receipt, { fault: async (point) => { if (point === "after_invoke") throw new DeliveryV2Error("SIMULATED_CRASH", point); } });
@@ -189,7 +238,7 @@ test("U2B dos resume cross-process serializan la reconciliación efectiva a uno"
   const inputArgs = await writeCliInputs(root, data);
   const argv = [join(HERE, "delivery-v2-cli.mjs"), "resume", ...inputArgs, "--root", ledgerRoot, "--timeout-ms", "100"];
   const outcomes = await Promise.allSettled([execFileAsync(process.execPath, argv), execFileAsync(process.execPath, argv)]);
-  assert.ok(outcomes.some((item) => item.status === "fulfilled"));
+  assert.ok(outcomes.some((item) => item.status === "fulfilled"), outcomes.map((item) => item.status === "fulfilled" ? item.value.stdout : item.reason.stderr).join("\n"));
   const deliveryDir = deliveryLedgerPathV2(ledgerRoot, data.attempt.attempt_id, data.attempt.transport_real_id);
   const names = (await readdir(deliveryDir)).filter((name) => /^state-/.test(name)).sort(); const state = JSON.parse(await readFile(join(deliveryDir, names.at(-1)), "utf8"));
   assert.equal(state.phase, "HANDOFF_COMPLETE"); assert.equal(state.reconciliation_count, 1); assert.equal(state.invocation_returned_count, 1);
@@ -228,15 +277,18 @@ test("U2B recupera un lock de transición huérfano sin borrar su evidencia", as
 });
 
 test("U2B schemas y grafo mantienen v1 desconectado y API pública mínima", async () => {
-  for (const file of ["handoff-attempt-v2.schema.json", "handoff-result-v2.schema.json", "handoff-delivery-v2.schema.json"]) {
+  for (const file of ["handoff-attempt-v2.schema.json", "handoff-result-v2.schema.json", "handoff-delivery-v2.schema.json", "handoff-resolution-v2.schema.json"]) {
     const raw = await readFile(join(HERE, file), "utf8");
     assert.doesNotThrow(() => JSON.parse(raw), file);
   }
   const deliverySchema = JSON.parse(await readFile(join(HERE, "handoff-delivery-v2.schema.json"), "utf8"));
+  const resolutionSchema = JSON.parse(await readFile(join(HERE, "handoff-resolution-v2.schema.json"), "utf8"));
   assert.deepEqual(new Set(deliverySchema.required), new Set(["delivery_version", "delivery_key", "sequence", "phase", "binding", "invocation_intent_count", "invocation_returned_count", "reconciliation_count", "cause", "updated_at"]));
+  assert.deepEqual(new Set(resolutionSchema.required), new Set(["head_sha", "contract_sha256", "manifest_sha256", "git_sources", "canonical_references", "closure_evidence"]));
   assert.deepEqual(new Set(deliverySchema.properties.binding.required), new Set(["attempt_id", "transport_real_id", "target_role_id", "target_surface_id", "manifest_sha256", "head_sha", "output_ref", "output_sha256", "output_bytes"]));
   const engineSource = await readFile(join(HERE, "delivery-engine-v2.mjs"), "utf8"); const cliSource = await readFile(join(HERE, "delivery-v2-cli.mjs"), "utf8"); const v1Source = await readFile(join(HERE, "handoff.mjs"), "utf8");
   assert.match(cliSource, /delivery-engine-v2/); assert.match(engineSource, /handoff-contract-v2/); assert.doesNotMatch(v1Source, /delivery-engine-v2|delivery-v2-cli|deliveries/);
+  assert.doesNotMatch(cliSource, /path\.length\s*>\s*0|head_o_historial\s*===\s*head|resolveCanonicalReference:\s*\(?.*\)?\s*=>\s*true|resolveEvidence:\s*\(?.*\)?\s*=>\s*true/);
   for (const name of ["poll", "tick", "processIssue", "invokeAgent"]) assert.doesNotMatch(v1Source, new RegExp(`${name}[\\s\\S]{0,300}delivery`, "i"));
   const moduleNames = (await readdir(HERE)).filter((name) => name.endsWith(".mjs")); const importers = [];
   for (const name of moduleNames) if ((await readFile(join(HERE, name), "utf8")).includes('from "./delivery-engine-v2.mjs"')) importers.push(name);

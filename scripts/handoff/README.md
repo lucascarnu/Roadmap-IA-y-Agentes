@@ -473,10 +473,20 @@ contratos o manifiestos, por lo que no se agregó al inventario de productores
 de 2a.
 
 El CLI recibe por separado el bundle de intento/resultado, los bytes exactos de
-contrato, manifiesto y salida, y la resolución externa de `head_sha` más metadata
-Git. Calcula los SHA-256 de contrato y manifiesto desde esos bytes y los compara
-con la resolución, el intento, el resultado y el manifiesto antes de crear el
-ledger; no acepta que el mismo bundle se autoafirme esos hashes.
+contrato, manifiesto y salida, y la resolución externa cerrada gobernada por
+[`handoff-resolution-v2.schema.json`](handoff-resolution-v2.schema.json). Esa
+entrada contiene `head_sha`, metadata Git y conjuntos exactos de referencias
+canónicas y evidencia de cierre. Cada resolución conserva contenido, SHA-256,
+bytes, HEAD e identificador derivado; faltantes, extras, duplicados, colisiones o
+discrepancias fallan antes de crear el ledger. Los callbacks puros del contrato
+consultan exclusivamente esos conjuntos ya verificados: no aceptan existencia
+aparente del path, mera igualdad de HEAD ni callbacks permisivos.
+
+El CLI calcula además los SHA-256 de contrato y manifiesto desde sus bytes y los
+compara con la resolución, el intento, el resultado y el manifiesto antes de
+crear el ledger; no acepta que el mismo bundle se autoafirme esos hashes. El
+mapa Git externo también debe coincidir exactamente con las fuentes versionadas
+del manifiesto.
 
 El intento fija `attempt_id`, `transport_real_id`, destinatario canónico,
 manifiesto, `head_sha` y `salida_requerida`. La ruta durable se deriva del
