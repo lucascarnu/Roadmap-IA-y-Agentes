@@ -481,7 +481,8 @@ ledger; no acepta que el mismo bundle se autoafirme esos hashes.
 El intento fija `attempt_id`, `transport_real_id`, destinatario canónico,
 manifiesto, `head_sha` y `salida_requerida`. La ruta durable se deriva del
 SHA-256 del par ordenado `attempt_id + transport_real_id`, pero el ledger
-conserva ambos literales y vuelve a compararlos en cada reanudación. Los estados
+conserva ambos literales, target, manifiesto, HEAD y referencia/hash/bytes de la
+salida original, y vuelve a compararlos en cada reanudación. Los estados
 son `PREPARADA → EMISION_CLAIMED → RECONCILIANDO → ENTREGA_CONFIRMADA →
 HANDOFF_COMPLETE`; toda falta cerrada termina en `ENTREGA_NO_CONFIRMADA` con
 causa enumerada.

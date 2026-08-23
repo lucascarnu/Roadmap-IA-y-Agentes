@@ -39,7 +39,8 @@ function outputBytesOf(deliveryPackage) {
   return Buffer.from(deliveryPackage.output.content, "utf8");
 }
 
-function bindingFromAttempt(attempt) {
+function bindingFromPackage(deliveryPackage) {
+  const { attempt, result } = deliveryPackage;
   return {
     attempt_id: attempt.attempt_id,
     transport_real_id: attempt.transport_real_id,
@@ -47,6 +48,9 @@ function bindingFromAttempt(attempt) {
     target_surface_id: attempt.target.surface_id,
     manifest_sha256: attempt.manifest_sha256,
     head_sha: attempt.head_sha,
+    output_ref: result.binding.output_ref,
+    output_sha256: result.binding.output_sha256,
+    output_bytes: result.binding.output_bytes,
   };
 }
 
@@ -58,8 +62,8 @@ function validateLedgerState(state, expectedKey) {
   if (!state || typeof state !== "object" || Array.isArray(state) || Object.keys(state).sort().join("|") !== [...LEDGER_KEYS].sort().join("|")) fail("LEDGER_CORRUPTO", "Shape de ledger no admitida");
   if (state.delivery_version !== "2" || !/^[0-9a-f]{64}$/.test(state.delivery_key) || (expectedKey && state.delivery_key !== expectedKey) || !Number.isInteger(state.sequence) || state.sequence < 1 || !DELIVERY_PHASES_V2.includes(state.phase) || typeof state.updated_at !== "string" || !state.updated_at) fail("LEDGER_CORRUPTO", "Metadatos de ledger inválidos");
   if (!state.binding || typeof state.binding !== "object" || Array.isArray(state.binding) || Object.keys(state.binding).sort().join("|") !== [...BINDING_KEYS].sort().join("|")) fail("LEDGER_CORRUPTO", "Binding de ledger inválido");
-  for (const key of ["attempt_id", "transport_real_id", "target_role_id", "target_surface_id"]) if (typeof state.binding[key] !== "string" || !state.binding[key]) fail("LEDGER_CORRUPTO", `binding.${key}`);
-  if (!/^[0-9a-f]{64}$/.test(state.binding.manifest_sha256) || !/^[0-9a-f]{40}$/.test(state.binding.head_sha) || deliveryKeyV2(state.binding.attempt_id, state.binding.transport_real_id) !== state.delivery_key) fail("LEDGER_CORRUPTO", "Hashes/binding de ledger inválidos");
+  for (const key of ["attempt_id", "transport_real_id", "target_role_id", "target_surface_id", "output_ref"]) if (typeof state.binding[key] !== "string" || !state.binding[key]) fail("LEDGER_CORRUPTO", `binding.${key}`);
+  if (!/^[0-9a-f]{64}$/.test(state.binding.manifest_sha256) || !/^[0-9a-f]{40}$/.test(state.binding.head_sha) || !/^[0-9a-f]{64}$/.test(state.binding.output_sha256) || !Number.isInteger(state.binding.output_bytes) || state.binding.output_bytes < 1 || deliveryKeyV2(state.binding.attempt_id, state.binding.transport_real_id) !== state.delivery_key) fail("LEDGER_CORRUPTO", "Hashes/binding de ledger inválidos");
   for (const counter of ["invocation_intent_count", "invocation_returned_count", "reconciliation_count"]) if (![0, 1].includes(state[counter])) fail("LEDGER_CORRUPTO", counter);
   if (state.invocation_returned_count > state.invocation_intent_count || (state.phase === "ENTREGA_NO_CONFIRMADA" ? !CAUSES.has(state.cause) : state.cause !== null)) fail("LEDGER_CORRUPTO", "Contadores o causa incompatibles");
   const tuple = [state.invocation_intent_count, state.invocation_returned_count, state.reconciliation_count].join("");
@@ -206,7 +210,7 @@ export function createDeliveryEngineV2(options = {}) {
       if (error?.code === "EEXIST") fail("DELIVERY_REUTILIZADA", "La combinación attempt_id + transport_real_id ya existe", error);
       throw error;
     }
-    const state = await appendState(deliveryDir, null, { delivery_key: deliveryKey, phase: "PREPARADA", binding: bindingFromAttempt(attempt), invocation_intent_count: 0, invocation_returned_count: 0 }, now);
+    const state = await appendState(deliveryDir, null, { delivery_key: deliveryKey, phase: "PREPARADA", binding: bindingFromPackage(deliveryPackage), invocation_intent_count: 0, invocation_returned_count: 0 }, now);
     return { deliveryDir, state };
   }
 
@@ -277,7 +281,7 @@ export function createDeliveryEngineV2(options = {}) {
     const deliveryDir = deliveryLedgerPathV2(rootDir, deliveryPackage.attempt.attempt_id, deliveryPackage.attempt.transport_real_id);
     return withTransitionLock(deliveryDir, async () => {
       let state = await latestState(deliveryDir);
-      if (!sameBinding(state.binding, bindingFromAttempt(deliveryPackage.attempt))) fail("DELIVERY_BINDING_NO_COINCIDE", "El intento no coincide con el ledger");
+      if (!sameBinding(state.binding, bindingFromPackage(deliveryPackage))) fail("DELIVERY_BINDING_NO_COINCIDE", "El intento o la salida no coinciden con el ledger");
       if (TERMINAL_PHASES.has(state.phase)) return state;
       if (state.phase === "PREPARADA") {
         state = await claim(deliveryDir, state);
@@ -296,7 +300,7 @@ export function createDeliveryEngineV2(options = {}) {
     const deliveryDir = deliveryLedgerPathV2(rootDir, deliveryPackage.attempt.attempt_id, deliveryPackage.attempt.transport_real_id);
     return withTransitionLock(deliveryDir, async () => {
       const state = await latestState(deliveryDir);
-      if (!sameBinding(state.binding, bindingFromAttempt(deliveryPackage.attempt))) fail("DELIVERY_BINDING_NO_COINCIDE", "El receipt tardío no coincide con el ledger");
+      if (!sameBinding(state.binding, bindingFromPackage(deliveryPackage))) fail("DELIVERY_BINDING_NO_COINCIDE", "El receipt tardío o la salida no coinciden con el ledger");
       if (state.phase !== "ENTREGA_NO_CONFIRMADA") fail("RECEIPT_TARDIO_NO_APLICA", state.phase);
       try {
         validateDeliveryReceiptV2(receipt, deliveryPackage.attempt, deliveryPackage.result, outputBytes, sha256Bytes);

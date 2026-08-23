@@ -153,6 +153,19 @@ test("U2B receipt tardío exige el mismo binding durable del ledger", async (t) 
   await assert.rejects(engine(root, counters, null).recordLateReceipt(alternate, dependencies(alternate), alternate.receipt), (error) => error.code === "DELIVERY_BINDING_NO_COINCIDE");
 });
 
+test("U2B resume y late-receipt rechazan sustitución durable de ref/hash/bytes de salida", async (t) => {
+  const root = await temporaryRoot(t);
+  for (const variant of ["ref", "hash", "bytes"]) {
+    const data = fixture({ attempt: { ...fixture().attempt, attempt_id: `attempt:output-${variant}` } }); data.result = structuredClone(fixture().result); data.result.binding.attempt_id = data.attempt.attempt_id; data.receipt = { ...fixture().receipt, attempt_id: data.attempt.attempt_id }; const counters = { invocations: 0, reconciliations: 0 }; const variantRoot = join(root, variant); await engine(variantRoot, counters, null).start(data, dependencies(data));
+    const alternate = structuredClone(data);
+    if (variant === "ref") { alternate.output.ref = "alternate.txt"; alternate.result.binding.output_ref = "alternate.txt"; alternate.receipt.output_ref = "alternate.txt"; }
+    else { alternate.output.content = variant === "hash" ? [...OUTPUT].reverse().join("") : `${OUTPUT}+`; const bytes = Buffer.from(alternate.output.content); alternate.result.binding.output_sha256 = sha256(bytes); alternate.result.binding.output_bytes = bytes.byteLength; alternate.receipt.output_sha256 = sha256(bytes); alternate.receipt.output_bytes = bytes.byteLength; }
+    await assert.rejects(engine(variantRoot, counters, null).resume(alternate, dependencies(alternate)), (error) => error.code === "DELIVERY_BINDING_NO_COINCIDE", variant);
+    await assert.rejects(engine(variantRoot, counters, null).recordLateReceipt(alternate, dependencies(alternate), alternate.receipt), (error) => error.code === "DELIVERY_BINDING_NO_COINCIDE", variant);
+    assert.deepEqual(counters, { invocations: 1, reconciliations: 1 });
+  }
+});
+
 test("U2B dos procesos compiten por un único ledger y sólo uno invoca", async (t) => {
   const root = await temporaryRoot(t); const data = fixture(); const inputArgs = await writeCliInputs(root, data);
   const cli = join(HERE, "delivery-v2-cli.mjs"); const ledgerRoot = join(root, "ledger"); const argv = [cli, "start", ...inputArgs, "--root", ledgerRoot, "--timeout-ms", "100"];
@@ -221,6 +234,7 @@ test("U2B schemas y grafo mantienen v1 desconectado y API pública mínima", asy
   }
   const deliverySchema = JSON.parse(await readFile(join(HERE, "handoff-delivery-v2.schema.json"), "utf8"));
   assert.deepEqual(new Set(deliverySchema.required), new Set(["delivery_version", "delivery_key", "sequence", "phase", "binding", "invocation_intent_count", "invocation_returned_count", "reconciliation_count", "cause", "updated_at"]));
+  assert.deepEqual(new Set(deliverySchema.properties.binding.required), new Set(["attempt_id", "transport_real_id", "target_role_id", "target_surface_id", "manifest_sha256", "head_sha", "output_ref", "output_sha256", "output_bytes"]));
   const engineSource = await readFile(join(HERE, "delivery-engine-v2.mjs"), "utf8"); const cliSource = await readFile(join(HERE, "delivery-v2-cli.mjs"), "utf8"); const v1Source = await readFile(join(HERE, "handoff.mjs"), "utf8");
   assert.match(cliSource, /delivery-engine-v2/); assert.match(engineSource, /handoff-contract-v2/); assert.doesNotMatch(v1Source, /delivery-engine-v2|delivery-v2-cli|deliveries/);
   for (const name of ["poll", "tick", "processIssue", "invokeAgent"]) assert.doesNotMatch(v1Source, new RegExp(`${name}[\\s\\S]{0,300}delivery`, "i"));
